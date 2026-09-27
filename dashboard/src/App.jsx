@@ -17,8 +17,9 @@ const menu = [
   { icon: "🤖", label: "AI" },
   { icon: "👤", label: "Admins" },
   { icon: "📝", label: "Activity Log" },
-  { icon: "⚙️", label: "Settings" }
-];
+   { icon: "📡", label: "Telegram" },
+  { icon: "⚙️", label: "Settings" },
+]; 
 
 const emptyBot = {
   name: "",
@@ -87,6 +88,10 @@ function App() {
 
   const [activeSection, setActiveSection] =
     useState("Overview");
+  const [telegramLoading, setTelegramLoading] = useState(false);
+const [telegramStatus, setTelegramStatus] = useState("Not connected");
+const [telegramMessage, setTelegramMessage] = useState("");
+const [telegramError, setTelegramError] = useState("");
 
   const [bots, setBots] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -362,6 +367,64 @@ function App() {
         }
       }
     );
+    async function connectTelegramWebhook() {
+  try {
+    setTelegramLoading(true);
+    setTelegramError("");
+    setTelegramMessage("");
+
+    const result = await fetchApi(
+      "/api/telegram/webhook/findly",
+      {
+        method: "POST"
+      }
+    );
+
+    setTelegramStatus("Connected");
+    setTelegramMessage(
+      result?.webhook
+        ? `Webhook connected: ${result.webhook}`
+        : "Telegram webhook connected successfully."
+    );
+  } catch (error) {
+    console.error(error);
+    setTelegramStatus("Connection failed");
+    setTelegramError(
+      error.message ||
+        "Unable to connect Telegram webhook."
+    );
+  } finally {
+    setTelegramLoading(false);
+  }
+}
+
+async function disconnectTelegramWebhook() {
+  try {
+    setTelegramLoading(true);
+    setTelegramError("");
+    setTelegramMessage("");
+
+    await fetchApi(
+      "/api/telegram/webhook/findly",
+      {
+        method: "DELETE"
+      }
+    );
+
+    setTelegramStatus("Disconnected");
+    setTelegramMessage(
+      "Telegram webhook disconnected."
+    );
+  } catch (error) {
+    console.error(error);
+    setTelegramError(
+      error.message ||
+        "Unable to disconnect Telegram webhook."
+    );
+  } finally {
+    setTelegramLoading(false);
+  }
+}
 
     const result =
       await response.json().catch(
@@ -1016,6 +1079,111 @@ function App() {
             )
           : ""
     });
+    .telegram-panel {
+  margin-top: 24px;
+}
+
+.telegram-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.telegram-bot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.telegram-bot-icon {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: #229ed9;
+  font-size: 26px;
+}
+
+.telegram-bot strong,
+.telegram-bot span {
+  display: block;
+}
+
+.telegram-bot span {
+  margin-top: 4px;
+  opacity: 0.65;
+}
+
+.telegram-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.telegram-info-grid > div {
+  padding: 16px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+}
+
+.telegram-info-grid small,
+.telegram-info-grid strong {
+  display: block;
+}
+
+.telegram-info-grid small {
+  margin-bottom: 6px;
+  opacity: 0.6;
+}
+
+.telegram-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.telegram-status span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.telegram-status.connected {
+  color: #16a34a;
+}
+
+.telegram-status.failed {
+  color: #dc2626;
+}
+
+.telegram-status.disconnected {
+  color: #6b7280;
+}
+
+.telegram-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+@media (max-width: 700px) {
+  .telegram-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .telegram-actions {
+    flex-direction: column;
+  }
+  }
 
     setContentFormError("");
     setContentModal(item);
@@ -1707,6 +1875,16 @@ function App() {
             }
           />
         )}
+        {activeSection === "Telegram" && (
+  <TelegramSection
+    status={telegramStatus}
+    loading={telegramLoading}
+    message={telegramMessage}
+    error={telegramError}
+    onConnect={connectTelegramWebhook}
+    onDisconnect={disconnectTelegramWebhook}
+  />
+)}
 
         {activeSection ===
           "Users" && (
@@ -3862,6 +4040,101 @@ function StatusBadge({
         ? "Active"
         : "Paused"}
     </div>
+  );
+}
+function TelegramSection({
+  status,
+  loading,
+  message,
+  error,
+  onConnect,
+  onDisconnect
+}) {
+  return (
+    <section className="panel telegram-panel">
+      <div className="panel-header">
+        <div>
+          <h2>Telegram</h2>
+          <p>
+            Connect and control the FINDLY Master Bot webhook.
+          </p>
+        </div>
+
+        <div
+          className={
+            "telegram-status " +
+            (status === "Connected"
+              ? "connected"
+              : status === "Connection failed"
+              ? "failed"
+              : "disconnected")
+          }
+        >
+          <span />
+          {status}
+        </div>
+      </div>
+
+      <div className="telegram-card">
+        <div className="telegram-bot">
+          <div className="telegram-bot-icon">🤖</div>
+
+          <div>
+            <strong>FINDLY Master Bot</strong>
+            <span>@FindlySearch2026Bot</span>
+          </div>
+        </div>
+
+        <div className="telegram-info-grid">
+          <div>
+            <small>Bot role</small>
+            <strong>Master / Admin</strong>
+          </div>
+
+          <div>
+            <small>Webhook endpoint</small>
+            <strong>/telegram/findly</strong>
+          </div>
+
+          <div>
+            <small>Backend</small>
+            <strong>Cloudflare Worker</strong>
+          </div>
+        </div>
+
+        {message && (
+          <div className="auth-success">
+            {message}
+          </div>
+        )}
+
+        {error && (
+          <div className="auth-error">
+            {error}
+          </div>
+        )}
+
+        <div className="telegram-actions">
+          <button
+            className="primary-button"
+            type="button"
+            onClick={onConnect}
+            disabled={loading}
+          >
+            {loading ? "Working..." : "Connect Webhook"}
+          </button>
+
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onDisconnect}
+            disabled={loading}
+          >
+            Disconnect
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
