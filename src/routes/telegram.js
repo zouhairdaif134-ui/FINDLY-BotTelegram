@@ -412,6 +412,49 @@ async function saveTelegramUser(
   return user;
 }
 
+async function recordAnalytics(
+  env,
+  bot,
+  telegramUser,
+  eventType,
+  eventData = {}
+) {
+  if (!bot?.id || !eventType) {
+    return;
+  }
+
+  const supabase = getSupabase(env);
+
+  const { data: user } =
+    telegramUser?.id
+      ? await supabase
+          .from("telegram_users")
+          .select("id")
+          .eq(
+            "telegram_user_id",
+            String(telegramUser.id)
+          )
+          .maybeSingle()
+      : { data: null };
+
+  const { error } =
+    await supabase
+      .from("analytics_events")
+      .insert({
+        user_id: user?.id || null,
+        bot_id: bot.id,
+        event_type: eventType,
+        event_data: eventData
+      });
+
+  if (error) {
+    console.error(
+      "Analytics event failed:",
+      error
+    );
+  }
+}
+
 function escapeHtml(
   value
 ) {
@@ -970,6 +1013,27 @@ async function processTelegramUpdate(
     env,
     bot,
     telegramUser
+  );
+
+  await recordAnalytics(
+    env,
+    bot,
+    telegramUser,
+    callbackQuery
+      ? "callback_query"
+      : message
+        ? "message"
+        : "update",
+    {
+      update_id:
+        update?.update_id ?? null,
+      action:
+        callbackQuery?.data || null,
+      command:
+        message?.text?.startsWith("/")
+          ? message.text
+          : null
+    }
   );
 
   if (callbackQuery) {
