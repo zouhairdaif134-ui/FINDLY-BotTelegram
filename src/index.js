@@ -1321,7 +1321,24 @@ export default {
           );
 
         if (auth.response) {
-          if (
+          return withCors(
+            auth.response
+          );
+        }
+
+        return withCors(
+          success(
+            await getSettings(
+              env,
+              url.searchParams.get(
+                "bot_id"
+              )
+            )
+          )
+        );
+      }
+
+      if (
         url.pathname ===
           "/api/settings" &&
         request.method ===
@@ -1410,23 +1427,6 @@ export default {
             await deleteSetting(
               env,
               getId(url)
-            )
-          )
-        );
-      }
-
-      return withCors(
-            auth.response
-          );
-        }
-
-        return withCors(
-          success(
-            await getSettings(
-              env,
-              url.searchParams.get(
-                "bot_id"
-              )
             )
           )
         );
