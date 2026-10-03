@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase.js";
+import NotificationsSection from "./NotificationsSection.jsx";
 
 const API_URL =
   "https://findly-v3-api.berrchidcity99.workers.dev";
@@ -1828,8 +1829,16 @@ async function disconnectTelegramWebhook() {
           />
         )}
 
+        {activeSection ===
+          "Notifications" && (
+          <NotificationsSection
+            fetchApi={fetchApi}
+            bots={bots}
+            users={users}
+          />
+        )}
+
         {[
-          "Notifications",
           "Analytics",
           "Monetization",
           "AI",
