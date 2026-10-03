@@ -3,6 +3,7 @@ import {
   sendMessage,
   answerCallback
 } from "../lib/telegram.js";
+import { generateAIReply } from "../lib/ai.js";
 
 async function getBot(
   env,
