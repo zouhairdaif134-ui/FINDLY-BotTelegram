@@ -98,7 +98,7 @@ const PERMISSIONS = {
 
 function corsHeaders() {
   return {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": "https://findly-bottelegram.pages.dev",
     "Access-Control-Allow-Headers":
       "Authorization, Content-Type",
     "Access-Control-Allow-Methods":
@@ -1181,11 +1181,45 @@ export default {
         error
       );
 
+      if (error?.code === "PGRST116") {
+        return withCors(
+          failure(
+            "NOT_FOUND",
+            "Resource not found",
+            404
+          )
+        );
+      }
+
+      if (error?.code === "23505") {
+        return withCors(
+          failure(
+            "CONFLICT",
+            "Resource already exists",
+            409
+          )
+        );
+      }
+
+      if (
+        error?.status &&
+        Number.isInteger(error.status) &&
+        error.status >= 400 &&
+        error.status < 500
+      ) {
+        return withCors(
+          failure(
+            "BAD_REQUEST",
+            "Request could not be processed",
+            error.status
+          )
+        );
+      }
+
       return withCors(
         failure(
           "API_ERROR",
-          error.message ||
-            "Internal server error",
+          "Internal server error",
           500
         )
       );
