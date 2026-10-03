@@ -423,6 +423,7 @@ function escapeHtml(
 
 async function sendMasterMenu(
   env,
+  bot,
   chatId
 ) {
   const bots =
@@ -450,9 +451,13 @@ async function sendMasterMenu(
 
   await sendMessage(
     env,
-    "findly",
+    bot.slug,
     chatId,
-    "<b>🤖 FINDLY</b>\n\n" +
+    "<b>" +
+      (bot.icon || "🤖") +
+      " " +
+      bot.name +
+      "</b>\n\n" +
       "اختار الخدمة اللي بغيتي:",
     {
       reply_markup: {
@@ -1073,6 +1078,7 @@ async function processTelegramUpdate(
     ) {
       await sendMasterMenu(
         env,
+        bot,
         chatId
       );
     } else {
@@ -1110,6 +1116,7 @@ async function processTelegramUpdate(
   ) {
     await sendMasterMenu(
       env,
+      bot,
       chatId
     );
   } else {
