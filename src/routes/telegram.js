@@ -1118,6 +1118,52 @@ async function processTelegramUpdate(
     };
   }
 
+  try {
+    const aiReply = await generateAIReply(
+      env,
+      bot,
+      text
+    );
+
+    if (aiReply) {
+      await sendMessage(
+        env,
+        bot.slug,
+        chatId,
+        escapeHtml(aiReply)
+      );
+
+      await recordAnalytics(
+        env,
+        bot,
+        telegramUser,
+        "ai_message",
+        {
+          update_id:
+            update?.update_id ?? null
+        }
+      );
+
+      return {
+        ok: true,
+        ai: true
+      };
+    }
+  } catch (error) {
+    console.error("AI reply failed:", error);
+    await sendMessage(
+      env,
+      bot.slug,
+      chatId,
+      "وقع مشكل مؤقت فالمساعد الذكي. حاول من بعد."
+    );
+    return {
+      ok: true,
+      ai: false,
+      error: "ai_unavailable"
+    };
+  }
+
   if (
     bot.bot_type ===
     "master"
