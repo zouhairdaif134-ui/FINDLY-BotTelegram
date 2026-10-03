@@ -32,7 +32,12 @@ import {
 } from "./routes/users.js";
 
 import { getFavorites } from "./routes/favorites.js";
-import { getNotifications } from "./routes/notifications.js";
+import {
+  getNotifications,
+  createNotification,
+  updateNotification,
+  deleteNotification
+} from "./routes/notifications.js";
 import { getAnalytics } from "./routes/analytics.js";
 import { getSettings } from "./routes/settings.js";
 
@@ -1103,6 +1108,100 @@ export default {
 
       if (
         url.pathname ===
+          "/api/notifications" &&
+        request.method ===
+          "POST"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.notifications
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          );
+        }
+
+        return withCors(
+          success(
+            await createNotification(
+              env,
+              await readJson(
+                request
+              )
+            )
+          )
+        );
+      }
+
+      if (
+        url.pathname.startsWith(
+          "/api/notifications/"
+        ) &&
+        request.method ===
+          "PUT"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.notifications
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          );
+        }
+
+        return withCors(
+          success(
+            await updateNotification(
+              env,
+              getId(url),
+              await readJson(
+                request
+              )
+            )
+          )
+        );
+      }
+
+      if (
+        url.pathname.startsWith(
+          "/api/notifications/"
+        ) &&
+        request.method ===
+          "DELETE"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.notifications
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          );
+        }
+
+        return withCors(
+          success(
+            await deleteNotification(
+              env,
+              getId(url)
+            )
+          )
+        );
+      }
+
+      if (
+        url.pathname ===
           "/api/analytics" &&
         request.method ===
           "GET"
@@ -1220,7 +1319,11 @@ export default {
         "Content title cannot be empty",
         "User id is required",
         "No supported fields to update",
-        "Bot slug is required"
+        "Bot slug is required",
+        "user_id, bot_id and subscription_type are required",
+        "Notification id is required",
+        "subscription_type cannot be empty",
+        "No supported notification fields to update"
       ]);
 
       if (validationErrors.has(error?.message)) {
