@@ -1321,24 +1321,7 @@ export default {
           );
 
         if (auth.response) {
-          return withCors(
-            auth.response
-          );
-        }
-
-        return withCors(
-          success(
-            await getSettings(
-              env,
-              url.searchParams.get(
-                "bot_id"
-              )
-            )
-          )
-        );
-      }
-
-      if (
+          if (
         url.pathname ===
           "/api/settings" &&
         request.method ===
