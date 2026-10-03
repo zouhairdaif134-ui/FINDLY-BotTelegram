@@ -39,7 +39,7 @@ import {
   deleteNotification
 } from "./routes/notifications.js";
 import { getAnalytics } from "./routes/analytics.js";
-import { getSettings } from "./routes/settings.js";
+import {\n  getSettings,\n  createSetting,\n  updateSetting,\n  deleteSetting\n} from "./routes/settings.js";
 
 import {
   handleTelegramUpdate
@@ -1237,21 +1237,7 @@ export default {
         );
       }
 
-      if (
-        url.pathname ===
-          "/api/settings" &&
-        request.method ===
-          "GET"
-      ) {
-        const auth =
-          await requirePermission(
-            env,
-            request,
-            PERMISSIONS.settings
-          );
-
-        if (auth.response) {
-          return withCors(
+      if (\n        url.pathname ===\n          "/api/settings" &&\n        request.method ===\n          "GET"\n      ) {\n        const auth =\n          await requirePermission(\n            env,\n            request,\n            PERMISSIONS.settings\n          );\n\n        if (auth.response) {\n          return withCors(\n            auth.response\n          );\n        }\n\n        return withCors(\n          success(\n            await getSettings(\n              env,\n              url.searchParams.get(\n                "bot_id"\n              )\n            )\n          )\n        );\n      }\n\n      if (\n        url.pathname ===\n          "/api/settings" &&\n        request.method ===\n          "POST"\n      ) {\n        const auth =\n          await requirePermission(\n            env,\n            request,\n            PERMISSIONS.settings\n          );\n\n        if (auth.response) {\n          return withCors(\n            auth.response\n          );\n        }\n\n        return withCors(\n          success(\n            await createSetting(\n              env,\n              await readJson(\n                request\n              )\n            )\n          )\n        );\n      }\n\n      if (\n        url.pathname.startsWith(\n          "/api/settings/"\n        ) &&\n        request.method ===\n          "PUT"\n      ) {\n        const auth =\n          await requirePermission(\n            env,\n            request,\n            PERMISSIONS.settings\n          );\n\n        if (auth.response) {\n          return withCors(\n            auth.response\n          );\n        }\n\n        return withCors(\n          success(\n            await updateSetting(\n              env,\n              getId(url),\n              await readJson(\n                request\n              )\n            )\n          )\n        );\n      }\n\n      if (\n        url.pathname.startsWith(\n          "/api/settings/"\n        ) &&\n        request.method ===\n          "DELETE"\n      ) {\n        const auth =\n          await requirePermission(\n            env,\n            request,\n            PERMISSIONS.settings\n          );\n\n        if (auth.response) {\n          return withCors(\n            auth.response\n          );\n        }\n\n        return withCors(\n          success(\n            await deleteSetting(\n              env,\n              getId(url)\n            )\n          )\n        );\n      }\n\n      return withCors(
             auth.response
           );
         }
@@ -1323,7 +1309,7 @@ export default {
         "user_id, bot_id and subscription_type are required",
         "Notification id is required",
         "subscription_type cannot be empty",
-        "No supported notification fields to update"
+        "No supported notification fields to update",\n        "bot_id and setting_key are required",\n        "setting_key cannot be empty",\n        "Setting id is required",\n        "No supported setting fields to update"
       ]);
 
       if (validationErrors.has(error?.message)) {
