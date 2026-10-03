@@ -976,12 +976,20 @@ export async function handleTelegramUpdate(
   }
 
   try {
-    return await processTelegramUpdate(
+    const result =
+      await processTelegramUpdate(
+        env,
+        bot,
+        update,
+        claim.recordId
+      );
+
+    await markTelegramUpdateProcessed(
       env,
-      bot,
-      update,
       claim.recordId
     );
+
+    return result;
   } catch (error) {
     await markTelegramUpdateFailed(
       env,
@@ -1111,11 +1119,6 @@ async function processTelegramUpdate(
       chatId
     );
   }
-
-  await markTelegramUpdateProcessed(
-    env,
-    recordId
-  );
 
   return {
     ok: true
