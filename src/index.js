@@ -1201,6 +1201,38 @@ export default {
         );
       }
 
+      const validationErrors = new Set([
+        "Request body must contain valid JSON",
+        "name, slug and bot_type are required",
+        "Bot id is required",
+        "No fields to update",
+        "Category name is required",
+        "Category slug is required",
+        "Category id is required",
+        "Category name cannot be empty",
+        "Category slug cannot be empty",
+        "bot_id is required",
+        "Menu label is required",
+        "Menu id is required",
+        "Menu label cannot be empty",
+        "Content title is required",
+        "Content id is required",
+        "Content title cannot be empty",
+        "User id is required",
+        "No supported fields to update",
+        "Bot slug is required"
+      ]);
+
+      if (validationErrors.has(error?.message)) {
+        return withCors(
+          failure(
+            "BAD_REQUEST",
+            "Invalid request",
+            400
+          )
+        );
+      }
+
       if (
         error?.status &&
         Number.isInteger(error.status) &&
