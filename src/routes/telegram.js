@@ -493,101 +493,33 @@ async function sendHomeButton(
   };
 }
 
-async function sendChildMenu(
-  env,
-  bot,
-  chatId
-) {
+async function sendMenuLevel(env, bot, chatId, parentId = null) {
   const supabase = getSupabase(env);
-
-  const { data: menus, error } =
-    await supabase
-      .from("menu_items")
-      .select(
-        "id, bot_id, parent_id, label, icon, action_type, action_value, is_active, sort_order"
-      )
-      .eq(
-        "bot_id",
-        bot.id
-      )
-      .eq(
-        "is_active",
-        true
-      )
-      .is(
-        "parent_id",
-        null
-      )
-      .order("sort_order", {
-        ascending: true
-      })
-      .order("created_at", {
-        ascending: true
-      });
-
-  if (error) {
-    throw error;
-  }
-
+  let query = supabase.from("menu_items").select("id, bot_id, parent_id, label, icon, action_type, action_value, is_active, sort_order").eq("bot_id", bot.id).eq("is_active", true).order("sort_order", { ascending: true }).order("created_at", { ascending: true });
+  query = parentId ? query.eq("parent_id", parentId) : query.is("parent_id", null);
+  const { data: menus, error } = await query;
+  if (error) throw error;
   const keyboard = [];
-
   for (const item of menus || []) {
-    if (
-      item.action_type === "url" &&
-      item.action_value
-    ) {
-      keyboard.push([
-        {
-          text:
-            `${item.icon || "🔘"} ${item.label}`,
-          url: item.action_value
-        }
-      ]);
-      continue;
+    if (item.action_type === "url" && item.action_value) {
+      keyboard.push([{ text: `${item.icon || "🔘"} ${item.label}`, url: item.action_value }]);
+    } else {
+      keyboard.push([{ text: `${item.icon || "🔘"} ${item.label}`, callback_data: `menu:${item.id}` }]);
     }
-
-    keyboard.push([
-      {
-        text:
-          `${item.icon || "🔘"} ${item.label}`,
-        callback_data:
-          `menu:${item.id}`
-      }
-    ]);
   }
-
-  const homeButton =
-    await sendHomeButton(
-      env,
-      bot.slug
-    );
-
-  if (homeButton) {
-    keyboard.push([
-      homeButton
-    ]);
+  if (parentId) {
+    const { data: parent, error: parentError } = await supabase.from("menu_items").select("parent_id").eq("id", parentId).eq("bot_id", bot.id).maybeSingle();
+    if (parentError) throw parentError;
+    keyboard.push([{ text: "⬅️ رجوع", callback_data: parent?.parent_id ? `menuback:${parent.parent_id}` : "menuback:root" }]);
   }
-
-  await sendMessage(
-    env,
-    bot.slug,
-    chatId,
-    `<b>${escapeHtml(
-      bot.icon || "🤖"
-    )} ${escapeHtml(bot.name)}</b>\n\n` +
-      escapeHtml(
-        bot.description ||
-          "اختار من القائمة:"
-      ),
-    {
-      reply_markup: {
-        inline_keyboard:
-          keyboard
-      }
-    }
-  );
+  const homeButton = await sendHomeButton(env, bot.slug);
+  if (homeButton) keyboard.push([homeButton]);
+  await sendMessage(env, bot.slug, chatId, `<b>${escapeHtml(bot.icon || "🤖")} ${escapeHtml(bot.name)}</b>\n\n` + escapeHtml(parentId ? "اختار من القائمة:" : bot.description || "اختار من القائمة:"), { reply_markup: { inline_keyboard: keyboard } });
 }
 
+async function sendChildMenu(env, bot, chatId) {
+  return sendMenuLevel(env, bot, chatId, null);
+}
 async function sendCategory(
   env,
   bot,
@@ -754,6 +686,13 @@ async function handleMenuCallback(
   chatId,
   callbackQuery
 ) {
+  if (callbackQuery.data?.startsWith("menuback:")) {
+    const target = callbackQuery.data.slice("menuback:".length);
+    await answerCallback(env, bot.slug, callbackQuery.id);
+    await sendMenuLevel(env, bot, chatId, target === "root" ? null : target);
+    return;
+  }
+
   const menuId =
     callbackQuery.data?.startsWith(
       "menu:"
@@ -771,7 +710,7 @@ async function handleMenuCallback(
     await supabase
       .from("menu_items")
       .select(
-        "id, bot_id, label, icon, action_type, action_value, is_active"
+        "id, bot_id, parent_id, label, icon, action_type, action_value, is_active"
       )
       .eq(
         "id",
@@ -841,6 +780,10 @@ async function handleMenuCallback(
         .eq(
           "bot_id",
           bot.id
+        )
+        .eq(
+          "is_active",
+          true
         )
         .maybeSingle();
 
@@ -931,10 +874,11 @@ async function handleMenuCallback(
     item.action_type ===
       "menu"
   ) {
-    await sendChildMenu(
+    await sendMenuLevel(
       env,
       bot,
-      chatId
+      chatId,
+      item.id
     );
 
     return;
