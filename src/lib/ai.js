@@ -93,7 +93,7 @@ export async function generateAIReply(
       ],
       temperature: config.temperature,
       max_tokens: config.maxTokens
-    }
+    })
   });
 
   if (!response.ok) {
