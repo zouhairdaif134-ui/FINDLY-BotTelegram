@@ -124,9 +124,11 @@ export async function deleteBot(env, id) {
 
   const { data, error } = await supabase
     .from("bots")
-    .delete()
+    .update({
+      is_active: false
+    })
     .eq("id", id)
-    .select("id")
+    .select("id, is_active")
     .single();
 
   if (error) {
@@ -134,7 +136,8 @@ export async function deleteBot(env, id) {
   }
 
   return {
-    deleted: true,
-    id: data.id
+    archived: true,
+    id: data.id,
+    is_active: data.is_active
   };
 }
