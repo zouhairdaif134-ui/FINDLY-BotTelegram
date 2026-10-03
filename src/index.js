@@ -31,7 +31,11 @@ import {
   updateUser
 } from "./routes/users.js";
 
-import { getFavorites } from "./routes/favorites.js";
+import {
+  getFavorites,
+  createFavorite,
+  deleteFavorite
+} from "./routes/favorites.js";
 import {
   getNotifications,
   createNotification,
@@ -39,7 +43,12 @@ import {
   deleteNotification
 } from "./routes/notifications.js";
 import { getAnalytics } from "./routes/analytics.js";
-import {\n  getSettings,\n  createSetting,\n  updateSetting,\n  deleteSetting\n} from "./routes/settings.js";
+import {
+  getSettings,
+  createSetting,
+  updateSetting,
+  deleteSetting
+} from "./routes/settings.js";
 
 import {
   handleTelegramUpdate
@@ -1074,6 +1083,67 @@ export default {
 
       if (
         url.pathname ===
+          "/api/favorites" &&
+        request.method ===
+          "POST"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.favorites
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          );
+        }
+
+        return withCors(
+          success(
+            await createFavorite(
+              env,
+              await readJson(
+                request
+              )
+            )
+          )
+        );
+      }
+
+      if (
+        url.pathname.startsWith(
+          "/api/favorites/"
+        ) &&
+        request.method ===
+          "DELETE"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.favorites
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          );
+        }
+
+        return withCors(
+          success(
+            await deleteFavorite(
+              env,
+              getId(url)
+            )
+          )
+        );
+      }
+
+      if (
+        url.pathname ===
           "/api/notifications" &&
         request.method ===
           "GET"
@@ -1237,7 +1307,132 @@ export default {
         );
       }
 
-      if (\n        url.pathname ===\n          "/api/settings" &&\n        request.method ===\n          "GET"\n      ) {\n        const auth =\n          await requirePermission(\n            env,\n            request,\n            PERMISSIONS.settings\n          );\n\n        if (auth.response) {\n          return withCors(\n            auth.response\n          );\n        }\n\n        return withCors(\n          success(\n            await getSettings(\n              env,\n              url.searchParams.get(\n                "bot_id"\n              )\n            )\n          )\n        );\n      }\n\n      if (\n        url.pathname ===\n          "/api/settings" &&\n        request.method ===\n          "POST"\n      ) {\n        const auth =\n          await requirePermission(\n            env,\n            request,\n            PERMISSIONS.settings\n          );\n\n        if (auth.response) {\n          return withCors(\n            auth.response\n          );\n        }\n\n        return withCors(\n          success(\n            await createSetting(\n              env,\n              await readJson(\n                request\n              )\n            )\n          )\n        );\n      }\n\n      if (\n        url.pathname.startsWith(\n          "/api/settings/"\n        ) &&\n        request.method ===\n          "PUT"\n      ) {\n        const auth =\n          await requirePermission(\n            env,\n            request,\n            PERMISSIONS.settings\n          );\n\n        if (auth.response) {\n          return withCors(\n            auth.response\n          );\n        }\n\n        return withCors(\n          success(\n            await updateSetting(\n              env,\n              getId(url),\n              await readJson(\n                request\n              )\n            )\n          )\n        );\n      }\n\n      if (\n        url.pathname.startsWith(\n          "/api/settings/"\n        ) &&\n        request.method ===\n          "DELETE"\n      ) {\n        const auth =\n          await requirePermission(\n            env,\n            request,\n            PERMISSIONS.settings\n          );\n\n        if (auth.response) {\n          return withCors(\n            auth.response\n          );\n        }\n\n        return withCors(\n          success(\n            await deleteSetting(\n              env,\n              getId(url)\n            )\n          )\n        );\n      }\n\n      return withCors(
+      if (
+        url.pathname ===
+          "/api/settings" &&
+        request.method ===
+          "GET"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.settings
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          );
+        }
+
+        return withCors(
+          success(
+            await getSettings(
+              env,
+              url.searchParams.get(
+                "bot_id"
+              )
+            )
+          )
+        );
+      }
+
+      if (
+        url.pathname ===
+          "/api/settings" &&
+        request.method ===
+          "POST"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.settings
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          );
+        }
+
+        return withCors(
+          success(
+            await createSetting(
+              env,
+              await readJson(
+                request
+              )
+            )
+          )
+        );
+      }
+
+      if (
+        url.pathname.startsWith(
+          "/api/settings/"
+        ) &&
+        request.method ===
+          "PUT"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.settings
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          );
+        }
+
+        return withCors(
+          success(
+            await updateSetting(
+              env,
+              getId(url),
+              await readJson(
+                request
+              )
+            )
+          )
+        );
+      }
+
+      if (
+        url.pathname.startsWith(
+          "/api/settings/"
+        ) &&
+        request.method ===
+          "DELETE"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.settings
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          );
+        }
+
+        return withCors(
+          success(
+            await deleteSetting(
+              env,
+              getId(url)
+            )
+          )
+        );
+      }
+
+      return withCors(
             auth.response
           );
         }
@@ -1309,7 +1504,13 @@ export default {
         "user_id, bot_id and subscription_type are required",
         "Notification id is required",
         "subscription_type cannot be empty",
-        "No supported notification fields to update",\n        "bot_id and setting_key are required",\n        "setting_key cannot be empty",\n        "Setting id is required",\n        "No supported setting fields to update"
+        "No supported notification fields to update",
+        "user_id and content_id are required",
+        "Favorite id is required",
+        "bot_id and setting_key are required",
+        "setting_key cannot be empty",
+        "Setting id is required",
+        "No supported setting fields to update"
       ]);
 
       if (validationErrors.has(error?.message)) {
