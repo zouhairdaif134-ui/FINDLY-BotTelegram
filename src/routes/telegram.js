@@ -78,6 +78,203 @@ async function getChildBots(
   return data || [];
 }
 
+
+async function claimTelegramUpdate(
+  env,
+  bot,
+  update
+) {
+  const updateId = update?.update_id;
+
+  if (
+    !Number.isSafeInteger(updateId) ||
+    updateId < 0
+  ) {
+    throw new Error(
+      "Telegram update_id is required"
+    );
+  }
+
+  const supabase = getSupabase(env);
+
+  const updateType =
+    update.callback_query
+      ? "callback_query"
+      : update.message
+        ? "message"
+        : update.edited_message
+          ? "edited_message"
+          : update.channel_post
+            ? "channel_post"
+            : update.edited_channel_post
+              ? "edited_channel_post"
+              : "other";
+
+  const { data, error } =
+    await supabase
+      .from("telegram_updates")
+      .upsert(
+        {
+          bot_id: bot.id,
+          update_id: updateId,
+          update_type: updateType,
+          status: "processing",
+          error_message: null,
+          processed_at: null
+        },
+        {
+          onConflict: "bot_id,update_id",
+          ignoreDuplicates: true
+        }
+      )
+      .select(
+        "id, status"
+      )
+      .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (data) {
+    return {
+      claimed: true,
+      recordId: data.id
+    };
+  }
+
+  const { data: existing, error: existingError } =
+    await supabase
+      .from("telegram_updates")
+      .select(
+        "id, status"
+      )
+      .eq(
+        "bot_id",
+        bot.id
+      )
+      .eq(
+        "update_id",
+        updateId
+      )
+      .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (!existing) {
+    throw new Error(
+      "Telegram update claim could not be verified"
+    );
+  }
+
+  if (existing.status === "processed") {
+    return {
+      claimed: false,
+      recordId: existing.id,
+      duplicate: true
+    };
+  }
+
+  if (existing.status === "processing") {
+    return {
+      claimed: false,
+      recordId: existing.id,
+      inProgress: true
+    };
+  }
+
+  const { data: retry, error: retryError } =
+    await supabase
+      .from("telegram_updates")
+      .update({
+        status: "processing",
+        error_message: null,
+        processed_at: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq(
+        "id",
+        existing.id
+      )
+      .eq(
+        "status",
+        "failed"
+      )
+      .select(
+        "id"
+      )
+      .maybeSingle();
+
+  if (retryError) {
+    throw retryError;
+  }
+
+  return {
+    claimed: Boolean(retry),
+    recordId: existing.id,
+    duplicate: !retry
+  };
+}
+
+async function markTelegramUpdateProcessed(
+  env,
+  recordId
+) {
+  const supabase = getSupabase(env);
+
+  const { error } =
+    await supabase
+      .from("telegram_updates")
+      .update({
+        status: "processed",
+        error_message: null,
+        processed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq(
+        "id",
+        recordId
+      );
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function markTelegramUpdateFailed(
+  env,
+  recordId,
+  error
+) {
+  const supabase = getSupabase(env);
+
+  const message =
+    error?.message ||
+    "Telegram update processing failed";
+
+  const { error: updateError } =
+    await supabase
+      .from("telegram_updates")
+      .update({
+        status: "failed",
+        error_message: message.slice(0, 1000),
+        processed_at: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq(
+        "id",
+        recordId
+      );
+
+  if (updateError) {
+    console.error(
+      updateError
+    );
+  }
+}
+
 async function saveTelegramUser(
   env,
   bot,
@@ -757,6 +954,51 @@ export async function handleTelegramUpdate(
       botSlug
     );
 
+  const claim =
+    await claimTelegramUpdate(
+      env,
+      bot,
+      update
+    );
+
+  if (
+    !claim.claimed
+  ) {
+    return {
+      ok: true,
+      duplicate: Boolean(
+        claim.duplicate
+      ),
+      in_progress: Boolean(
+        claim.inProgress
+      )
+    };
+  }
+
+  try {
+    return await processTelegramUpdate(
+      env,
+      bot,
+      update,
+      claim.recordId
+    );
+  } catch (error) {
+    await markTelegramUpdateFailed(
+      env,
+      claim.recordId,
+      error
+    );
+
+    throw error;
+  }
+}
+
+async function processTelegramUpdate(
+  env,
+  bot,
+  update,
+  recordId
+) {
   const message =
     update.message;
 
@@ -870,7 +1112,12 @@ export async function handleTelegramUpdate(
     );
   }
 
+  await markTelegramUpdateProcessed(
+    env,
+    recordId
+  );
+
   return {
     ok: true
   };
-        }
+}
