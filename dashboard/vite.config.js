@@ -51,30 +51,32 @@ function TelegramSection({
 }
 `;
 
+const telegramRepairPlugin = {
+  name: "findly-telegram-dashboard-repair",
+  transform(code, id) {
+    if (!id.endsWith("/dashboard/src/App.jsx")) {
+      return null;
+    }
+
+    if (code.includes("function TelegramSection({")) {
+      return null;
+    }
+
+    const marker = "function getSectionDescription(\n";
+    if (!code.includes(marker)) {
+      throw new Error("FINDLY Telegram repair marker not found in App.jsx");
+    }
+
+    return {
+      code: code.replace(marker, `${telegramSection}\n${marker}`),
+      map: null
+    };
+  }
+};
+
 export default defineConfig({
   plugins: [
-    react(),
-    {
-      name: "findly-telegram-dashboard-repair",
-      transform(code, id) {
-        if (!id.endsWith("/dashboard/src/App.jsx")) {
-          return null;
-        }
-
-        if (code.includes("function TelegramSection({")) {
-          return null;
-        }
-
-        const marker = "function getSectionDescription(\n";
-        if (!code.includes(marker)) {
-          throw new Error("FINDLY Telegram repair marker not found in App.jsx");
-        }
-
-        return {
-          code: code.replace(marker, `${telegramSection}\n${marker}`),
-          map: null
-        };
-      }
-    }
+    telegramRepairPlugin,
+    react()
   ]
 });
