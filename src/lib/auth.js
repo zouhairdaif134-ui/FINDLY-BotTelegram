@@ -52,8 +52,15 @@ export async function authorizeRequest(
     return {
       response: failure(
         "SUPABASE_AUTH_REJECTED",
-        userError?.message ||
+        [
           "Supabase Auth rejected the access token",
+          userError?.name ? `name=${userError.name}` : null,
+          userError?.status ? `status=${userError.status}` : null,
+          userError?.code ? `code=${userError.code}` : null,
+          userError?.message ? `message=${userError.message}` : null
+        ]
+          .filter(Boolean)
+          .join(" | "),
         401
       )
     };
