@@ -1444,6 +1444,26 @@ export default {
         error
       );
 
+      if (error?.code === "TELEGRAM_CONFIG_ERROR") {
+        return withCors(
+          failure(
+            "TELEGRAM_CONFIG_ERROR",
+            error.message,
+            500
+          )
+        );
+      }
+
+      if (error?.code === "TELEGRAM_API_ERROR") {
+        return withCors(
+          failure(
+            "TELEGRAM_API_ERROR",
+            error.message,
+            502
+          )
+        );
+      }
+
       if (error?.code === "PGRST116") {
         return withCors(
           failure(
