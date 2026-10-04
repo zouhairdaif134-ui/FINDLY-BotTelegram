@@ -42,11 +42,18 @@ export async function authorizeRequest(
   } = await supabase.auth.getUser(token);
 
   if (userError || !user) {
-    console.error("Supabase access token verification failed:", userError);
+    console.error("Supabase access token verification failed:", {
+      name: userError?.name || null,
+      status: userError?.status || null,
+      code: userError?.code || null,
+      message: userError?.message || null
+    });
+
     return {
       response: failure(
-        "UNAUTHORIZED",
-        "Invalid or expired authorization token",
+        "SUPABASE_AUTH_REJECTED",
+        userError?.message ||
+          "Supabase Auth rejected the access token",
         401
       )
     };
