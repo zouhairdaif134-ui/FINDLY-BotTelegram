@@ -407,17 +407,17 @@ async function sendMasterMenu(
 
   const keyboard = [];
 
-  for (const bot of bots) {
-    if (!bot.telegram_username) {
+  for (const childBot of bots) {
+    if (!childBot.telegram_username) {
       continue;
     }
 
     keyboard.push([
       {
-        text: `${bot.icon || "🤖"} ${bot.name}`,
+        text: `${childBot.icon || "🤖"} ${childBot.name}`,
         url:
           `https://t.me/` +
-          bot.telegram_username.replace(
+          childBot.telegram_username.replace(
             /^@/,
             ""
           )
