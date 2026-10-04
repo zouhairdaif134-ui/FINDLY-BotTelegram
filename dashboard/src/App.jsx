@@ -93,6 +93,8 @@ function App() {
 const [telegramStatus, setTelegramStatus] = useState("Not connected");
 const [telegramMessage, setTelegramMessage] = useState("");
 const [telegramError, setTelegramError] = useState("");
+const [telegramWebhookInfo, setTelegramWebhookInfo] = useState(null);
+const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
 
   const [bots, setBots] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -376,6 +378,38 @@ const [telegramError, setTelegramError] = useState("");
     }
   }
   
+  async function checkTelegramWebhook() {
+    try {
+      setTelegramWebhookChecking(true);
+      setTelegramError("");
+      setTelegramMessage("");
+
+      const result = await fetchApi(
+        "/api/telegram/webhook/findly"
+      );
+
+      const webhook = result?.webhook || null;
+      setTelegramWebhookInfo(webhook);
+
+      if (webhook?.url) {
+        setTelegramStatus("Connected");
+        setTelegramMessage("Webhook status checked successfully.");
+      } else {
+        setTelegramStatus("Not connected");
+        setTelegramMessage("No Telegram webhook is currently configured.");
+      }
+    } catch (error) {
+      console.error(error);
+      setTelegramWebhookInfo(null);
+      setTelegramError(
+        error.message ||
+          "Unable to check Telegram webhook status."
+      );
+    } finally {
+      setTelegramWebhookChecking(false);
+    }
+  }
+
   async function disconnectTelegramWebhook() {
     try {
       setTelegramLoading(true);
@@ -1778,8 +1812,11 @@ const [telegramError, setTelegramError] = useState("");
     loading={telegramLoading}
     message={telegramMessage}
     error={telegramError}
+    webhookInfo={telegramWebhookInfo}
+    webhookChecking={telegramWebhookChecking}
     onConnect={connectTelegramWebhook}
     onDisconnect={disconnectTelegramWebhook}
+    onCheckWebhook={checkTelegramWebhook}
   />
 )}
 
@@ -3952,8 +3989,11 @@ function TelegramSection({
   loading,
   message,
   error,
+  webhookInfo,
+  webhookChecking,
   onConnect,
-  onDisconnect
+  onDisconnect,
+  onCheckWebhook
 }) {
   return (
     <section className="panel telegram-panel">
@@ -4019,21 +4059,63 @@ function TelegramSection({
           </div>
         )}
 
+        {webhookInfo && (
+          <div className="telegram-info-grid">
+            <div>
+              <small>Webhook status</small>
+              <strong>
+                {webhookInfo.url ? "Active" : "Not configured"}
+              </strong>
+            </div>
+
+            <div>
+              <small>Pending updates</small>
+              <strong>
+                {Number.isFinite(webhookInfo.pending_update_count)
+                  ? webhookInfo.pending_update_count
+                  : "—"}
+              </strong>
+            </div>
+
+            <div>
+              <small>Last Telegram error</small>
+              <strong>
+                {webhookInfo.last_error_message || "None"}
+              </strong>
+            </div>
+          </div>
+        )}
+
         <div className="telegram-actions">
           <button
             className="primary-button"
             type="button"
-            onClick={onConnect}
-            disabled={loading}
+            onClick={status === "Connected" ? onCheckWebhook : onConnect}
+            disabled={loading || webhookChecking}
           >
-            {loading ? "Working..." : "Connect Webhook"}
+            {loading
+              ? "Connecting..."
+              : webhookChecking
+              ? "Checking..."
+              : status === "Connected"
+              ? "Refresh Webhook Status"
+              : "Connect Webhook"}
+          </button>
+
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onCheckWebhook}
+            disabled={loading || webhookChecking}
+          >
+            {webhookChecking ? "Checking..." : "Check Webhook"}
           </button>
 
           <button
             className="secondary-button"
             type="button"
             onClick={onDisconnect}
-            disabled={loading}
+            disabled={loading || webhookChecking}
           >
             Disconnect
           </button>
