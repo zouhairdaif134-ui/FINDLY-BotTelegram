@@ -56,6 +56,7 @@ import {
 
 import {
   setWebhook,
+  getWebhookInfo,
   deleteWebhook
 } from "./lib/telegram.js";
 
@@ -408,6 +409,67 @@ export default {
             webhook:
               webhookUrl,
             result
+          })
+        );
+      }
+
+      /*
+       * =========================
+       * TELEGRAM WEBHOOK INFO
+       * =========================
+       *
+       * Protected admin diagnostic endpoint.
+       *
+       * GET
+       * /api/telegram/webhook/:slug
+       */
+
+      if (
+        url.pathname.startsWith(
+          "/api/telegram/webhook/"
+        ) &&
+        request.method ===
+          "GET"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            "settings.manage"
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          );
+        }
+
+        const parts =
+          url.pathname
+            .split("/")
+            .filter(Boolean);
+
+        const botSlug =
+          parts[3] || null;
+
+        if (!botSlug) {
+          throw new Error(
+            "Bot slug is required"
+          );
+        }
+
+        const result =
+          await getWebhookInfo(
+            env,
+            botSlug
+          );
+
+        return withCors(
+          success({
+            bot:
+              botSlug,
+            webhook:
+              result
           })
         );
       }
