@@ -140,6 +140,17 @@ export async function setWebhook(
   );
 }
 
+export async function getWebhookInfo(
+  env,
+  botSlug
+) {
+  return telegramRequest(
+    env,
+    botSlug,
+    "getWebhookInfo"
+  );
+}
+
 export async function deleteWebhook(
   env,
   botSlug
