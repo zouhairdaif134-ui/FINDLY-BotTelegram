@@ -50,11 +50,13 @@ export async function authorizeRequest(
     };
   }
 
+  let payload;
+
   try {
     const issuer =
       `${env.SUPABASE_URL}${REQUIRED_ISSUER_SUFFIX}`;
 
-    const { payload } = await jwtVerify(
+    const verified = await jwtVerify(
       token,
       getJwks(env),
       {
@@ -63,7 +65,20 @@ export async function authorizeRequest(
       }
     );
 
-    const userId = payload.sub;
+    payload = verified.payload;
+  } catch (error) {
+    console.error("JWT verification failed:", error);
+
+    return {
+      response: failure(
+        "UNAUTHORIZED",
+        "Invalid or expired authorization token",
+        401
+      )
+    };
+  }
+
+  const userId = payload.sub;
 
     if (!userId) {
       return {
