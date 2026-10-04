@@ -436,9 +436,11 @@ const [telegramError, setTelegramError] = useState("");
       !response.ok ||
       !result?.success
     ) {
+      const apiCode = result?.error?.code || "UNKNOWN_API_ERROR";
+      const apiMessage = result?.error?.message || `API ${response.status}`;
+
       throw new Error(
-        result?.error?.message ||
-          `API ${response.status}`
+        `API ${response.status} [${apiCode}]: ${apiMessage} | session_token_present=${Boolean(session?.access_token)}`
       );
     }
 
