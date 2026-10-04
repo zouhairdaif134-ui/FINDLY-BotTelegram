@@ -194,7 +194,8 @@ function getTelegramSlug(
 export default {
   async fetch(
     request,
-    env
+    env,
+    ctx
   ) {
     const url =
       new URL(
@@ -324,8 +325,8 @@ export default {
             );
           });
 
-        if (typeof request.waitUntil === "function") {
-          request.waitUntil(processUpdate);
+        if (ctx && typeof ctx.waitUntil === "function") {
+          ctx.waitUntil(processUpdate);
         } else {
           await processUpdate;
         }
