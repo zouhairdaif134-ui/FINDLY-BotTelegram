@@ -345,6 +345,65 @@ const [telegramError, setTelegramError] = useState("");
     }
   }
 
+  async function connectTelegramWebhook() {
+    try {
+      setTelegramLoading(true);
+      setTelegramError("");
+      setTelegramMessage("");
+  
+      const result = await fetchApi(
+        "/api/telegram/webhook/findly",
+        {
+          method: "POST"
+        }
+      );
+  
+      setTelegramStatus("Connected");
+      setTelegramMessage(
+        result?.webhook
+          ? `Webhook connected: ${result.webhook}`
+          : "Telegram webhook connected successfully."
+      );
+    } catch (error) {
+      console.error(error);
+      setTelegramStatus("Connection failed");
+      setTelegramError(
+        error.message ||
+          "Unable to connect Telegram webhook."
+      );
+    } finally {
+      setTelegramLoading(false);
+    }
+  }
+  
+  async function disconnectTelegramWebhook() {
+    try {
+      setTelegramLoading(true);
+      setTelegramError("");
+      setTelegramMessage("");
+  
+      await fetchApi(
+        "/api/telegram/webhook/findly",
+        {
+          method: "DELETE"
+        }
+      );
+  
+      setTelegramStatus("Disconnected");
+      setTelegramMessage(
+        "Telegram webhook disconnected."
+      );
+    } catch (error) {
+      console.error(error);
+      setTelegramError(
+        error.message ||
+          "Unable to disconnect Telegram webhook."
+      );
+    } finally {
+      setTelegramLoading(false);
+    }
+  }
+
   async function fetchApi(
     endpoint,
     options = {}
@@ -368,65 +427,6 @@ const [telegramError, setTelegramError] = useState("");
         }
       }
     );
-    async function connectTelegramWebhook() {
-  try {
-    setTelegramLoading(true);
-    setTelegramError("");
-    setTelegramMessage("");
-
-    const result = await fetchApi(
-      "/api/telegram/webhook/findly",
-      {
-        method: "POST"
-      }
-    );
-
-    setTelegramStatus("Connected");
-    setTelegramMessage(
-      result?.webhook
-        ? `Webhook connected: ${result.webhook}`
-        : "Telegram webhook connected successfully."
-    );
-  } catch (error) {
-    console.error(error);
-    setTelegramStatus("Connection failed");
-    setTelegramError(
-      error.message ||
-        "Unable to connect Telegram webhook."
-    );
-  } finally {
-    setTelegramLoading(false);
-  }
-}
-
-async function disconnectTelegramWebhook() {
-  try {
-    setTelegramLoading(true);
-    setTelegramError("");
-    setTelegramMessage("");
-
-    await fetchApi(
-      "/api/telegram/webhook/findly",
-      {
-        method: "DELETE"
-      }
-    );
-
-    setTelegramStatus("Disconnected");
-    setTelegramMessage(
-      "Telegram webhook disconnected."
-    );
-  } catch (error) {
-    console.error(error);
-    setTelegramError(
-      error.message ||
-        "Unable to disconnect Telegram webhook."
-    );
-  } finally {
-    setTelegramLoading(false);
-  }
-}
-
     const result =
       await response.json().catch(
         () => null
