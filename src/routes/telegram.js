@@ -111,114 +111,46 @@ async function claimTelegramUpdate(
               ? "edited_channel_post"
               : "other";
 
-  const { data, error } =
-    await supabase
-      .from("telegram_updates")
-      .upsert(
-        {
-          bot_id: bot.id,
-          update_id: updateId,
-          update_type: updateType,
-          status: "processing",
-          error_message: null,
-          processed_at: null
-        },
-        {
-          onConflict: "bot_id,update_id",
-          ignoreDuplicates: true
-        }
-      )
-      .select(
-        "id, status"
-      )
-      .maybeSingle();
+  const {
+    data,
+    error
+  } = await supabase.rpc(
+    "claim_telegram_update",
+    {
+      p_bot_id: bot.id,
+      p_update_id: updateId,
+      p_update_type: updateType,
+      p_stale_after_seconds: 120
+    }
+  );
 
   if (error) {
     throw error;
   }
 
-  if (data) {
-    return {
-      claimed: true,
-      recordId: data.id
-    };
-  }
+  const claim = Array.isArray(data)
+    ? data[0]
+    : data;
 
-  const { data: existing, error: existingError } =
-    await supabase
-      .from("telegram_updates")
-      .select(
-        "id, status"
-      )
-      .eq(
-        "bot_id",
-        bot.id
-      )
-      .eq(
-        "update_id",
-        updateId
-      )
-      .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  if (!existing) {
+  if (!claim?.record_id) {
     throw new Error(
       "Telegram update claim could not be verified"
     );
   }
 
-  if (existing.status === "processed") {
-    return {
-      claimed: false,
-      recordId: existing.id,
-      duplicate: true
-    };
-  }
-
-  if (existing.status === "processing") {
-    return {
-      claimed: false,
-      recordId: existing.id,
-      inProgress: true
-    };
-  }
-
-  const { data: retry, error: retryError } =
-    await supabase
-      .from("telegram_updates")
-      .update({
-        status: "processing",
-        error_message: null,
-        processed_at: null,
-        updated_at: new Date().toISOString()
-      })
-      .eq(
-        "id",
-        existing.id
-      )
-      .eq(
-        "status",
-        "failed"
-      )
-      .select(
-        "id"
-      )
-      .maybeSingle();
-
-  if (retryError) {
-    throw retryError;
-  }
-
   return {
-    claimed: Boolean(retry),
-    recordId: existing.id,
-    duplicate: !retry
+    claimed: Boolean(
+      claim.claimed
+    ),
+    recordId: claim.record_id,
+    duplicate: Boolean(
+      claim.duplicate
+    ),
+    inProgress: Boolean(
+      claim.in_progress
+    )
   };
 }
-
 async function markTelegramUpdateProcessed(
   env,
   recordId
