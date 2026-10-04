@@ -2,7 +2,9 @@ const TELEGRAM_API = "https://api.telegram.org";
 
 function getBotTokens(env) {
   if (!env.TELEGRAM_BOT_TOKENS) {
-    throw new Error("TELEGRAM_BOT_TOKENS is missing");
+    const error = new Error("TELEGRAM_BOT_TOKENS is missing");
+    error.code = "TELEGRAM_CONFIG_ERROR";
+    throw error;
   }
 
   let tokens;
@@ -10,9 +12,11 @@ function getBotTokens(env) {
   try {
     tokens = JSON.parse(env.TELEGRAM_BOT_TOKENS);
   } catch {
-    throw new Error(
+    const error = new Error(
       "TELEGRAM_BOT_TOKENS must contain valid JSON"
     );
+    error.code = "TELEGRAM_CONFIG_ERROR";
+    throw error;
   }
 
   return tokens;
@@ -23,9 +27,11 @@ export function getTelegramToken(env, botSlug) {
   const token = tokens[botSlug];
 
   if (!token) {
-    throw new Error(
+    const error = new Error(
       `Telegram token is not configured for bot: ${botSlug}`
     );
+    error.code = "TELEGRAM_CONFIG_ERROR";
+    throw error;
   }
 
   return token;
@@ -56,10 +62,13 @@ export async function telegramRequest(
   const data = await response.json();
 
   if (!data.ok) {
-    throw new Error(
+    const error = new Error(
       data.description ||
         `Telegram API error: ${method}`
     );
+    error.code = "TELEGRAM_API_ERROR";
+    error.status = response.status;
+    throw error;
   }
 
   return data.result;
