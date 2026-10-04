@@ -1,0 +1,55 @@
+name: Repair Telegram Dashboard
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Repair TelegramSection and validate dashboard
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("dashboard/src/App.jsx")
+          text = path.read_text(encoding="utf-8")
+
+          if "function TelegramSection({" not in text:
+              marker = "function getSectionDescription(\n"
+              component = '''function TelegramSection({\n  status,\n  loading,\n  message,\n  error,\n  onConnect,\n  onDisconnect\n}) {\n  return (\n    <section className="panel">\n      <div className="panel-header">\n        <div>\n          <h2>Telegram Webhook</h2>\n          <p>Connect the FINDLY Master Bot to the production Worker.</p>\n        </div>\n        <span className={\n          status === "Connected"\n            ? "active-label"\n            : "inactive-label"\n        }>\n          {status}\n        </span>\n      </div>\n\n      <div className="management-toolbar">\n        <div>\n          <strong>Master Bot</strong>\n          <span>@FindlySearch2026Bot</span>\n        </div>\n\n        <div className="header-actions">\n          <button\n            className="primary-button"\n            type="button"\n            onClick={onConnect}\n            disabled={loading}\n          >\n            {loading ? "Connecting..." : "Connect Webhook"}\n          </button>\n\n          <button\n            className="secondary-button"\n            type="button"\n            onClick={onDisconnect}\n            disabled={loading}\n          >\n            Disconnect\n          </button>\n        </div>\n      </div>\n\n      {message && (\n        <div className="auth-success">\n          {message}\n        </div>\n      )}\n\n      {error && (\n        <div className="auth-error">\n          {error}\n        </div>\n      )}\n\n      <div className="panel" style={{ marginTop: "16px" }}>\n        <strong>Production Worker</strong>\n        <p>\n          https://findly-v3-api.berrchidcity99.workers.dev\n        </p>\n        <small>\n          The webhook endpoint is configured by the FINDLY API.\n        </small>\n      </div>\n    </section>\n  );\n}\n\n'''
+              if marker not in text:
+                  raise SystemExit("Expected insertion marker not found")
+              text = text.replace(marker, component + marker, 1)
+              path.write_text(text, encoding="utf-8")
+          PY
+
+          cd dashboard
+          npm install --progress=false
+          npm run build
+
+      - name: Commit repaired dashboard
+        if: success()
+        shell: bash
+        run: |
+          if git diff --quiet -- dashboard/src/App.jsx; then
+            echo "TelegramSection already present; no repair commit needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dashboard/src/App.jsx
+          git commit -m "fix: repair Telegram dashboard JSX"
+          git push origin main
