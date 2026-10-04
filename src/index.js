@@ -303,11 +303,32 @@ export default {
             request
           );
 
-        await handleTelegramUpdate(
-          env,
+        console.log("Telegram webhook received:", {
           botSlug,
-          update
-        );
+          update_id: update?.update_id ?? null
+        });
+
+        const processUpdate =
+          handleTelegramUpdate(
+            env,
+            botSlug,
+            update
+          ).catch((error) => {
+            console.error(
+              "Telegram webhook processing failed:",
+              {
+                botSlug,
+                update_id: update?.update_id ?? null,
+                message: error?.message || "Unknown error"
+              }
+            );
+          });
+
+        if (typeof request.waitUntil === "function") {
+          request.waitUntil(processUpdate);
+        } else {
+          await processUpdate;
+        }
 
         return withCors(
           success({
