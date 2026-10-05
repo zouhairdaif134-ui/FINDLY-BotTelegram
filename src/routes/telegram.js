@@ -214,6 +214,9 @@ async function saveTelegramUser(
   telegramUser
 ) {
   if (!telegramUser?.id) {
+    console.warn("Telegram user missing from update:", {
+      botSlug: bot?.slug || null
+    });
     return null;
   }
 
@@ -222,7 +225,12 @@ async function saveTelegramUser(
   const telegramUserId =
     String(telegramUser.id);
 
-  const { data: existingUser } =
+  console.log("Telegram user save started:", {
+    botSlug: bot?.slug || null,
+    telegramUserId
+  });
+
+  const { data: existingUser, error: lookupError } =
     await supabase
       .from("telegram_users")
       .select(
@@ -233,6 +241,24 @@ async function saveTelegramUser(
         telegramUserId
       )
       .maybeSingle();
+
+  if (lookupError) {
+    console.error("Telegram user lookup failed:", {
+      botSlug: bot?.slug || null,
+      telegramUserId,
+      code: lookupError.code || null,
+      message: lookupError.message || "Unknown error",
+      details: lookupError.details || null,
+      hint: lookupError.hint || null
+    });
+    throw lookupError;
+  }
+
+  console.log("Telegram user lookup completed:", {
+    botSlug: bot?.slug || null,
+    telegramUserId,
+    found: Boolean(existingUser)
+  });
 
   let user;
 
@@ -312,7 +338,7 @@ async function saveTelegramUser(
     return user;
   }
 
-  const { data: existingRelation } =
+  const { data: existingRelation, error: relationLookupError } =
     await supabase
       .from("user_bots")
       .select(
@@ -328,6 +354,19 @@ async function saveTelegramUser(
       )
       .maybeSingle();
 
+  if (relationLookupError) {
+    console.error("Telegram user-bot lookup failed:", {
+      botSlug: bot?.slug || null,
+      userId: user.id,
+      botId: bot.id,
+      code: relationLookupError.code || null,
+      message: relationLookupError.message || "Unknown error",
+      details: relationLookupError.details || null,
+      hint: relationLookupError.hint || null
+    });
+    throw relationLookupError;
+  }
+
   if (!existingRelation) {
     const { error } =
       await supabase
@@ -338,9 +377,25 @@ async function saveTelegramUser(
         });
 
     if (error) {
+      console.error("Telegram user-bot insert failed:", {
+        botSlug: bot?.slug || null,
+        userId: user.id,
+        botId: bot.id,
+        code: error.code || null,
+        message: error.message || "Unknown error",
+        details: error.details || null,
+        hint: error.hint || null
+      });
       throw error;
     }
   }
+
+  console.log("Telegram user save completed:", {
+    botSlug: bot?.slug || null,
+    telegramUserId,
+    userId: user.id,
+    botId: bot.id
+  });
 
   return user;
 }
@@ -932,6 +987,12 @@ async function processTelegramUpdate(
   update,
   recordId
 ) {
+  console.log("Telegram update processing started:", {
+    botSlug: bot?.slug || null,
+    update_id: update?.update_id ?? null,
+    recordId
+  });
+
   const message =
     update.message;
 
@@ -947,6 +1008,12 @@ async function processTelegramUpdate(
     bot,
     telegramUser
   );
+
+  console.log("Telegram user stage completed:", {
+    botSlug: bot?.slug || null,
+    update_id: update?.update_id ?? null,
+    recordId
+  });
 
   await recordAnalytics(
     env,
@@ -968,6 +1035,12 @@ async function processTelegramUpdate(
           : null
     }
   );
+
+  console.log("Telegram analytics stage completed:", {
+    botSlug: bot?.slug || null,
+    update_id: update?.update_id ?? null,
+    recordId
+  });
 
   if (callbackQuery) {
     const chatId =
@@ -1017,6 +1090,12 @@ async function processTelegramUpdate(
       bot.bot_type ===
       "master"
     ) {
+      console.log("Telegram /start master handler:", {
+        botSlug: bot.slug,
+        update_id: update?.update_id ?? null,
+        chatId
+      });
+
       await sendMasterMenu(
         env,
         bot,
