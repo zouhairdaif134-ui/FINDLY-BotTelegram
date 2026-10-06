@@ -273,6 +273,56 @@ export default {
 
       /*
        * =========================
+       * JOBS AUTOMATION MANUAL RUN
+       * =========================
+       *
+       * Protected operational endpoint.
+       * Uses the existing Telegram webhook secret as the
+       * shared operational secret; no new secret is required.
+       *
+       * POST /api/jobs/sync
+       * Header: X-FINDLY-JOBS-SECRET
+       */
+
+      if (
+        url.pathname === "/api/jobs/sync" &&
+        request.method === "POST"
+      ) {
+        if (!env.TELEGRAM_WEBHOOK_SECRET) {
+          return withCors(
+            failure(
+              "JOBS_CONFIG_ERROR",
+              "Operational secret is missing",
+              500
+            )
+          );
+        }
+
+        const receivedSecret = request.headers.get(
+          "X-FINDLY-JOBS-SECRET"
+        );
+
+        if (receivedSecret !== env.TELEGRAM_WEBHOOK_SECRET) {
+          return withCors(
+            failure(
+              "UNAUTHORIZED",
+              "Invalid jobs operational secret",
+              401
+            )
+          );
+        }
+
+        const sync = await runJobsAutomation(env);
+
+        return withCors(
+          success({
+            sync
+          })
+        );
+      }
+
+      /*
+       * =========================
        * TELEGRAM WEBHOOKS
        * =========================
        */
