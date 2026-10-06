@@ -944,13 +944,30 @@ export async function syncJobSource(env, source) {
         last_seen_at: new Date().toISOString()
       };
 
-      const { data: existing, error: lookupError } = await supabase
-        .from("jobs")
-        .select("id")
-        .eq("fingerprint", job.fingerprint)
-        .maybeSingle();
+      let existing = null;
 
-      if (lookupError) throw lookupError;
+      if (job.source_job_id) {
+        const { data, error: idLookupError } = await supabase
+          .from("jobs")
+          .select("id")
+          .eq("source_id", source.id)
+          .eq("source_job_id", job.source_job_id)
+          .maybeSingle();
+
+        if (idLookupError) throw idLookupError;
+        existing = data;
+      }
+
+      if (!existing) {
+        const { data, error: lookupError } = await supabase
+          .from("jobs")
+          .select("id")
+          .eq("fingerprint", job.fingerprint)
+          .maybeSingle();
+
+        if (lookupError) throw lookupError;
+        existing = data;
+      }
 
       if (existing?.id) {
         const { error } = await supabase
@@ -981,12 +998,15 @@ export async function syncJobSource(env, source) {
     }
 
     const completedAt = new Date().toISOString();
+    const isFullySkipped =
+      fetchedCount > 0 && skippedCount === fetchedCount;
+    const runStatus = isFullySkipped ? "partial" : "success";
 
     const { error: runUpdateError } = await supabase
       .from("job_sync_runs")
       .update({
         completed_at: completedAt,
-        status: "success",
+        status: runStatus,
         fetched_count: fetchedCount,
         inserted_count: insertedCount,
         updated_count: updatedCount,
@@ -1004,9 +1024,11 @@ export async function syncJobSource(env, source) {
       .from("job_sources")
       .update({
         last_synced_at: completedAt,
-        last_success_at: completedAt,
-        last_error_at: null,
-        last_error: null
+        last_success_at: isFullySkipped ? source.last_success_at : completedAt,
+        last_error_at: isFullySkipped ? completedAt : null,
+        last_error: isFullySkipped
+          ? `All fetched jobs were skipped (fetched=${fetchedCount}, skipped=${skippedCount})`
+          : null
       })
       .eq("id", source.id);
 
