@@ -59,6 +59,10 @@ import {
 } from "./lib/jobs.js";
 
 import {
+  runJobsDelivery
+} from "./lib/job-delivery.js";
+
+import {
   setWebhook,
   getWebhookInfo,
   deleteWebhook
@@ -204,7 +208,12 @@ export default {
 
     try {
       const result = await runJobsAutomation(env);
-      console.log("Jobs automation completed:", result);
+      const delivery = await runJobsDelivery(env);
+
+      console.log("Jobs automation completed:", {
+        sync: result,
+        delivery
+      });
     } catch (error) {
       console.error("Jobs automation failed:", {
         message: error?.message || "Unknown error"
