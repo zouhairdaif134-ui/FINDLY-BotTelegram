@@ -295,12 +295,31 @@ export function parseRssFeed(xml) {
   return items;
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Source request timed out after ${timeoutMs}ms: ${url}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function fetchJsonSource(source) {
   if (!source.feed_url) {
     throw new Error(`Source ${source.slug} has no feed_url`);
   }
 
-  const response = await fetch(source.feed_url, {
+  const response = await fetchWithTimeout(source.feed_url, {
     headers: {
       accept: "application/json",
       "user-agent": "FINDLY-Jobs/1.0"
@@ -546,7 +565,7 @@ async function fetchHtmlSource(source) {
     throw new Error(`Source ${source.slug} has no base_url/feed_url`);
   }
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       accept: "text/html,application/xhtml+xml",
       "user-agent": "FINDLY-Jobs/1.0"
