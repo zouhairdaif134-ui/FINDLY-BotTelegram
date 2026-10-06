@@ -11,5 +11,10 @@
       "invocation_logs": true,
       "persist": true
     }
+  },
+  "triggers": {
+    "crons": [
+      "0 * * * *"
+    ]
   }
 }
