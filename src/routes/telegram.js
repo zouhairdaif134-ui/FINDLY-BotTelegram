@@ -634,7 +634,18 @@ async function sendJobsCategory(env, bot, chatId) {
   }
 
   const homeButton = await sendHomeButton(env, bot.slug);
-  const keyboard = homeButton ? [[homeButton]] : [];
+  const keyboard = [
+    [
+      {
+        text: "🔔 نبهني على عروض الشغل",
+        callback_data: "jobs:subscribe"
+      }
+    ]
+  ];
+
+  if (homeButton) {
+    keyboard.push([homeButton]);
+  }
 
   await sendMessage(
     env,
@@ -809,12 +820,75 @@ async function sendCategory(
   );
 }
 
+async function updateJobNotificationSubscription(
+  env,
+  telegramUser,
+  enabled
+) {
+  if (!telegramUser?.id) {
+    throw new Error("Telegram user is required for job notifications");
+  }
+
+  const supabase = getSupabase(env);
+
+  const { data: user, error: userError } = await supabase
+    .from("telegram_users")
+    .select("id")
+    .eq("telegram_user_id", String(telegramUser.id))
+    .maybeSingle();
+
+  if (userError) throw userError;
+  if (!user?.id) throw new Error("Telegram user was not found");
+
+  const { error } = await supabase
+    .from("job_notification_subscriptions")
+    .upsert(
+      {
+        user_id: user.id,
+        enabled,
+        region: "Casablanca-Settat",
+        city: null,
+        keywords: []
+      },
+      {
+        onConflict: "user_id"
+      }
+    );
+
+  if (error) throw error;
+}
+
 async function handleMenuCallback(
   env,
   bot,
   chatId,
   callbackQuery
 ) {
+  if (callbackQuery.data === "jobs:subscribe") {
+    await answerCallback(
+      env,
+      bot.slug,
+      callbackQuery.id,
+      "تم التفعيل"
+    );
+
+    await updateJobNotificationSubscription(
+      env,
+      callbackQuery.from,
+      true
+    );
+
+    await sendMessage(
+      env,
+      bot.slug,
+      chatId,
+      "<b>🔔 تنبيهات فرص الشغل</b>\n\n" +
+        "تفعلات ليك التنبيهات. غادي توصلك العروض الجديدة المناسبة لجهة الدار البيضاء-سطات."
+    );
+
+    return;
+  }
+
   if (callbackQuery.data?.startsWith("menuback:")) {
     const target = callbackQuery.data.slice("menuback:".length);
     await answerCallback(env, bot.slug, callbackQuery.id);
