@@ -419,68 +419,86 @@ function parseAddworkHtml(html, source) {
   if (jsonLdJobs.length) return jsonLdJobs;
 
   const page = String(html || "");
-  const startMarker = "Nos opportunités au Maroc";
-  const endMarker = "Votre parcours mérite";
-  const start = page.indexOf(startMarker);
-  const end = page.indexOf(endMarker);
 
-  if (start < 0) {
-    throw new Error("ADDWORK jobs section was not found");
+  if (!page.trim()) {
+    throw new Error("ADDWORK returned an empty HTML response");
   }
 
-  const section = page.slice(start, end > start ? end : undefined);
+  const plainText = htmlToText(page);
+  const normalizedPageText = normalizeKey(plainText);
+
+  const hasJobsSection =
+    normalizedPageText.includes(normalizeKey("Nos opportunités au Maroc")) ||
+    normalizedPageText.includes(normalizeKey("Nos offres au Maroc")) ||
+    normalizedPageText.includes(normalizeKey("ADDWORK recrute"));
+
+  if (!hasJobsSection) {
+    const preview = cleanText(plainText)?.slice(0, 160) || "empty";
+    throw new Error(
+      `ADDWORK jobs page structure was not recognized: ${preview}`
+    );
+  }
+
   const headingMatches = [
-    ...section.matchAll(/<h3[^>]*>([\s\S]*?)<\/h3>/gi)
+    ...page.matchAll(/<h3\\b[^>]*>([\\s\\S]*?)<\\/h3>/gi)
   ];
 
   const jobs = [];
+  const locationCandidates = [
+    "Berrechid",
+    "Settat",
+    "Casablanca",
+    "Kénitra",
+    "Kenitra",
+    "Dar Bouazza",
+    "Marrakech",
+    "Rabat",
+    "Mohammedia",
+    "El Jadida",
+    "Bouskoura",
+    "Médiouna",
+    "Mediouna",
+    "Nouaceur",
+    "Benslimane",
+    "Tanger",
+    "Fès",
+    "Fes",
+    "Meknès",
+    "Meknes",
+    "Tétouan",
+    "Tetouan",
+    "Nador",
+    "Laâyoune",
+    "Dakhla"
+  ];
+
+  const ignoredTitles = new Set([
+    "ADDWORK recrute",
+    "Votre parcours mérite",
+    "Une équipe à votre écoute"
+  ].map(normalizeKey));
 
   for (let index = 0; index < headingMatches.length; index += 1) {
     const match = headingMatches[index];
     const title = stripTags(match[1]);
 
-    if (!title) continue;
+    if (!title || ignoredTitles.has(normalizeKey(title))) continue;
 
     const blockStart = match.index + match[0].length;
     const blockEnd =
       index + 1 < headingMatches.length
         ? headingMatches[index + 1].index
-        : section.length;
+        : page.length;
 
-    const block = section.slice(blockStart, blockEnd);
+    const block = page.slice(blockStart, blockEnd);
     const text = htmlToText(block);
 
     if (!text) continue;
 
-    const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
-
-    const locationCandidates = [
-      "Berrechid",
-      "Settat",
-      "Casablanca",
-      "Kénitra",
-      "Kenitra",
-      "Dar Bouazza",
-      "Marrakech",
-      "Rabat",
-      "Mohammedia",
-      "El Jadida",
-      "Bouskoura",
-      "Médiouna",
-      "Mediouna",
-      "Nouaceur",
-      "Benslimane",
-      "Tanger",
-      "Fès",
-      "Fes",
-      "Meknès",
-      "Meknes",
-      "Tétouan",
-      "Tetouan",
-      "Nador",
-      "Laâyoune",
-      "Dakhla"
-    ];
+    const lines = text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
 
     const locationLine =
       lines.find((line) =>
@@ -494,11 +512,15 @@ function parseAddworkHtml(html, source) {
       .filter((line) => !/^Déposer ma candidature/i.test(line))
       .filter((line) => !/^Découvrir l’offre/i.test(line))
       .filter((line) => !/^Envoyer mon CV/i.test(line))
+      .filter((line) => !/^Postuler par e-mail/i.test(line))
+      .filter((line) => !/^Partager mon profil/i.test(line))
       .join("\n")
       .slice(0, 5000);
 
+    const sourceJobId = `addwork:${normalizeKey(title)}:${normalizeKey(locationLine || "maroc")}`;
+
     jobs.push({
-      source_job_id: `addwork:${normalizeKey(title)}:${normalizeKey(locationLine)}`,
+      source_job_id: sourceJobId,
       title,
       company: "ADDWORK",
       location_text: locationLine,
@@ -509,9 +531,14 @@ function parseAddworkHtml(html, source) {
     });
   }
 
+  if (jobs.length === 0) {
+    throw new Error(
+      "ADDWORK jobs page was recognized but no job headings were found"
+    );
+  }
+
   return jobs;
 }
-
 async function fetchHtmlSource(source) {
   const url = source.feed_url || source.base_url;
 
