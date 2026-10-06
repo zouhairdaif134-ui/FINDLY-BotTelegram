@@ -259,7 +259,7 @@ function stripTags(value) {
 
 function readXmlTag(block, tag) {
   const pattern = new RegExp(
-    `<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`,
+    `<${tag}(?:\s[^>]*)?>([\s\S]*?)</${tag}>`,
     "i"
   );
 
@@ -350,31 +350,31 @@ async function fetchRssSource(source) {
 function htmlToText(value) {
   return decodeXmlEntities(
     String(value || "")
-      .replace(/<script[\\s\\S]*?<\\/script>/gi, " ")
-      .replace(/<style[\\s\\S]*?<\\/style>/gi, " ")
-      .replace(/<noscript[\\s\\S]*?<\\/noscript>/gi, " ")
-      .replace(/<br\\s*\\/?>(?=.)/gi, "\\n")
-      .replace(/<\\/(p|div|li|section|article|h1|h2|h3|h4|h5|h6)>/gi, "\\n")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+      .replace(/<br\s*\/?>(?=.)/gi, "\n")
+      .replace(/<\/(p|div|li|section|article|h1|h2|h3|h4|h5|h6)>/gi, "\n")
       .replace(/<[^>]+>/g, " ")
       .replace(/&nbsp;/gi, " ")
-      .replace(/\\r/g, "")
-      .split("\\n")
-      .map((line) => line.replace(/\\s+/g, " ").trim())
+      .replace(/\r/g, "")
+      .split("\n")
+      .map((line) => line.replace(/\s+/g, " ").trim())
       .filter(Boolean)
-      .join("\\n")
+      .join("\n")
   );
 }
 
 function parseJsonLdJobs(html, source) {
   const jobs = [];
   const scripts = String(html || "").match(
-    /<script[^>]+type=["']application\\/ld\\+json["'][^>]*>[\\s\\S]*?<\\/script>/gi
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi
   ) || [];
 
   for (const script of scripts) {
     const body = script
       .replace(/^<script[^>]*>/i, "")
-      .replace(/<\\/script>$/i, "")
+      .replace(/<\/script>$/i, "")
       .trim();
 
     try {
@@ -430,7 +430,7 @@ function parseAddworkHtml(html, source) {
 
   const section = page.slice(start, end > start ? end : undefined);
   const headingMatches = [
-    ...section.matchAll(/<h3[^>]*>([\\s\\S]*?)<\\/h3>/gi)
+    ...section.matchAll(/<h3[^>]*>([\s\S]*?)<\/h3>/gi)
   ];
 
   const jobs = [];
@@ -452,7 +452,7 @@ function parseAddworkHtml(html, source) {
 
     if (!text) continue;
 
-    const lines = text.split("\\n").map((line) => line.trim()).filter(Boolean);
+    const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
 
     const locationCandidates = [
       "Berrechid",
@@ -494,7 +494,7 @@ function parseAddworkHtml(html, source) {
       .filter((line) => !/^Déposer ma candidature/i.test(line))
       .filter((line) => !/^Découvrir l’offre/i.test(line))
       .filter((line) => !/^Envoyer mon CV/i.test(line))
-      .join("\\n")
+      .join("\n")
       .slice(0, 5000);
 
     jobs.push({
