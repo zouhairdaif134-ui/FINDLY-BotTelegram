@@ -202,10 +202,6 @@ function getTelegramSlug(
 
 export default {
   async scheduled(controller, env) {
-    if (controller.cron !== "*/5 * * * *") {
-      return;
-    }
-
     try {
       const result = await runJobsAutomation(env);
       const delivery = await runJobsDelivery(env);
