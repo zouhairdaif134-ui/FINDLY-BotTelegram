@@ -578,6 +578,77 @@ async function sendMenuLevel(env, bot, chatId, parentId = null) {
 async function sendChildMenu(env, bot, chatId) {
   return sendMenuLevel(env, bot, chatId, null);
 }
+async function sendJobsCategory(env, bot, chatId) {
+  const supabase = getSupabase(env);
+
+  const { data: jobs, error } = await supabase
+    .from("jobs")
+    .select(
+      "id, title, company, location_text, city, region, priority_city, target_region, employment_type, published_at, source_url"
+    )
+    .eq("status", "active")
+    .order("published_at", {
+      ascending: false,
+      nullsFirst: false
+    })
+    .order("created_at", {
+      ascending: false
+    })
+    .limit(10);
+
+  if (error) throw error;
+
+  const lines = [
+    "<b>💼 فرص الشغل</b>",
+    "",
+    jobs?.length
+      ? "آخر العروض المتوفرة:"
+      : "حالياً ما كاين حتى عرض شغل متوفر."
+  ];
+
+  for (const [index, job] of (jobs || []).entries()) {
+    lines.push(
+      "",
+      "<b>" + (index + 1) + ". " + escapeHtml(job.title) + "</b>"
+    );
+
+    if (job.company) {
+      lines.push("🏢 " + escapeHtml(job.company));
+    }
+
+    if (job.location_text) {
+      lines.push("📍 " + escapeHtml(job.location_text));
+    }
+
+    if (job.employment_type) {
+      lines.push("🧾 " + escapeHtml(job.employment_type));
+    }
+
+    if (job.source_url) {
+      lines.push(
+        '<a href="' +
+          escapeHtml(job.source_url) +
+          '">🔗 التفاصيل</a>'
+      );
+    }
+  }
+
+  const homeButton = await sendHomeButton(env, bot.slug);
+  const keyboard = homeButton ? [[homeButton]] : [];
+
+  await sendMessage(
+    env,
+    bot.slug,
+    chatId,
+    lines.join("\n"),
+    {
+      reply_markup: {
+        inline_keyboard: keyboard
+      }
+    }
+  );
+}
+
 async function sendCategory(
   env,
   bot,
@@ -895,12 +966,20 @@ async function handleMenuCallback(
       "category" &&
     item.action_value
   ) {
-    await sendCategory(
-      env,
-      bot,
-      chatId,
-      item.action_value
-    );
+    if (item.action_value === "jobs") {
+      await sendJobsCategory(
+        env,
+        bot,
+        chatId
+      );
+    } else {
+      await sendCategory(
+        env,
+        bot,
+        chatId,
+        item.action_value
+      );
+    }
 
     return;
   }
