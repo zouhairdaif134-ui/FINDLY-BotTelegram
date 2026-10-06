@@ -259,7 +259,7 @@ function stripTags(value) {
 
 function readXmlTag(block, tag) {
   const pattern = new RegExp(
-    `<${tag}(?:\s[^>]*)?>([\s\S]*?)</${tag}>`,
+    `<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`,
     "i"
   );
 
@@ -458,11 +458,11 @@ function parseAddworkHtml(html, source) {
     );
   }
 
-  // ADDWORK currently exposes job titles at more than one heading level.
-  // Parse h2/h3 headings, then use the following content block to decide
-  // whether the heading represents an actual vacancy rather than a section.
+  // ADDWORK has used multiple heading levels and may wrap heading content
+  // with attributes/classes. Capture every semantic heading level instead of
+  // assuming only h2/h3.
   const headingMatches = [
-    ...page.matchAll(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/gi)
+    ...page.matchAll(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/gi)
   ];
 
   const jobs = [];
@@ -567,9 +567,6 @@ function parseAddworkHtml(html, source) {
       normalizedBlock.includes(normalizeKey(city))
     );
 
-    // A real vacancy must expose a concrete application/recruitment signal.
-    // Location alone is not sufficient because ADDWORK page sections and CTAs
-    // can contain city names unrelated to an actual job.
     const looksLikeVacancy =
       hasApplicationAction || (hasRecruitmentSignal && hasKnownLocation);
 
@@ -618,12 +615,13 @@ function parseAddworkHtml(html, source) {
 
   if (jobs.length === 0) {
     throw new Error(
-      "ADDWORK jobs page was recognized but no job headings were found"
+      `ADDWORK jobs page was recognized but no job headings were found (headings=${headingMatches.length}, textLength=${plainText.length})`
     );
   }
 
   return jobs;
 }
+
 async function fetchHtmlSource(source) {
   const url = source.feed_url || source.base_url;
 
@@ -809,7 +807,7 @@ export async function syncJobSource(env, source) {
 
     const completedAt = new Date().toISOString();
 
-    await supabase
+    const { error: runUpdateError } = await supabase
       .from("job_sync_runs")
       .update({
         completed_at: completedAt,
@@ -821,7 +819,13 @@ export async function syncJobSource(env, source) {
       })
       .eq("id", run.id);
 
-    await supabase
+    if (runUpdateError) {
+      throw new Error(
+        `Failed to finalize job sync run ${run.id}: ${runUpdateError.message}`
+      );
+    }
+
+    const { error: sourceUpdateError } = await supabase
       .from("job_sources")
       .update({
         last_synced_at: completedAt,
@@ -830,6 +834,12 @@ export async function syncJobSource(env, source) {
         last_error: null
       })
       .eq("id", source.id);
+
+    if (sourceUpdateError) {
+      throw new Error(
+        `Failed to update job source ${source.slug}: ${sourceUpdateError.message}`
+      );
+    }
 
     return {
       source: source.slug,
@@ -842,7 +852,7 @@ export async function syncJobSource(env, source) {
     const completedAt = new Date().toISOString();
     const message = error?.message || "Unknown source sync error";
 
-    await supabase
+    const { error: runUpdateError } = await supabase
       .from("job_sync_runs")
       .update({
         completed_at: completedAt,
@@ -855,7 +865,15 @@ export async function syncJobSource(env, source) {
       })
       .eq("id", run.id);
 
-    await supabase
+    if (runUpdateError) {
+      console.error("Failed to finalize failed job sync run:", {
+        run_id: run.id,
+        source: source.slug,
+        message: runUpdateError.message
+      });
+    }
+
+    const { error: sourceUpdateError } = await supabase
       .from("job_sources")
       .update({
         last_synced_at: completedAt,
@@ -863,6 +881,13 @@ export async function syncJobSource(env, source) {
         last_error: message
       })
       .eq("id", source.id);
+
+    if (sourceUpdateError) {
+      console.error("Failed to update failed job source:", {
+        source: source.slug,
+        message: sourceUpdateError.message
+      });
+    }
 
     throw error;
   }
