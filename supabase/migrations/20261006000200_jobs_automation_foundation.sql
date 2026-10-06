@@ -34,6 +34,8 @@ create table if not exists public.jobs (
   location_text text,
   city text,
   region text,
+  priority_city text,
+  target_region text,
   description text,
   employment_type text,
   published_at timestamptz,
@@ -77,6 +79,9 @@ create index if not exists idx_jobs_status_published
 
 create index if not exists idx_jobs_city_region
   on public.jobs (city, region);
+
+create index if not exists idx_jobs_target_region
+  on public.jobs (target_region, priority_city);
 
 create index if not exists idx_jobs_expires_at
   on public.jobs (expires_at);
