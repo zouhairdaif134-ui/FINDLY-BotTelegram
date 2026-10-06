@@ -613,6 +613,129 @@ function parseAddworkHtml(html, source) {
     });
   }
 
+  // Some ADDWORK deployments render job cards as divs/articles rather than
+  // semantic headings. When the heading parser finds nothing, fall back to the
+  // visible text structure: location/category line -> job title -> recruitment
+  // or application text. This keeps the connector independent of CSS classes.
+  if (jobs.length === 0) {
+    const lines = plainText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const isIgnoredLine = (line) => {
+      const normalized = normalizeKey(line);
+
+      return (
+        !normalized ||
+        ignoredTitles.has(normalized) ||
+        nonJobTitlePatterns.some((pattern) => pattern.test(line)) ||
+        /^(relation client|systèmes? d['’]information|industrie agroalimentaire|distribution automobile|hôtellerie|profils commerciaux et support)$/i.test(
+          line
+        ) ||
+        /^(pour postuler|votre mission|vos responsabilités|profil recherché|pour postuler)$/i.test(
+          line
+        )
+      );
+    };
+
+    const findLocation = (windowLines) =>
+      windowLines.find((line) =>
+        locationCandidates.some((city) =>
+          normalizeKey(line).includes(normalizeKey(city))
+        )
+      ) || null;
+
+    const addTextJob = (title, windowLines) => {
+      const cleanTitle = cleanText(title);
+
+      if (
+        !cleanTitle ||
+        isIgnoredLine(cleanTitle) ||
+        cleanTitle.length < 4 ||
+        cleanTitle.length > 180
+      ) {
+        return;
+      }
+
+      const locationLine = findLocation(windowLines);
+      const normalizedWindow = normalizeKey(windowLines.join(" "));
+      const hasApplicationAction =
+        /\b(Découvrir l’offre|Découvrir l'offre|Déposer ma candidature|Envoyer mon CV|Postuler par e-mail)\b/i.test(
+          windowLines.join(" ")
+        );
+      const hasRecruitmentSignal = /\bADDWORK recrute\b/i.test(
+        windowLines.join(" ")
+      );
+
+      if (!locationLine || (!hasApplicationAction && !hasRecruitmentSignal)) {
+        return;
+      }
+
+      const detectedCity =
+        locationCandidates.find((city) =>
+          normalizeKey(locationLine).includes(normalizeKey(city))
+        ) || null;
+
+      const description = windowLines
+        .filter((line) => line !== locationLine)
+        .filter((line) => !/^ADDWORK recrute/i.test(line))
+        .filter((line) => !/^Pour postuler/i.test(line))
+        .filter((line) => !/^Découvrir l['’]offre/i.test(line))
+        .filter((line) => !/^Déposer ma candidature/i.test(line))
+        .filter((line) => !/^Envoyer mon CV/i.test(line))
+        .filter((line) => !/^Postuler par e-mail/i.test(line))
+        .join("\n")
+        .slice(0, 5000);
+
+      const sourceJobId = `addwork:${normalizeKey(cleanTitle)}:${normalizeKey(
+        locationLine
+      )}`;
+
+      if (
+        jobs.some(
+          (job) =>
+            job.source_job_id === sourceJobId ||
+            normalizeKey(job.title) === normalizeKey(cleanTitle)
+        )
+      ) {
+        return;
+      }
+
+      jobs.push({
+        source_job_id: sourceJobId,
+        title: cleanTitle,
+        company: "ADDWORK",
+        location_text: locationLine,
+        city: detectedCity,
+        description: description || null,
+        source_url: source.base_url,
+        apply_url: source.base_url
+      });
+    };
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (isIgnoredLine(line)) continue;
+
+      const forwardWindow = lines.slice(index + 1, index + 9);
+      const localWindow = lines.slice(Math.max(0, index - 2), index + 9);
+      const nextLine = lines[index + 1] || "";
+
+      // Pattern 1: location/category line followed by the job title and then
+      // ADDWORK/application text.
+      const currentHasLocation = locationCandidates.some((city) =>
+        normalizeKey(line).includes(normalizeKey(city))
+      );
+      if (currentHasLocation && nextLine && !isIgnoredLine(nextLine)) {
+        addTextJob(nextLine, forwardWindow);
+      }
+
+      // Pattern 2: title followed by location and recruitment/application text.
+      addTextJob(line, localWindow);
+    }
+  }
+
   if (jobs.length === 0) {
     throw new Error(
       `ADDWORK jobs page was recognized but no job headings were found (headings=${headingMatches.length}, textLength=${plainText.length})`
@@ -620,7 +743,6 @@ function parseAddworkHtml(html, source) {
   }
 
   return jobs;
-}
 
 async function fetchHtmlSource(source) {
   const url = source.feed_url || source.base_url;
