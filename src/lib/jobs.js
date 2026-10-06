@@ -788,12 +788,6 @@ function parseAddworkHtml(html, source) {
     );
   }
 
-  if (jobs.length < 3) {
-    throw new Error(
-      `ADDWORK suspicious result (${jobs.length} jobs, headings=${headingMatches.length}): ${plainText.slice(0, 3000)}`
-    );
-  }
-
   return jobs;
 }
 
@@ -869,16 +863,31 @@ export async function loadEnabledJobSources(env) {
 
 async function expireKnownJobs(env) {
   const supabase = getSupabase(env);
+  const now = new Date();
+  const staleCutoff = new Date(
+    now.getTime() - 3 * 24 * 60 * 60 * 1000
+  ).toISOString();
 
-  const { error } = await supabase
+  const { error: explicitExpiryError } = await supabase
     .from("jobs")
     .update({
       status: "expired"
     })
     .eq("status", "active")
-    .lt("expires_at", new Date().toISOString());
+    .lt("expires_at", now.toISOString());
 
-  if (error) throw error;
+  if (explicitExpiryError) throw explicitExpiryError;
+
+  const { error: staleExpiryError } = await supabase
+    .from("jobs")
+    .update({
+      status: "expired"
+    })
+    .eq("status", "active")
+    .not("last_seen_at", "is", null)
+    .lt("last_seen_at", staleCutoff);
+
+  if (staleExpiryError) throw staleExpiryError;
 }
 
 export async function syncJobSource(env, source) {
