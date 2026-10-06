@@ -202,7 +202,7 @@ function getTelegramSlug(
 
 export default {
   async scheduled(controller, env) {
-    if (controller.cron !== "0 * * * *") {
+    if (controller.cron !== "*/5 * * * *") {
       return;
     }
 
