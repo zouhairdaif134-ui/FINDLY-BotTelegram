@@ -508,14 +508,43 @@ function parseAddworkHtml(html, source) {
     "Industrie agroalimentaire",
     "Distribution automobile",
     "Hôtellerie",
-    "Profils commerciaux et support"
+    "Profils commerciaux et support",
+    "Explorer",
+    "Échangeons sur vos projets",
+    "Echangeons sur vos projets",
+    "Partager mon profil",
+    "Déposer ma candidature",
+    "Découvrir l’offre",
+    "Découvrir l'offre",
+    "Envoyer mon CV",
+    "Postuler par e-mail"
   ].map(normalizeKey));
+
+  const nonJobTitlePatterns = [
+    /^explorer$/i,
+    /^échangeons\s+sur\s+vos\s+projets$/i,
+    /^echangeons\s+sur\s+vos\s+projets$/i,
+    /^partager\s+mon\s+profil$/i,
+    /^déposer\s+ma\s+candidature$/i,
+    /^deposer\s+ma\s+candidature$/i,
+    /^découvrir\s+l['’]offre$/i,
+    /^decouvrir\s+l['’]offre$/i,
+    /^envoyer\s+mon\s+cv$/i,
+    /^postuler\s+par\s+e-mail$/i
+  ];
 
   for (let index = 0; index < headingMatches.length; index += 1) {
     const match = headingMatches[index];
     const title = stripTags(match[1]);
+    const normalizedTitle = normalizeKey(title);
 
-    if (!title || ignoredTitles.has(normalizeKey(title))) continue;
+    if (
+      !title ||
+      ignoredTitles.has(normalizedTitle) ||
+      nonJobTitlePatterns.some((pattern) => pattern.test(title))
+    ) {
+      continue;
+    }
 
     const blockStart = match.index + match[0].length;
     const blockEnd =
@@ -529,12 +558,20 @@ function parseAddworkHtml(html, source) {
     if (!text) continue;
 
     const normalizedBlock = normalizeKey(text);
-    const looksLikeVacancy =
-      /\bADDWORK recrute\b/i.test(text) ||
-      /\b(Découvrir l’offre|Déposer ma candidature|Envoyer mon CV|Postuler par e-mail)\b/i.test(text) ||
-      locationCandidates.some((city) =>
-        normalizedBlock.includes(normalizeKey(city))
+    const hasApplicationAction =
+      /\b(Découvrir l’offre|Découvrir l'offre|Déposer ma candidature|Envoyer mon CV|Postuler par e-mail)\b/i.test(
+        text
       );
+    const hasRecruitmentSignal = /\bADDWORK recrute\b/i.test(text);
+    const hasKnownLocation = locationCandidates.some((city) =>
+      normalizedBlock.includes(normalizeKey(city))
+    );
+
+    // A real vacancy must expose a concrete application/recruitment signal.
+    // Location alone is not sufficient because ADDWORK page sections and CTAs
+    // can contain city names unrelated to an actual job.
+    const looksLikeVacancy =
+      hasApplicationAction || (hasRecruitmentSignal && hasKnownLocation);
 
     if (!looksLikeVacancy) continue;
 
@@ -548,6 +585,11 @@ function parseAddworkHtml(html, source) {
         locationCandidates.some((city) =>
           normalizeKey(line).includes(normalizeKey(city))
         )
+      ) || null;
+
+    const detectedCity =
+      locationCandidates.find((city) =>
+        normalizeKey(locationLine).includes(normalizeKey(city))
       ) || null;
 
     const description = lines
@@ -567,7 +609,7 @@ function parseAddworkHtml(html, source) {
       title,
       company: "ADDWORK",
       location_text: locationLine,
-      city: locationLine,
+      city: detectedCity,
       description: description || null,
       source_url: source.base_url,
       apply_url: source.base_url
