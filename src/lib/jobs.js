@@ -372,7 +372,32 @@ export async function loadEnabledJobSources(env) {
 
   if (error) throw error;
 
-  return data || [];
+  const now = Date.now();
+
+  return (data || []).filter((source) => {
+    if (!source.last_synced_at) return true;
+
+    const intervalMs =
+      Math.max(5, Number(source.sync_interval_minutes) || 1440) *
+      60 *
+      1000;
+
+    return now - new Date(source.last_synced_at).getTime() >= intervalMs;
+  });
+}
+
+async function expireKnownJobs(env) {
+  const supabase = getSupabase(env);
+
+  const { error } = await supabase
+    .from("jobs")
+    .update({
+      status: "expired"
+    })
+    .eq("status", "active")
+    .lt("expires_at", new Date().toISOString());
+
+  if (error) throw error;
 }
 
 export async function syncJobSource(env, source) {
@@ -425,6 +450,8 @@ export async function syncJobSource(env, source) {
         location_text: job.location_text,
         city: job.city,
         region: job.region,
+        priority_city: job.priority_city,
+        target_region: job.target_region,
         description: job.description,
         employment_type: job.employment_type,
         published_at: job.published_at,
@@ -534,6 +561,8 @@ export async function syncJobSource(env, source) {
 }
 
 export async function runJobsAutomation(env) {
+  await expireKnownJobs(env);
+
   const sources = await loadEnabledJobSources(env);
 
   if (sources.length === 0) {
