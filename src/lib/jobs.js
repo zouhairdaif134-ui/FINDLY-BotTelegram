@@ -901,6 +901,7 @@ export async function syncJobSource(env, source) {
   let insertedCount = 0;
   let updatedCount = 0;
   let skippedCount = 0;
+  const skipReasons = [];
 
   try {
     const rawJobs = await fetchSourceJobs(source);
@@ -913,6 +914,9 @@ export async function syncJobSource(env, source) {
         job = normalizeJob(source, raw);
       } catch (error) {
         skippedCount += 1;
+        skipReasons.push(
+          `normalize: ${raw?.title || "?"}: ${error?.message || "invalid"}`
+        );
         console.warn("Job normalization skipped item:", {
           source: source.slug,
           message: error?.message || "Invalid job"
@@ -988,6 +992,9 @@ export async function syncJobSource(env, source) {
 
         if (error?.code === "23505") {
           skippedCount += 1;
+          skipReasons.push(
+            `insert23505: ${job.title}: ${error.message} | ${error.details || ""}`
+          );
           continue;
         }
 
@@ -1010,7 +1017,10 @@ export async function syncJobSource(env, source) {
         fetched_count: fetchedCount,
         inserted_count: insertedCount,
         updated_count: updatedCount,
-        skipped_count: skippedCount
+        skipped_count: skippedCount,
+        error_message: skipReasons.length
+          ? skipReasons.slice(0, 6).join(" || ").slice(0, 3000)
+          : null
       })
       .eq("id", run.id);
 
