@@ -742,6 +742,12 @@ function parseAddworkHtml(html, source) {
     );
   }
 
+  if (jobs.length < 3) {
+    throw new Error(
+      `ADDWORK suspicious result (${jobs.length} jobs, headings=${headingMatches.length}): ${plainText.slice(0, 3000)}`
+    );
+  }
+
   return jobs;
 }
 
