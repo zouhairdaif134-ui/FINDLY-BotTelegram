@@ -440,7 +440,7 @@ function parseAddworkHtml(html, source) {
   }
 
   const headingMatches = [
-    ...page.matchAll(/<h3\\b[^>]*>([\\s\\S]*?)<\\/h3>/gi)
+    ...page.matchAll(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi)
   ];
 
   const jobs = [];
