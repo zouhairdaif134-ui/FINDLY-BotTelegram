@@ -458,8 +458,11 @@ function parseAddworkHtml(html, source) {
     );
   }
 
+  // ADDWORK currently exposes job titles at more than one heading level.
+  // Parse h2/h3 headings, then use the following content block to decide
+  // whether the heading represents an actual vacancy rather than a section.
   const headingMatches = [
-    ...page.matchAll(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi)
+    ...page.matchAll(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/gi)
   ];
 
   const jobs = [];
@@ -493,8 +496,19 @@ function parseAddworkHtml(html, source) {
 
   const ignoredTitles = new Set([
     "ADDWORK recrute",
+    "Nos offres au Maroc",
+    "Nos opportunités au Maroc",
+    "Des opportunités dans tout le Maroc",
     "Votre parcours mérite",
-    "Une équipe à votre écoute"
+    "Une équipe à votre écoute",
+    "Relation client & centres d’appels",
+    "Relation client & centres d'appels",
+    "Systèmes d’information",
+    "Systèmes d'information",
+    "Industrie agroalimentaire",
+    "Distribution automobile",
+    "Hôtellerie",
+    "Profils commerciaux et support"
   ].map(normalizeKey));
 
   for (let index = 0; index < headingMatches.length; index += 1) {
@@ -513,6 +527,16 @@ function parseAddworkHtml(html, source) {
     const text = htmlToText(block);
 
     if (!text) continue;
+
+    const normalizedBlock = normalizeKey(text);
+    const looksLikeVacancy =
+      /\bADDWORK recrute\b/i.test(text) ||
+      /\b(Découvrir l’offre|Déposer ma candidature|Envoyer mon CV|Postuler par e-mail)\b/i.test(text) ||
+      locationCandidates.some((city) =>
+        normalizedBlock.includes(normalizeKey(city))
+      );
+
+    if (!looksLikeVacancy) continue;
 
     const lines = text
       .split("\n")
