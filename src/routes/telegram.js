@@ -1296,7 +1296,8 @@ async function processTelegramUpdate(
     await sendMasterMenu(
       env,
       bot,
-      chatId
+      chatId,
+      telegramUser
     );
   } else {
     await sendChildMenu(
