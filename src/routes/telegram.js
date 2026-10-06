@@ -455,7 +455,8 @@ function escapeHtml(
 async function sendMasterMenu(
   env,
   bot,
-  chatId
+  chatId,
+  telegramUser = null
 ) {
   const supabase = getSupabase(env);
 
@@ -499,7 +500,7 @@ async function sendMasterMenu(
   await recordAnalytics(
     env,
     bot,
-    null,
+    telegramUser,
     "master_menu_viewed",
     {
       chat_id: chatId,
@@ -1210,7 +1211,8 @@ async function processTelegramUpdate(
       await sendMasterMenu(
         env,
         bot,
-        chatId
+        chatId,
+        telegramUser
       );
     } else {
       await sendChildMenu(
