@@ -123,7 +123,7 @@ function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "https://findly-bottelegram.pages.dev",
     "Access-Control-Allow-Headers":
-      "Authorization, Content-Type",
+      "Authorization, Content-Type, X-FINDLY-JOBS-SECRET",
     "Access-Control-Allow-Methods":
       "GET, POST, PUT, PATCH, DELETE, OPTIONS"
   };
@@ -202,16 +202,31 @@ function getTelegramSlug(
 
 export default {
   async scheduled(controller, env) {
+    const startedAt = new Date().toISOString();
+
+    console.log("FINDLY scheduled invocation started:", {
+      cron: controller?.cron || null,
+      started_at: startedAt
+    });
+
     try {
       const result = await runJobsAutomation(env);
+
+      console.log("FINDLY scheduled jobs sync finished:", {
+        finished_at: new Date().toISOString(),
+        sync: result
+      });
+
       const delivery = await runJobsDelivery(env);
 
-      console.log("Jobs automation completed:", {
-        sync: result,
+      console.log("FINDLY scheduled invocation completed:", {
+        completed_at: new Date().toISOString(),
         delivery
       });
     } catch (error) {
-      console.error("Jobs automation failed:", {
+      console.error("FINDLY scheduled invocation failed:", {
+        cron: controller?.cron || null,
+        started_at: startedAt,
         message: error?.message || "Unknown error"
       });
       throw error;
