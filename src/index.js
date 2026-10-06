@@ -55,6 +55,10 @@ import {
 } from "./routes/telegram.js";
 
 import {
+  runJobsAutomation
+} from "./lib/jobs.js";
+
+import {
   setWebhook,
   getWebhookInfo,
   deleteWebhook
@@ -193,6 +197,22 @@ function getTelegramSlug(
 }
 
 export default {
+  async scheduled(controller, env) {
+    if (controller.cron !== "0 * * * *") {
+      return;
+    }
+
+    try {
+      const result = await runJobsAutomation(env);
+      console.log("Jobs automation completed:", result);
+    } catch (error) {
+      console.error("Jobs automation failed:", {
+        message: error?.message || "Unknown error"
+      });
+      throw error;
+    }
+  },
+
   async fetch(
     request,
     env,
