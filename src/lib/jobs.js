@@ -433,6 +433,49 @@ function parseJsonLdJobs(html, source) {
   return jobs;
 }
 
+function parseAddworkCards(plainText, source) {
+  const lines = String(plainText || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const jobs = [];
+  const seen = new Set();
+
+  for (let i = 3; i < lines.length; i += 1) {
+    if (!/^Voir l['’]offre\b/i.test(lines[i])) continue;
+
+    const description = lines[i - 1];
+    const location = lines[i - 2];
+    const title = lines[i - 3];
+
+    if (
+      !title || title.length < 4 || title.length > 180 ||
+      !location || location.length > 60 ||
+      !description || description.length < 20
+    ) {
+      continue;
+    }
+
+    const key = `${normalizeKey(title)}|${normalizeKey(location)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    jobs.push({
+      source_job_id: `addwork:${normalizeKey(title)}:${normalizeKey(location)}`,
+      title,
+      company: "ADDWORK",
+      location_text: location,
+      city: location,
+      description: description.slice(0, 5000),
+      source_url: source.base_url,
+      apply_url: source.base_url
+    });
+  }
+
+  return jobs;
+}
+
 function parseAddworkHtml(html, source) {
   const jsonLdJobs = parseJsonLdJobs(html, source);
   if (jsonLdJobs.length) return jsonLdJobs;
@@ -457,6 +500,9 @@ function parseAddworkHtml(html, source) {
       `ADDWORK jobs page structure was not recognized: ${preview}`
     );
   }
+
+  const cardJobs = parseAddworkCards(plainText, source);
+  if (cardJobs.length >= 3) return cardJobs;
 
   // ADDWORK has used multiple heading levels and may wrap heading content
   // with attributes/classes. Capture every semantic heading level instead of
