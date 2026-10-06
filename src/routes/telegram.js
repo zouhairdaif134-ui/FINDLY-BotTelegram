@@ -457,28 +457,55 @@ async function sendMasterMenu(
   bot,
   chatId
 ) {
-  const bots =
-    await getChildBots(env);
+  const supabase = getSupabase(env);
 
-  const keyboard = [];
+  const { data: menus, error } =
+    await supabase
+      .from("menu_items")
+      .select(
+        "id, bot_id, parent_id, label, icon, action_type, action_value, is_active, sort_order"
+      )
+      .eq("bot_id", bot.id)
+      .is("parent_id", null)
+      .eq("is_active", true)
+      .order("sort_order", {
+        ascending: true
+      })
+      .order("created_at", {
+        ascending: true
+      });
 
-  for (const childBot of bots) {
-    if (!childBot.telegram_username) {
-      continue;
+  if (error) {
+    throw error;
+  }
+
+  const keyboard = (menus || []).map((item) => {
+    const button = {
+      text: `${item.icon || "🔘"} ${item.label}`
+    };
+
+    if (
+      item.action_type === "url" &&
+      item.action_value
+    ) {
+      button.url = item.action_value;
+    } else {
+      button.callback_data = `menu:${item.id}`;
     }
 
-    keyboard.push([
-      {
-        text: `${childBot.icon || "🤖"} ${childBot.name}`,
-        url:
-          `https://t.me/` +
-          childBot.telegram_username.replace(
-            /^@/,
-            ""
-          )
-      }
-    ]);
-  }
+    return [button];
+  });
+
+  await recordAnalytics(
+    env,
+    bot,
+    null,
+    "master_menu_viewed",
+    {
+      chat_id: chatId,
+      menu_items: (menus || []).length
+    }
+  );
 
   await sendMessage(
     env,
@@ -492,8 +519,7 @@ async function sendMasterMenu(
       "اختار الخدمة اللي بغيتي:",
     {
       reply_markup: {
-        inline_keyboard:
-          keyboard
+        inline_keyboard: keyboard
       }
     }
   );
@@ -777,6 +803,91 @@ async function handleMenuCallback(
     bot.slug,
     callbackQuery.id
   );
+
+  await recordAnalytics(
+    env,
+    bot,
+    callbackQuery.from,
+    "menu_item_clicked",
+    {
+      menu_item_id: item.id,
+      label: item.label,
+      action_type: item.action_type,
+      action_value: item.action_value || null
+    }
+  );
+
+  if (
+    item.action_type ===
+      "premium"
+  ) {
+    await recordAnalytics(
+      env,
+      bot,
+      callbackQuery.from,
+      "premium_viewed",
+      {
+        menu_item_id: item.id
+      }
+    );
+
+    await sendMessage(
+      env,
+      bot.slug,
+      chatId,
+      "<b>💎 FINDLY Premium</b>\n\n" +
+        "Premium غادي يفتح لك مزايا وخدمات إضافية داخل FINDLY.\n\n" +
+        "🚧 الاشتراك كيتوجد حالياً وغادي يتفعل من بعد عبر Telegram Stars."
+    );
+
+    return;
+  }
+
+  if (
+    item.action_type ===
+      "help"
+  ) {
+    await sendMessage(
+      env,
+      bot.slug,
+      chatId,
+      "<b>ℹ️ المساعدة</b>\n\n" +
+        "استعمل /start باش ترجع للقائمة الرئيسية، " +
+        "واختار الخدمة اللي بغيتي من الأزرار."
+    );
+
+    return;
+  }
+
+  if (
+    item.action_type ===
+      "ai"
+  ) {
+    await sendMessage(
+      env,
+      bot.slug,
+      chatId,
+      "<b>🤖 المساعد الذكي</b>\n\n" +
+        "كتب ليا سؤالك مباشرة، وأنا نحاول نعاونك."
+    );
+
+    return;
+  }
+
+  if (
+    item.action_type ===
+      "search"
+  ) {
+    await sendMessage(
+      env,
+      bot.slug,
+      chatId,
+      "<b>🔎 البحث</b>\n\n" +
+        "كتب ليا شنو بغيتي تقلب عليه، وغادي نجهزو ليك البحث داخل FINDLY."
+    );
+
+    return;
+  }
 
   if (
     item.action_type ===
