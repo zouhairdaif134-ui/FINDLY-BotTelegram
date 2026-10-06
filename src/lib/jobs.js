@@ -347,12 +347,208 @@ async function fetchRssSource(source) {
   return parseRssFeed(await response.text());
 }
 
+function htmlToText(value) {
+  return decodeXmlEntities(
+    String(value || "")
+      .replace(/<script[\\s\\S]*?<\\/script>/gi, " ")
+      .replace(/<style[\\s\\S]*?<\\/style>/gi, " ")
+      .replace(/<noscript[\\s\\S]*?<\\/noscript>/gi, " ")
+      .replace(/<br\\s*\\/?>(?=.)/gi, "\\n")
+      .replace(/<\\/(p|div|li|section|article|h1|h2|h3|h4|h5|h6)>/gi, "\\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/\\r/g, "")
+      .split("\\n")
+      .map((line) => line.replace(/\\s+/g, " ").trim())
+      .filter(Boolean)
+      .join("\\n")
+  );
+}
+
+function parseJsonLdJobs(html, source) {
+  const jobs = [];
+  const scripts = String(html || "").match(
+    /<script[^>]+type=["']application\\/ld\\+json["'][^>]*>[\\s\\S]*?<\\/script>/gi
+  ) || [];
+
+  for (const script of scripts) {
+    const body = script
+      .replace(/^<script[^>]*>/i, "")
+      .replace(/<\\/script>$/i, "")
+      .trim();
+
+    try {
+      const data = JSON.parse(body);
+      const nodes = Array.isArray(data)
+        ? data
+        : Array.isArray(data["@graph"])
+          ? data["@graph"]
+          : [data];
+
+      for (const node of nodes) {
+        if (node?.["@type"] !== "JobPosting") continue;
+
+        jobs.push({
+          source_job_id: node.identifier?.value || node.identifier || node.url || node["@id"] || null,
+          title: node.title,
+          company: node.hiringOrganization?.name || null,
+          location_text:
+            node.jobLocation?.address?.addressLocality ||
+            node.jobLocation?.address?.streetAddress ||
+            node.jobLocation?.name ||
+            null,
+          city: node.jobLocation?.address?.addressLocality || null,
+          description: node.description || null,
+          employment_type: node.employmentType || null,
+          published_at: node.datePosted || null,
+          expires_at: node.validThrough || null,
+          source_url: node.url || source.base_url,
+          apply_url: node.url || source.base_url
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return jobs;
+}
+
+function parseAddworkHtml(html, source) {
+  const jsonLdJobs = parseJsonLdJobs(html, source);
+  if (jsonLdJobs.length) return jsonLdJobs;
+
+  const page = String(html || "");
+  const startMarker = "Nos opportunités au Maroc";
+  const endMarker = "Votre parcours mérite";
+  const start = page.indexOf(startMarker);
+  const end = page.indexOf(endMarker);
+
+  if (start < 0) {
+    throw new Error("ADDWORK jobs section was not found");
+  }
+
+  const section = page.slice(start, end > start ? end : undefined);
+  const headingMatches = [
+    ...section.matchAll(/<h3[^>]*>([\\s\\S]*?)<\\/h3>/gi)
+  ];
+
+  const jobs = [];
+
+  for (let index = 0; index < headingMatches.length; index += 1) {
+    const match = headingMatches[index];
+    const title = stripTags(match[1]);
+
+    if (!title) continue;
+
+    const blockStart = match.index + match[0].length;
+    const blockEnd =
+      index + 1 < headingMatches.length
+        ? headingMatches[index + 1].index
+        : section.length;
+
+    const block = section.slice(blockStart, blockEnd);
+    const text = htmlToText(block);
+
+    if (!text) continue;
+
+    const lines = text.split("\\n").map((line) => line.trim()).filter(Boolean);
+
+    const locationCandidates = [
+      "Berrechid",
+      "Settat",
+      "Casablanca",
+      "Kénitra",
+      "Kenitra",
+      "Dar Bouazza",
+      "Marrakech",
+      "Rabat",
+      "Mohammedia",
+      "El Jadida",
+      "Bouskoura",
+      "Médiouna",
+      "Mediouna",
+      "Nouaceur",
+      "Benslimane",
+      "Tanger",
+      "Fès",
+      "Fes",
+      "Meknès",
+      "Meknes",
+      "Tétouan",
+      "Tetouan",
+      "Nador",
+      "Laâyoune",
+      "Dakhla"
+    ];
+
+    const locationLine =
+      lines.find((line) =>
+        locationCandidates.some((city) =>
+          normalizeKey(line).includes(normalizeKey(city))
+        )
+      ) || null;
+
+    const description = lines
+      .filter((line) => line !== locationLine)
+      .filter((line) => !/^Déposer ma candidature/i.test(line))
+      .filter((line) => !/^Découvrir l’offre/i.test(line))
+      .filter((line) => !/^Envoyer mon CV/i.test(line))
+      .join("\\n")
+      .slice(0, 5000);
+
+    jobs.push({
+      source_job_id: `addwork:${normalizeKey(title)}:${normalizeKey(locationLine)}`,
+      title,
+      company: "ADDWORK",
+      location_text: locationLine,
+      city: locationLine,
+      description: description || null,
+      source_url: source.base_url,
+      apply_url: source.base_url
+    });
+  }
+
+  return jobs;
+}
+
+async function fetchHtmlSource(source) {
+  const url = source.feed_url || source.base_url;
+
+  if (!url) {
+    throw new Error(`Source ${source.slug} has no base_url/feed_url`);
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      accept: "text/html,application/xhtml+xml",
+      "user-agent": "FINDLY-Jobs/1.0"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Source ${source.slug} returned HTTP ${response.status}`
+    );
+  }
+
+  const html = await response.text();
+
+  if (source.slug === JOB_SOURCE_SLUGS.ADDWORK) {
+    return parseAddworkHtml(html, source);
+  }
+
+  throw new Error(`HTML connector is not configured for source ${source.slug}`);
+}
+
 export async function fetchSourceJobs(source) {
   switch (source.source_type) {
     case "json":
       return fetchJsonSource(source);
     case "rss":
       return fetchRssSource(source);
+    case "html":
+      return fetchHtmlSource(source);
     default:
       throw new Error(
         `Source ${source.slug} is not technically configured yet`
