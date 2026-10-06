@@ -743,6 +743,7 @@ function parseAddworkHtml(html, source) {
   }
 
   return jobs;
+}
 
 async function fetchHtmlSource(source) {
   const url = source.feed_url || source.base_url;
