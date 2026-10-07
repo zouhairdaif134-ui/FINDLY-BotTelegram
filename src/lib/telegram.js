@@ -95,6 +95,29 @@ export async function sendMessage(
   );
 }
 
+export async function editMessageText(
+  env,
+  botSlug,
+  chatId,
+  messageId,
+  text,
+  options = {}
+) {
+  return telegramRequest(
+    env,
+    botSlug,
+    "editMessageText",
+    {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+      ...options
+    }
+  );
+}
+
 export async function answerCallback(
   env,
   botSlug,
