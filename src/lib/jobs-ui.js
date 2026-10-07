@@ -190,7 +190,7 @@ async function renderJobDetail(env, bot, chatId, messageId, jobId, page, city) {
   const description = truncate(job.description, 900);
   if (description) lines.push("", escapeHtml(description));
   const keyboard = [];
-  if (job.source_url) keyboard.push([{ text: "🔗 فتح العرض", url: "https://findly-v3-api.berrchidcity99.workers.dev/jobs/click/" + encodeURIComponent(job.id) }, { text: "📤 شارك", url: "https://t.me/share/url?url=" + encodeURIComponent("https://t.me/FindlySearch2026Bot?start=job_" + job.id) + "&text=" + encodeURIComponent("💼 " + job.title + " — FINDLY") }]);
+  if (job.source_url) keyboard.push([{ text: "🔗 فتح العرض", url: "https://findly-v3-api.berrchidcity99.workers.dev/jobs/click/" + encodeURIComponent(job.id) }, { text: "📤 شارك", url: "https://t.me/share/url?url=" + encodeURIComponent("https://t.me/" + String(bot.telegram_username || "").replace(/^@/, "") + "?start=job_" + job.id) + "&text=" + encodeURIComponent("💼 " + job.title + " — FINDLY") }]);
   keyboard.push([{ text: "🔔 نبهني", callback_data: "jobs:interest" }]);
   keyboard.push([{ text: "◀️ الرجوع", callback_data: "jobs:page:" + page + ":" + cityIndex(city, cities) }]);
   if (bot.telegram_username) {
@@ -200,6 +200,94 @@ async function renderJobDetail(env, bot, chatId, messageId, jobId, page, city) {
     }]);
   }
   await editMessageText(env, bot.slug, chatId, messageId, lines.join("\n"), { reply_markup: { inline_keyboard: keyboard } });
+}
+
+export async function showSharedJob(env, bot, chatId, jobId) {
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  if (!uuidPattern.test(String(jobId || ""))) {
+    await sendMessage(
+      env,
+      bot.slug,
+      chatId,
+      "<b>💼 فرص الشغل</b>\n\nهاد العرض ما بقاش متوفر."
+    );
+    return;
+  }
+
+  const { data: job, error } = await getSupabase(env)
+    .from("jobs")
+    .select(
+      "id, title, company, location_text, city, description, source_url, first_seen_at, published_at"
+    )
+    .eq("id", jobId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (!job) {
+    await sendMessage(
+      env,
+      bot.slug,
+      chatId,
+      "<b>💼 فرص الشغل</b>\n\nهاد العرض ما بقاش متوفر."
+    );
+    return;
+  }
+
+  const lines = [
+    "<b>" + escapeHtml(job.title) + "</b>",
+    "",
+    "📍 " + escapeHtml(job.city || job.location_text || "غير محدد"),
+    "🏢 " + escapeHtml(job.company || "ADDWORK")
+  ];
+
+  if (jobIsNew(job)) lines.push("🆕 جديد");
+
+  const description = truncate(job.description, 900);
+  if (description) lines.push("", escapeHtml(description));
+
+  const botUsername = String(bot.telegram_username || "").replace(/^@/, "");
+  const keyboard = [];
+
+  if (job.source_url) {
+    keyboard.push([
+      {
+        text: "🔗 فتح العرض",
+        url:
+          "https://findly-v3-api.berrchidcity99.workers.dev/jobs/click/" +
+          encodeURIComponent(job.id)
+      },
+      {
+        text: "📤 شارك",
+        url:
+          "https://t.me/share/url?url=" +
+          encodeURIComponent(
+            "https://t.me/" + botUsername + "?start=job_" + job.id
+          ) +
+          "&text=" +
+          encodeURIComponent("💼 " + job.title + " — FINDLY")
+      }
+    ]);
+  }
+
+  keyboard.push([
+    { text: "🔔 نبهني", callback_data: "jobs:interest" }
+  ]);
+
+  keyboard.push([
+    { text: "💼 فرص الشغل", callback_data: "jobs:latest" }
+  ]);
+
+  await sendMessage(
+    env,
+    bot.slug,
+    chatId,
+    lines.join("\n"),
+    { reply_markup: { inline_keyboard: keyboard } }
+  );
 }
 
 export async function showJobsCategory(env, bot, chatId) {
