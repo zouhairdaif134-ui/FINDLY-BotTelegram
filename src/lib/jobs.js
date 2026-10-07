@@ -12,6 +12,12 @@ const CITY_ALIASES = new Map([
   ["berrechid, morocco", "Berrechid"],
   ["settat", "Settat"],
   ["casablanca", "Casablanca"],
+  ["dar bouazza", "Dar Bouazza"],
+  ["rahma", "Dar Bouazza"],
+  ["dar bouazza / rahma", "Dar Bouazza"],
+  ["dar bouazza /rahma", "Dar Bouazza"],
+  ["dar bouazza/ rahma", "Dar Bouazza"],
+  ["dar bouazza/rahma", "Dar Bouazza"],
   ["casablanca- settat", "Casablanca-Settat"],
   ["casablanca-settat", "Casablanca-Settat"],
   ["el jadida", "El Jadida"],
@@ -159,46 +165,15 @@ export function normalizeJob(source, raw) {
 
   const rawCityText = String(rawCity || "").trim();
   const rawCityKey = normalizeKey(rawCityText);
-  const multiCityCandidates = [
-    "casablanca",
-    "berrechid",
-    "settat",
-    "marrakech",
-    "rabat",
-    "mohammedia",
-    "el jadida",
-    "bouskoura",
-    "dar bouazza",
-    "rahma",
-    "mediouna",
-    "nouaceur",
-    "benslimane",
-    "kenitra",
-    "kénitra",
-    "tanger",
-    "fes",
-    "fès",
-    "meknes",
-    "meknès",
-    "tetouan",
-    "tétouan",
-    "nador",
-    "laayoune",
-    "laâyoune",
-    "dakhla"
-  ];
-  const matchedCities = multiCityCandidates.filter((candidate) =>
-    rawCityKey.includes(normalizeKey(candidate))
-  );
 
-  const hasMultiCitySeparator = /[\/,;|]/.test(rawCityText);
+  // Only normalize locations with explicit, known semantics. Do not infer
+  // multi-city from punctuation such as commas or slashes.
   const normalizedRawCity =
-    rawCityKey.includes("dar bouazza") || rawCityKey.includes("rahma")
+    /^(dar bouazza\s*\/\s*rahma|rahma|dar bouazza)$/i.test(rawCityText)
       ? "Dar Bouazza"
       : /^(multi[- ]?villes|multi[- ]?city|plusieurs villes)$/i.test(
           rawCityText
-        ) ||
-        (hasMultiCitySeparator && matchedCities.length >= 2)
+        )
         ? "Multi-villes"
         : rawCity;
 
