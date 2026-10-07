@@ -103,19 +103,30 @@ export async function editMessageText(
   text,
   options = {}
 ) {
-  return telegramRequest(
-    env,
-    botSlug,
-    "editMessageText",
-    {
-      chat_id: chatId,
-      message_id: messageId,
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
-      ...options
+  try {
+    return await telegramRequest(
+      env,
+      botSlug,
+      "editMessageText",
+      {
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        ...options
+      }
+    );
+  } catch (error) {
+    if (
+      error?.code === "TELEGRAM_API_ERROR" &&
+      String(error.message || "").toLowerCase().includes("message is not modified")
+    ) {
+      return null;
     }
-  );
+
+    throw error;
+  }
 }
 
 export async function answerCallback(
