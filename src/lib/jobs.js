@@ -476,6 +476,36 @@ function parseAddworkCards(plainText, source) {
   return jobs;
 }
 
+function extractAddworkOfferLinks(html) {
+  const links = [];
+  const seen = new Set();
+
+  for (const match of String(html || "").matchAll(
+    /href=["'](?:https?:\/\/www\.addwork\.ma)?(\/nos-opportunites\/[a-z0-9][a-z0-9-]*)["']/gi
+  )) {
+    const url = `https://www.addwork.ma${match[1]}`;
+    if (seen.has(url)) continue;
+    seen.add(url);
+    links.push(url);
+  }
+
+  return links;
+}
+
+function parseAddworkPageCards(html, source) {
+  const cards = parseAddworkCards(htmlToText(html), source);
+  const links = extractAddworkOfferLinks(html);
+
+  if (links.length === cards.length) {
+    cards.forEach((card, index) => {
+      card.source_url = links[index];
+      card.apply_url = links[index];
+    });
+  }
+
+  return cards;
+}
+
 function parseAddworkHtml(html, source) {
   const jsonLdJobs = parseJsonLdJobs(html, source);
   if (jsonLdJobs.length) return jsonLdJobs;
@@ -501,7 +531,7 @@ function parseAddworkHtml(html, source) {
     );
   }
 
-  const cardJobs = parseAddworkCards(plainText, source);
+  const cardJobs = parseAddworkPageCards(page, source);
   if (cardJobs.length >= 3) return cardJobs;
 
   // ADDWORK has used multiple heading levels and may wrap heading content
@@ -791,6 +821,47 @@ function parseAddworkHtml(html, source) {
   return jobs;
 }
 
+async function fetchAddworkJobs(source, firstPageHtml, firstPageUrl) {
+  const jobs = [...parseAddworkHtml(firstPageHtml, source)];
+  const seen = new Set(jobs.map((job) => job.source_job_id));
+
+  const pageNumbers = [
+    ...String(firstPageHtml).matchAll(/[?&;]page=(\d+)/gi)
+  ].map((match) => Number(match[1]));
+
+  const lastPage = Math.min(Math.max(1, ...pageNumbers), 10);
+
+  for (let page = 2; page <= lastPage; page += 1) {
+    const pageUrl = new URL(firstPageUrl);
+    pageUrl.searchParams.set("page", String(page));
+
+    const response = await fetchWithTimeout(pageUrl.toString(), {
+      headers: {
+        accept: "text/html,application/xhtml+xml",
+        "user-agent": "FINDLY-Jobs/1.0"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`ADDWORK page ${page} returned HTTP ${response.status}`);
+    }
+
+    const pageJobs = parseAddworkPageCards(await response.text(), source);
+
+    if (pageJobs.length === 0) {
+      throw new Error(`ADDWORK page ${page} returned no jobs`);
+    }
+
+    for (const job of pageJobs) {
+      if (seen.has(job.source_job_id)) continue;
+      seen.add(job.source_job_id);
+      jobs.push(job);
+    }
+  }
+
+  return jobs;
+}
+
 async function fetchHtmlSource(source) {
   const url = source.feed_url || source.base_url;
 
@@ -814,7 +885,7 @@ async function fetchHtmlSource(source) {
   const html = await response.text();
 
   if (source.slug === JOB_SOURCE_SLUGS.ADDWORK) {
-    return parseAddworkHtml(html, source);
+    return fetchAddworkJobs(source, html, url);
   }
 
   throw new Error(`HTML connector is not configured for source ${source.slug}`);
@@ -916,6 +987,25 @@ export async function syncJobSource(env, source) {
     const rawJobs = await fetchSourceJobs(source);
     fetchedCount = rawJobs.length;
 
+    const { data: existingRows, error: existingError } = await supabase
+      .from("jobs")
+      .select("id, source_job_id, fingerprint")
+      .eq("source_id", source.id);
+
+    if (existingError) throw existingError;
+
+    const existingBySourceJobId = new Map();
+    const existingByFingerprint = new Map();
+
+    for (const row of existingRows || []) {
+      if (row.source_job_id) {
+        existingBySourceJobId.set(row.source_job_id, row.id);
+      }
+      if (row.fingerprint) {
+        existingByFingerprint.set(row.fingerprint, row.id);
+      }
+    }
+
     for (const raw of rawJobs) {
       let job;
 
@@ -957,36 +1047,16 @@ export async function syncJobSource(env, source) {
         last_seen_at: new Date().toISOString()
       };
 
-      let existing = null;
+      const existingId =
+        (job.source_job_id && existingBySourceJobId.get(job.source_job_id)) ||
+        existingByFingerprint.get(job.fingerprint) ||
+        null;
 
-      if (job.source_job_id) {
-        const { data, error: idLookupError } = await supabase
-          .from("jobs")
-          .select("id")
-          .eq("source_id", source.id)
-          .eq("source_job_id", job.source_job_id)
-          .maybeSingle();
-
-        if (idLookupError) throw idLookupError;
-        existing = data;
-      }
-
-      if (!existing) {
-        const { data, error: lookupError } = await supabase
-          .from("jobs")
-          .select("id")
-          .eq("fingerprint", job.fingerprint)
-          .maybeSingle();
-
-        if (lookupError) throw lookupError;
-        existing = data;
-      }
-
-      if (existing?.id) {
+      if (existingId) {
         const { error } = await supabase
           .from("jobs")
           .update(payload)
-          .eq("id", existing.id);
+          .eq("id", existingId);
 
         if (error) throw error;
 
