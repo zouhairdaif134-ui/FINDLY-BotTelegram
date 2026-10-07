@@ -3,6 +3,10 @@ import {
   sendMessage,
   answerCallback
 } from "../lib/telegram.js";
+import {
+  showJobsCategory,
+  handleJobsCallback
+} from "../lib/jobs-ui.js";
 import { generateAIReply } from "../lib/ai.js";
 
 async function getBot(
@@ -578,88 +582,6 @@ async function sendMenuLevel(env, bot, chatId, parentId = null) {
 async function sendChildMenu(env, bot, chatId) {
   return sendMenuLevel(env, bot, chatId, null);
 }
-async function sendJobsCategory(env, bot, chatId) {
-  const supabase = getSupabase(env);
-
-  const { data: jobs, error } = await supabase
-    .from("jobs")
-    .select(
-      "id, title, company, location_text, city, region, priority_city, target_region, employment_type, published_at, source_url"
-    )
-    .eq("status", "active")
-    .order("published_at", {
-      ascending: false,
-      nullsFirst: false
-    })
-    .order("created_at", {
-      ascending: false
-    })
-    .limit(10);
-
-  if (error) throw error;
-
-  const lines = [
-    "<b>💼 فرص الشغل</b>",
-    "",
-    jobs?.length
-      ? "آخر العروض المتوفرة:"
-      : "حالياً ما كاين حتى عرض شغل متوفر."
-  ];
-
-  for (const [index, job] of (jobs || []).entries()) {
-    lines.push(
-      "",
-      "<b>" + (index + 1) + ". " + escapeHtml(job.title) + "</b>"
-    );
-
-    if (job.company) {
-      lines.push("🏢 " + escapeHtml(job.company));
-    }
-
-    if (job.location_text) {
-      lines.push("📍 " + escapeHtml(job.location_text));
-    }
-
-    if (job.employment_type) {
-      lines.push("🧾 " + escapeHtml(job.employment_type));
-    }
-
-    if (job.source_url) {
-      lines.push(
-        '<a href="' +
-          escapeHtml(job.source_url) +
-          '">🔗 التفاصيل</a>'
-      );
-    }
-  }
-
-  const homeButton = await sendHomeButton(env, bot.slug);
-  const keyboard = [
-    [
-      {
-        text: "🔔 نبهني على عروض الشغل",
-        callback_data: "jobs:subscribe"
-      }
-    ]
-  ];
-
-  if (homeButton) {
-    keyboard.push([homeButton]);
-  }
-
-  await sendMessage(
-    env,
-    bot.slug,
-    chatId,
-    lines.join("\n"),
-    {
-      reply_markup: {
-        inline_keyboard: keyboard
-      }
-    }
-  );
-}
-
 async function sendCategory(
   env,
   bot,
@@ -820,72 +742,14 @@ async function sendCategory(
   );
 }
 
-async function updateJobNotificationSubscription(
-  env,
-  telegramUser,
-  enabled
-) {
-  if (!telegramUser?.id) {
-    throw new Error("Telegram user is required for job notifications");
-  }
-
-  const supabase = getSupabase(env);
-
-  const { data: user, error: userError } = await supabase
-    .from("telegram_users")
-    .select("id")
-    .eq("telegram_user_id", String(telegramUser.id))
-    .maybeSingle();
-
-  if (userError) throw userError;
-  if (!user?.id) throw new Error("Telegram user was not found");
-
-  const { error } = await supabase
-    .from("job_notification_subscriptions")
-    .upsert(
-      {
-        user_id: user.id,
-        enabled,
-        region: "Casablanca-Settat",
-        city: null,
-        keywords: []
-      },
-      {
-        onConflict: "user_id"
-      }
-    );
-
-  if (error) throw error;
-}
-
 async function handleMenuCallback(
   env,
   bot,
   chatId,
   callbackQuery
 ) {
-  if (callbackQuery.data === "jobs:subscribe") {
-    await answerCallback(
-      env,
-      bot.slug,
-      callbackQuery.id,
-      "تم التفعيل"
-    );
-
-    await updateJobNotificationSubscription(
-      env,
-      callbackQuery.from,
-      true
-    );
-
-    await sendMessage(
-      env,
-      bot.slug,
-      chatId,
-      "<b>🔔 تنبيهات فرص الشغل</b>\n\n" +
-        "تفعلات ليك التنبيهات. غادي توصلك العروض الجديدة المناسبة لجهة الدار البيضاء-سطات."
-    );
-
+  if (callbackQuery.data?.startsWith("jobs:")) {
+    await handleJobsCallback(env, bot, chatId, callbackQuery);
     return;
   }
 
@@ -1041,7 +905,7 @@ async function handleMenuCallback(
     item.action_value
   ) {
     if (item.action_value === "jobs") {
-      await sendJobsCategory(
+      await showJobsCategory(
         env,
         bot,
         chatId
