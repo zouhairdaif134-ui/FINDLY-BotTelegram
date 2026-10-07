@@ -334,6 +334,67 @@ export default {
 
       /*
        * =========================
+       * JOBS CLICK TRACKING
+       * =========================
+       *
+       * Public redirect used by Telegram job-detail buttons.
+       * The destination is resolved from the database to prevent
+       * arbitrary open redirects.
+       */
+      if (
+        url.pathname.startsWith("/jobs/click/") &&
+        request.method === "GET"
+      ) {
+        const jobId = decodeURIComponent(
+          url.pathname.slice("/jobs/click/".length)
+        );
+
+        if (!jobId) {
+          return new Response("Job not found", { status: 404 });
+        }
+
+        const supabase = getSupabase(env);
+        const { data: job, error } = await supabase
+          .from("jobs")
+          .select("id, title, source_url")
+          .eq("id", jobId)
+          .eq("status", "active")
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!job?.source_url) {
+          return new Response("Job not found", { status: 404 });
+        }
+
+        const { data: bot } = await supabase
+          .from("bots")
+          .select("id")
+          .eq("bot_type", "master")
+          .eq("is_active", true)
+          .maybeSingle();
+
+        const { error: analyticsError } = await supabase
+          .from("analytics_events")
+          .insert({
+            user_id: null,
+            bot_id: bot?.id || null,
+            event_type: "job_offer_clicked",
+            event_data: {
+              job_id: job.id,
+              title: job.title,
+              source_url: job.source_url
+            }
+          });
+
+        if (analyticsError) {
+          console.error("Job click analytics failed:", analyticsError);
+        }
+
+        return Response.redirect(job.source_url, 302);
+      }
+
+      /*
+       * =========================
        * TELEGRAM WEBHOOKS
        * =========================
        */
