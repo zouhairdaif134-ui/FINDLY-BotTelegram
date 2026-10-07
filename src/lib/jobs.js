@@ -157,12 +157,46 @@ export function normalizeJob(source, raw) {
     raw.locationCity
   );
 
+  const rawCityText = String(rawCity || "").trim();
+  const rawCityKey = normalizeKey(rawCityText);
+  const multiCityCandidates = [
+    "casablanca",
+    "berrechid",
+    "settat",
+    "marrakech",
+    "rabat",
+    "mohammedia",
+    "el jadida",
+    "bouskoura",
+    "dar bouazza",
+    "rahma",
+    "mediouna",
+    "nouaceur",
+    "benslimane",
+    "kenitra",
+    "kénitra",
+    "tanger",
+    "fes",
+    "fès",
+    "meknes",
+    "meknès",
+    "tetouan",
+    "tétouan",
+    "nador",
+    "laayoune",
+    "laâyoune",
+    "dakhla"
+  ];
+  const matchedCities = multiCityCandidates.filter((candidate) =>
+    rawCityKey.includes(normalizeKey(candidate))
+  );
+
   const normalizedRawCity =
-    /^(dar bouazza|rahma)$/i.test(String(rawCity || "").trim())
+    rawCityKey.includes("dar bouazza") || rawCityKey.includes("rahma")
       ? "Dar Bouazza"
       : /^(multi[- ]?villes|multi[- ]?city|plusieurs villes)$/i.test(
-          String(rawCity || "").trim()
-        )
+          rawCityText
+        ) || matchedCities.length >= 2
         ? "Multi-villes"
         : rawCity;
 
