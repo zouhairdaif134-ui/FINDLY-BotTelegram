@@ -14,12 +14,43 @@ function truncate(value, max = 180) {
 }
 
 function moroccoTodayStartIso() {
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Casablanca", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, Number(part.value)]));
-  const localAsUtc = Date.UTC(values.year, values.month - 1, values.day, values.hour, values.minute, values.second);
-  const utcGuess = Date.UTC(values.year, values.month - 1, values.day, 0, 0, 0);
-  const offsetMs = localAsUtc - utcGuess;
-  return new Date(Date.UTC(values.year, values.month - 1, values.day) - offsetMs).toISOString();
+  const now = Date.now();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Casablanca",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date(now));
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)])
+  );
+
+  const localAsUtc = Date.UTC(
+    values.year,
+    values.month - 1,
+    values.day,
+    values.hour,
+    values.minute,
+    values.second
+  );
+
+  const offsetMs =
+    localAsUtc - Math.floor(now / 1000) * 1000;
+
+  return new Date(
+    Date.UTC(
+      values.year,
+      values.month - 1,
+      values.day
+    ) - offsetMs
+  ).toISOString();
 }
 
 function formatMoroccoTime(value) {
@@ -86,15 +117,19 @@ function jobSummary(job, index) {
   return lines.join("\n");
 }
 
-function encodedCity(city) { return encodeURIComponent(city || ""); }
+function cityIndex(city, cities) {
+  if (!city) return "";
+  const index = cities.indexOf(city);
+  return index >= 0 ? String(index) : "";
+}
 
-function jobsListKeyboard(jobs, page, totalPages, city) {
+function jobsListKeyboard(jobs, page, totalPages, city, cities) {
   const keyboard = [];
-  if (jobs.length) keyboard.push(jobs.map((job, index) => ({ text: (index + 1) + "️⃣", callback_data: "jobs:detail:" + job.id + ":" + page + ":" + encodedCity(city) })));
+  if (jobs.length) keyboard.push(jobs.map((job, index) => ({ text: (index + 1) + "️⃣", callback_data: "jobs:detail:" + job.id + ":" + page + ":" + cityIndex(city, cities) })));
   const nav = [];
-  if (page > 0) nav.push({ text: "◀️", callback_data: "jobs:page:" + (page - 1) + ":" + encodedCity(city) });
+  if (page > 0) nav.push({ text: "◀️", callback_data: "jobs:page:" + (page - 1) + ":" + cityIndex(city, cities) });
   nav.push({ text: (page + 1) + "/" + totalPages, callback_data: "jobs:noop" });
-  if (page + 1 < totalPages) nav.push({ text: "▶️", callback_data: "jobs:page:" + (page + 1) + ":" + encodedCity(city) });
+  if (page + 1 < totalPages) nav.push({ text: "▶️", callback_data: "jobs:page:" + (page + 1) + ":" + cityIndex(city, cities) });
   keyboard.push(nav);
   keyboard.push([{ text: "🆕 آخر العروض", callback_data: "jobs:latest" }, { text: "📍 حسب المدينة", callback_data: "jobs:cities" }]);
   keyboard.push([{ text: "🔔 نبهني", callback_data: "jobs:interest" }]);
@@ -102,7 +137,11 @@ function jobsListKeyboard(jobs, page, totalPages, city) {
 }
 
 export async function renderJobsList(env, bot, chatId, messageId, page = 0, city = null) {
-  const [stats, result] = await Promise.all([loadJobStats(env), loadJobs(env, page, city)]);
+  const [stats, result, cities] = await Promise.all([
+    loadJobStats(env),
+    loadJobs(env, page, city),
+    loadCities(env)
+  ]);
   const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
   if (safePage !== page) return renderJobsList(env, bot, chatId, messageId, safePage, city);
@@ -111,7 +150,7 @@ export async function renderJobsList(env, bot, chatId, messageId, page = 0, city
     result.jobs.forEach((job, index) => lines.push(jobSummary(job, index), ""));
     lines.push("<i>اختار رقم العرض باش تشوف التفاصيل · " + (safePage + 1) + "/" + totalPages + "</i>");
   }
-  const keyboard = jobsListKeyboard(result.jobs, safePage, totalPages, city);
+  const keyboard = jobsListKeyboard(result.jobs, safePage, totalPages, city, cities);
   if (bot.telegram_username) {
     keyboard.push([{
       text: "🏠 FINDLY",
@@ -122,9 +161,10 @@ export async function renderJobsList(env, bot, chatId, messageId, page = 0, city
 }
 
 async function renderJobDetail(env, bot, chatId, messageId, jobId, page, city) {
+  const cities = await loadCities(env);
   const { data: job, error } = await getSupabase(env).from("jobs").select("id, title, company, location_text, city, description, source_url, first_seen_at, published_at").eq("id", jobId).eq("status", "active").maybeSingle();
   if (error) throw error;
-  if (!job) { await editMessageText(env, bot.slug, chatId, messageId, "<b>💼 فرص الشغل</b>\n\nهاد العرض ما بقاش متوفر.", { reply_markup: { inline_keyboard: [[{ text: "◀️ الرجوع", callback_data: "jobs:page:" + page + ":" + encodedCity(city) }]] } }); return; }
+  if (!job) { await editMessageText(env, bot.slug, chatId, messageId, "<b>💼 فرص الشغل</b>\n\nهاد العرض ما بقاش متوفر.", { reply_markup: { inline_keyboard: [[{ text: "◀️ الرجوع", callback_data: "jobs:page:" + page + ":" + cityIndex(city, cities) }]] } }); return; }
   const lines = ["<b>" + escapeHtml(job.title) + "</b>", "", "📍 " + escapeHtml(job.city || job.location_text || "غير محدد"), "🏢 " + escapeHtml(job.company || "ADDWORK")];
   if (jobIsNew(job)) lines.push("🆕 جديد");
   const description = truncate(job.description, 900);
@@ -132,7 +172,7 @@ async function renderJobDetail(env, bot, chatId, messageId, jobId, page, city) {
   const keyboard = [];
   if (job.source_url) keyboard.push([{ text: "🔗 فتح العرض", url: "https://findly-v3-api.berrchidcity99.workers.dev/jobs/click/" + encodeURIComponent(job.id) }, { text: "📤 شارك", url: "https://t.me/share/url?url=" + encodeURIComponent(job.source_url) + "&text=" + encodeURIComponent(job.title) }]);
   keyboard.push([{ text: "🔔 نبهني", callback_data: "jobs:interest" }]);
-  keyboard.push([{ text: "◀️ الرجوع", callback_data: "jobs:page:" + page + ":" + encodedCity(city) }]);
+  keyboard.push([{ text: "◀️ الرجوع", callback_data: "jobs:page:" + page + ":" + cityIndex(city, cities) }]);
   if (bot.telegram_username) {
     keyboard.push([{
       text: "🏠 FINDLY",
@@ -156,18 +196,45 @@ export async function handleJobsCallback(env, bot, chatId, callbackQuery) {
   if (data === "jobs:cities") {
     await answerCallback(env, bot.slug, callbackQuery.id);
     const cities = await loadCities(env);
-    const keyboard = cities.map((city) => [{ text: "📍 " + city, callback_data: "jobs:city:" + encodeURIComponent(city) }]);
+    const keyboard = cities.map((city, index) => [
+      {
+        text: "📍 " + city,
+        callback_data: "jobs:city:" + index
+      }
+    ]);
     keyboard.push([{ text: "◀️ آخر العروض", callback_data: "jobs:latest" }]);
     await editMessageText(env, bot.slug, chatId, messageId, "<b>📍 حسب المدينة</b>\n\nاختار المدينة:", { reply_markup: { inline_keyboard: keyboard } });
     return;
   }
-  if (data.startsWith("jobs:city:")) { await answerCallback(env, bot.slug, callbackQuery.id); await renderJobsList(env, bot, chatId, messageId, 0, decodeURIComponent(data.slice("jobs:city:".length))); return; }
+  if (data.startsWith("jobs:city:")) {
+    await answerCallback(env, bot.slug, callbackQuery.id);
+    const cityIndexValue = Number(data.slice("jobs:city:".length));
+    const cities = await loadCities(env);
+    const city =
+      Number.isInteger(cityIndexValue) && cityIndexValue >= 0
+        ? cities[cityIndexValue] || null
+        : null;
+    await renderJobsList(env, bot, chatId, messageId, 0, city);
+    return;
+  }
   if (data.startsWith("jobs:page:")) {
     await answerCallback(env, bot.slug, callbackQuery.id);
     const parts = data.split(":");
     const page = Number(parts[2]);
-    const city = parts.slice(3).join(":") ? decodeURIComponent(parts.slice(3).join(":")) : null;
-    await renderJobsList(env, bot, chatId, messageId, Number.isInteger(page) ? page : 0, city);
+    const cityIndexValue = parts[3] === "" ? -1 : Number(parts[3]);
+    const cities = await loadCities(env);
+    const city =
+      Number.isInteger(cityIndexValue) && cityIndexValue >= 0
+        ? cities[cityIndexValue] || null
+        : null;
+    await renderJobsList(
+      env,
+      bot,
+      chatId,
+      messageId,
+      Number.isInteger(page) ? page : 0,
+      city
+    );
     return;
   }
   if (data.startsWith("jobs:detail:")) {
@@ -175,7 +242,12 @@ export async function handleJobsCallback(env, bot, chatId, callbackQuery) {
     const parts = data.split(":");
     const jobId = parts[2];
     const page = Number(parts[3]) || 0;
-    const city = parts.slice(4).join(":") ? decodeURIComponent(parts.slice(4).join(":")) : null;
+    const cityIndexValue = parts[4] === "" ? -1 : Number(parts[4]);
+    const cities = await loadCities(env);
+    const city =
+      Number.isInteger(cityIndexValue) && cityIndexValue >= 0
+        ? cities[cityIndexValue] || null
+        : null;
     await renderJobDetail(env, bot, chatId, messageId, jobId, page, city);
     return;
   }
