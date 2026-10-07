@@ -97,6 +97,22 @@ async function queueUserNotifications(env, jobs) {
 
   if (error) throw error;
 
+  const userIds = [...new Set((subscriptions || []).map((subscription) => subscription.user_id).filter(Boolean))];
+  const { data: telegramUsers, error: telegramUsersError } = userIds.length
+    ? await supabase
+        .from("telegram_users")
+        .select("id, telegram_user_id")
+        .in("id", userIds)
+    : { data: [], error: null };
+
+  if (telegramUsersError) throw telegramUsersError;
+
+  const telegramIdByUserId = new Map(
+    (telegramUsers || [])
+      .filter((user) => user?.id && user?.telegram_user_id)
+      .map((user) => [user.id, String(user.telegram_user_id)])
+  );
+
   const rows = [];
 
   for (const job of jobs) {
@@ -129,11 +145,13 @@ async function queueUserNotifications(env, jobs) {
           searchable.includes(String(keyword).toLowerCase())
         );
 
-      if (cityMatches && regionMatches && keywordMatches) {
+      const telegramUserId = telegramIdByUserId.get(subscription.user_id);
+
+      if (cityMatches && regionMatches && keywordMatches && telegramUserId) {
         rows.push({
           job_id: job.id,
           destination_type: "user",
-          destination_id: String(subscription.user_id),
+          destination_id: telegramUserId,
           status: "pending"
         });
       }
