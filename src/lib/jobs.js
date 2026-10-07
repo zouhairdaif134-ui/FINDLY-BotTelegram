@@ -151,9 +151,22 @@ export function normalizeJob(source, raw) {
     raw.localisation
   );
 
-  const city = normalizeCity(
-    firstValue(raw.city, raw.location_city, raw.locationCity)
+  const rawCity = firstValue(
+    raw.city,
+    raw.location_city,
+    raw.locationCity
   );
+
+  const normalizedRawCity =
+    /^(dar bouazza|rahma)$/i.test(String(rawCity || "").trim())
+      ? "Dar Bouazza"
+      : /^(multi[- ]?villes|multi[- ]?city|plusieurs villes)$/i.test(
+          String(rawCity || "").trim()
+        )
+        ? "Multi-villes"
+        : rawCity;
+
+  const city = normalizeCity(normalizedRawCity);
 
   const region = normalizeRegion(
     firstValue(raw.region, raw.location_region, raw.locationRegion)
