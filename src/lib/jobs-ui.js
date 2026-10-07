@@ -72,6 +72,13 @@ function jobSummary(job, index) {
 
 function encodedCity(city) { return encodeURIComponent(city || ""); }
 
+async function loadHomeButton(env) {
+  const { data, error } = await getSupabase(env).from("bots").select("telegram_username").eq("bot_type", "master").eq("is_active", true).maybeSingle();
+  if (error) throw error;
+  if (!data?.telegram_username) return null;
+  return { text: "🏠 FINDLY", url: "https://t.me/" + data.telegram_username.replace(/^@/, "") };
+}
+
 function jobsListKeyboard(jobs, page, totalPages, city) {
   const keyboard = [];
   if (jobs.length) keyboard.push(jobs.map((job, index) => ({ text: (index + 1) + "️⃣", callback_data: "jobs:detail:" + job.id + ":" + page + ":" + encodedCity(city) })));
@@ -95,7 +102,10 @@ export async function renderJobsList(env, bot, chatId, messageId, page = 0, city
     result.jobs.forEach((job, index) => lines.push(jobSummary(job, index), ""));
     lines.push("<i>اختار رقم العرض باش تشوف التفاصيل · " + (safePage + 1) + "/" + totalPages + "</i>");
   }
-  await editMessageText(env, bot.slug, chatId, messageId, lines.join("\n"), { reply_markup: { inline_keyboard: jobsListKeyboard(result.jobs, safePage, totalPages, city) } });
+  const keyboard = jobsListKeyboard(result.jobs, safePage, totalPages, city);
+  const homeButton = await loadHomeButton(env);
+  if (homeButton) keyboard.push([homeButton]);
+  await editMessageText(env, bot.slug, chatId, messageId, lines.join("\n"), { reply_markup: { inline_keyboard: keyboard } });
 }
 
 async function renderJobDetail(env, bot, chatId, messageId, jobId, page, city) {
@@ -110,6 +120,8 @@ async function renderJobDetail(env, bot, chatId, messageId, jobId, page, city) {
   if (job.source_url) keyboard.push([{ text: "🔗 فتح العرض", url: "https://findly-v3-api.berrchidcity99.workers.dev/jobs/click/" + encodeURIComponent(job.id) }, { text: "📤 شارك", url: "https://t.me/share/url?url=" + encodeURIComponent(job.source_url) + "&text=" + encodeURIComponent(job.title) }]);
   keyboard.push([{ text: "🔔 نبهني", callback_data: "jobs:interest" }]);
   keyboard.push([{ text: "◀️ الرجوع", callback_data: "jobs:page:" + page + ":" + encodedCity(city) }]);
+  const homeButton = await loadHomeButton(env);
+  if (homeButton) keyboard.push([homeButton]);
   await editMessageText(env, bot.slug, chatId, messageId, lines.join("\n"), { reply_markup: { inline_keyboard: keyboard } });
 }
 
