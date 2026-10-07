@@ -13,64 +13,13 @@ function truncate(value, max = 180) {
   return text.length > max ? text.slice(0, max - 1) + "…" : text;
 }
 
-function getTimeZoneOffsetMs(date, timeZone) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23"
-  }).formatToParts(date);
-
-  const values = Object.fromEntries(
-    parts
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, Number(part.value)])
-  );
-
-  return Date.UTC(
-    values.year,
-    values.month - 1,
-    values.day,
-    values.hour,
-    values.minute,
-    values.second
-  ) - date.getTime();
-}
-
-function moroccoTodayStartIso() {
-  const timeZone = "Africa/Casablanca";
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+function moroccoDateKey(value = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Casablanca",
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
-  }).formatToParts(now);
-
-  const values = Object.fromEntries(
-    parts
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, Number(part.value)])
-  );
-
-  const localMidnightAsUtc = Date.UTC(
-    values.year,
-    values.month - 1,
-    values.day
-  );
-
-  const offsetAtMidnight = getTimeZoneOffsetMs(
-    new Date(localMidnightAsUtc),
-    timeZone
-  );
-
-  return new Date(
-    localMidnightAsUtc - offsetAtMidnight
-  ).toISOString();
+  }).format(new Date(value));
 }
 
 function formatMoroccoTime(value) {
@@ -80,7 +29,7 @@ function formatMoroccoTime(value) {
 
 async function loadJobStats(env) {
   const supabase = getSupabase(env);
-  const todayStart = moroccoTodayStartIso();
+  const todayKey = moroccoDateKey();
   const [active, source] = await Promise.all([
     supabase
       .from("jobs")
@@ -97,9 +46,8 @@ async function loadJobStats(env) {
   ]);
   if (active.error) throw active.error;
   if (source.error) throw source.error;
-  const todayStartMs = new Date(todayStart).getTime();
   const newToday = (active.data || []).filter(
-    (job) => job.first_seen_at && new Date(job.first_seen_at).getTime() >= todayStartMs
+    (job) => job.first_seen_at && moroccoDateKey(job.first_seen_at) === todayKey
   ).length;
   return {
     activeCount: Number(active.count || 0),
@@ -126,7 +74,10 @@ async function loadCities(env) {
 }
 
 function jobIsNew(job) {
-  return Boolean(job.first_seen_at && new Date(job.first_seen_at).getTime() >= new Date(moroccoTodayStartIso()).getTime());
+  return Boolean(
+    job.first_seen_at &&
+    moroccoDateKey(job.first_seen_at) === moroccoDateKey()
+  );
 }
 
 function jobSummary(job, index) {
