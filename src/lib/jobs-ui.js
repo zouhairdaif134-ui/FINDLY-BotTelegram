@@ -190,7 +190,7 @@ async function renderJobDetail(env, bot, chatId, messageId, jobId, page, city) {
   const description = truncate(job.description, 900);
   if (description) lines.push("", escapeHtml(description));
   const keyboard = [];
-  if (job.source_url) keyboard.push([{ text: "🔗 فتح العرض", url: "https://findly-v3-api.berrchidcity99.workers.dev/jobs/click/" + encodeURIComponent(job.id) }, { text: "📤 شارك", url: "https://t.me/share/url?url=" + encodeURIComponent(job.source_url) + "&text=" + encodeURIComponent(job.title) }]);
+  if (job.source_url) keyboard.push([{ text: "🔗 فتح العرض", url: "https://findly-v3-api.berrchidcity99.workers.dev/jobs/click/" + encodeURIComponent(job.id) }, { text: "📤 شارك", url: "https://t.me/share/url?url=" + encodeURIComponent("https://t.me/FindlySearch2026Bot?start=job_" + job.id) + "&text=" + encodeURIComponent("💼 " + job.title + " — FINDLY") }]);
   keyboard.push([{ text: "🔔 نبهني", callback_data: "jobs:interest" }]);
   keyboard.push([{ text: "◀️ الرجوع", callback_data: "jobs:page:" + page + ":" + cityIndex(city, cities) }]);
   if (bot.telegram_username) {
