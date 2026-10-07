@@ -30,15 +30,31 @@ function formatMoroccoTime(value) {
 async function loadJobStats(env) {
   const supabase = getSupabase(env);
   const todayStart = moroccoTodayStartIso();
-  const [active, today, source] = await Promise.all([
-    supabase.from("jobs").select("id", { count: "exact", head: true }).eq("status", "active"),
-    supabase.from("jobs").select("id", { count: "exact", head: true }).eq("status", "active").gte("first_seen_at", todayStart),
-    supabase.from("job_sources").select("last_success_at").eq("enabled", true).order("last_success_at", { ascending: false, nullsFirst: false }).limit(1).maybeSingle()
+  const [active, source] = await Promise.all([
+    supabase
+      .from("jobs")
+      .select("id, first_seen_at", { count: "exact" })
+      .eq("status", "active")
+      .limit(1000),
+    supabase
+      .from("job_sources")
+      .select("last_success_at")
+      .eq("enabled", true)
+      .order("last_success_at", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle()
   ]);
   if (active.error) throw active.error;
-  if (today.error) throw today.error;
   if (source.error) throw source.error;
-  return { activeCount: Number(active.count || 0), newToday: Number(today.count || 0), lastUpdatedAt: source.data?.last_success_at || null };
+  const todayStartMs = new Date(todayStart).getTime();
+  const newToday = (active.data || []).filter(
+    (job) => job.first_seen_at && new Date(job.first_seen_at).getTime() >= todayStartMs
+  ).length;
+  return {
+    activeCount: Number(active.count || 0),
+    newToday,
+    lastUpdatedAt: source.data?.last_success_at || null
+  };
 }
 
 async function loadJobs(env, page = 0, city = null) {
@@ -72,13 +88,6 @@ function jobSummary(job, index) {
 
 function encodedCity(city) { return encodeURIComponent(city || ""); }
 
-async function loadHomeButton(env) {
-  const { data, error } = await getSupabase(env).from("bots").select("telegram_username").eq("bot_type", "master").eq("is_active", true).maybeSingle();
-  if (error) throw error;
-  if (!data?.telegram_username) return null;
-  return { text: "🏠 FINDLY", url: "https://t.me/" + data.telegram_username.replace(/^@/, "") };
-}
-
 function jobsListKeyboard(jobs, page, totalPages, city) {
   const keyboard = [];
   if (jobs.length) keyboard.push(jobs.map((job, index) => ({ text: (index + 1) + "️⃣", callback_data: "jobs:detail:" + job.id + ":" + page + ":" + encodedCity(city) })));
@@ -103,8 +112,12 @@ export async function renderJobsList(env, bot, chatId, messageId, page = 0, city
     lines.push("<i>اختار رقم العرض باش تشوف التفاصيل · " + (safePage + 1) + "/" + totalPages + "</i>");
   }
   const keyboard = jobsListKeyboard(result.jobs, safePage, totalPages, city);
-  const homeButton = await loadHomeButton(env);
-  if (homeButton) keyboard.push([homeButton]);
+  if (bot.telegram_username) {
+    keyboard.push([{
+      text: "🏠 FINDLY",
+      url: "https://t.me/" + bot.telegram_username.replace(/^@/, "")
+    }]);
+  }
   await editMessageText(env, bot.slug, chatId, messageId, lines.join("\n"), { reply_markup: { inline_keyboard: keyboard } });
 }
 
@@ -120,8 +133,12 @@ async function renderJobDetail(env, bot, chatId, messageId, jobId, page, city) {
   if (job.source_url) keyboard.push([{ text: "🔗 فتح العرض", url: "https://findly-v3-api.berrchidcity99.workers.dev/jobs/click/" + encodeURIComponent(job.id) }, { text: "📤 شارك", url: "https://t.me/share/url?url=" + encodeURIComponent(job.source_url) + "&text=" + encodeURIComponent(job.title) }]);
   keyboard.push([{ text: "🔔 نبهني", callback_data: "jobs:interest" }]);
   keyboard.push([{ text: "◀️ الرجوع", callback_data: "jobs:page:" + page + ":" + encodedCity(city) }]);
-  const homeButton = await loadHomeButton(env);
-  if (homeButton) keyboard.push([homeButton]);
+  if (bot.telegram_username) {
+    keyboard.push([{
+      text: "🏠 FINDLY",
+      url: "https://t.me/" + bot.telegram_username.replace(/^@/, "")
+    }]);
+  }
   await editMessageText(env, bot.slug, chatId, messageId, lines.join("\n"), { reply_markup: { inline_keyboard: keyboard } });
 }
 
