@@ -5,6 +5,7 @@ import {
 } from "../lib/telegram.js";
 import {
   showJobsCategory,
+  showSharedJob,
   handleJobsCallback
 } from "../lib/jobs-ui.js";
 import { generateAIReply } from "../lib/ai.js";
@@ -1215,6 +1216,24 @@ async function processTelegramUpdate(
     text === "/start" ||
     text.startsWith("/start ")
   ) {
+    const startPayload = text.slice("/start".length).trim();
+
+    if (startPayload.startsWith("job_")) {
+      const sharedJobId = startPayload.slice("job_".length);
+
+      if (bot.bot_type === "master") {
+        await showSharedJob(
+          env,
+          bot,
+          chatId,
+          sharedJobId
+        );
+
+        return {
+          ok: true
+        };
+      }
+    }
     if (
       bot.bot_type ===
       "master"
