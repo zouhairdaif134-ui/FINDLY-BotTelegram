@@ -218,7 +218,15 @@ export default {
         sync: result
       });
 
-      const delivery = await runJobsDelivery(env);
+      let delivery = null;
+
+      try {
+        delivery = await runJobsDelivery(env);
+      } catch (error) {
+        console.error("FINDLY jobs delivery skipped until delivery migration is active:", {
+          message: error?.message || "Unknown error"
+        });
+      }
 
       console.log("FINDLY scheduled invocation completed:", {
         completed_at: new Date().toISOString(),
@@ -350,7 +358,10 @@ export default {
           url.pathname.slice("/jobs/click/".length)
         );
 
-        if (!jobId) {
+        const uuidPattern =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+        if (!uuidPattern.test(jobId)) {
           return new Response("Job not found", { status: 404 });
         }
 
