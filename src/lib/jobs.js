@@ -191,12 +191,14 @@ export function normalizeJob(source, raw) {
     rawCityKey.includes(normalizeKey(candidate))
   );
 
+  const hasMultiCitySeparator = /[\/,;|]/.test(rawCityText);
   const normalizedRawCity =
     rawCityKey.includes("dar bouazza") || rawCityKey.includes("rahma")
       ? "Dar Bouazza"
       : /^(multi[- ]?villes|multi[- ]?city|plusieurs villes)$/i.test(
           rawCityText
-        ) || matchedCities.length >= 2
+        ) ||
+        (hasMultiCitySeparator && matchedCities.length >= 2)
         ? "Multi-villes"
         : rawCity;
 
