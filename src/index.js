@@ -69,6 +69,7 @@ import {
 } from "./lib/telegram.js";
 
 import { authorizeRequest } from "./lib/auth.js";
+import { getSupabase } from "./lib/supabase.js";
 
 import {
   success,
