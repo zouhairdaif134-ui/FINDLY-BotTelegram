@@ -13,10 +13,9 @@ function truncate(value, max = 180) {
   return text.length > max ? text.slice(0, max - 1) + "…" : text;
 }
 
-function moroccoTodayStartIso() {
-  const now = Date.now();
+function getTimeZoneOffsetMs(date, timeZone) {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Africa/Casablanca",
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -24,7 +23,7 @@ function moroccoTodayStartIso() {
     minute: "2-digit",
     second: "2-digit",
     hourCycle: "h23"
-  }).formatToParts(new Date(now));
+  }).formatToParts(date);
 
   const values = Object.fromEntries(
     parts
@@ -32,24 +31,45 @@ function moroccoTodayStartIso() {
       .map((part) => [part.type, Number(part.value)])
   );
 
-  const localAsUtc = Date.UTC(
+  return Date.UTC(
     values.year,
     values.month - 1,
     values.day,
     values.hour,
     values.minute,
     values.second
+  ) - date.getTime();
+}
+
+function moroccoTodayStartIso() {
+  const timeZone = "Africa/Casablanca";
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(now);
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)])
   );
 
-  const offsetMs =
-    localAsUtc - Math.floor(now / 1000) * 1000;
+  const localMidnightAsUtc = Date.UTC(
+    values.year,
+    values.month - 1,
+    values.day
+  );
+
+  const offsetAtMidnight = getTimeZoneOffsetMs(
+    new Date(localMidnightAsUtc),
+    timeZone
+  );
 
   return new Date(
-    Date.UTC(
-      values.year,
-      values.month - 1,
-      values.day
-    ) - offsetMs
+    localMidnightAsUtc - offsetAtMidnight
   ).toISOString();
 }
 
