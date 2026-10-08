@@ -789,3 +789,336 @@ Before implementing the database or application code:
 8. Verify every production path before moving to the next phase.
 
 **This document is a product definition, not permission to implement every feature immediately.**
+
+## 27. Research-Backed Implementation Architecture
+
+This section records the engineering conventions established after reviewing the current FINDLY repository, official Telegram Bot API documentation, relevant open-source Telegram movie/file architectures, and TMDB's current API documentation.
+
+### 27.1 Existing FINDLY structure to preserve
+
+The current Worker already separates responsibilities into:
+
+    src/index.js
+        |
+        +--> routes/
+        |      +--> telegram.js
+        |      +--> categories.js
+        |      +--> content.js
+        |      +--> favorites.js
+        |      +--> notifications.js
+        |      +--> analytics.js
+        |      +--> ...
+        |
+        +--> lib/
+               +--> telegram.js
+               +--> supabase.js
+               +--> auth.js
+               +--> jobs.js
+               +--> jobs-ui.js
+               +--> job-delivery.js
+               +--> ...
+
+Movies should follow this established pattern instead of creating a new architectural style.
+
+### 27.2 Planned Movies files
+
+The preferred first structure is:
+
+    src/lib/movies.js
+        Metadata access, synchronization, normalization,
+        deduplication and movie/series domain operations.
+
+    src/lib/movies-ui.js
+        Telegram presentation, keyboards, pagination,
+        details screens and navigation.
+
+    src/lib/movie-providers.js
+        Viewing-provider availability and provider normalization.
+
+    src/lib/movie-media.js
+        Future authorized Telegram media assets and delivery.
+        This file must remain separate from metadata logic.
+
+    src/routes/telegram.js
+        Thin integration point that delegates movies: callbacks
+        and movie deep links to movies-ui/domain handlers.
+
+    supabase/migrations/YYYYMMDDxxxx_movies_foundation.sql
+        Movies/series database foundation.
+
+Future migrations should remain chronological and additive.
+
+Do not create one giant movies.js containing database access, Telegram rendering, provider APIs, and media delivery.
+
+### 27.3 Separation of concerns
+
+The intended dependency direction is:
+
+    Telegram Route
+          |
+          v
+      Movies UI
+          |
+          v
+      Movies Domain
+       /              v          v
+   Supabase    External Movie APIs
+
+Provider availability should be a separate integration:
+
+    Movies Domain
+          |
+          v
+    Movie Providers
+
+Future authorized media should be separate:
+
+    Movies Domain
+          |
+          v
+    Authorized Media
+          |
+          v
+    Telegram Media Channel
+
+This separation prevents a future media-delivery feature from forcing a rewrite of search, metadata, or Telegram UI.
+
+### 27.4 Telegram interaction conventions
+
+Official Telegram documentation confirms that inline callback data is limited to **1–64 bytes**. Therefore Movies callbacks must use compact identifiers rather than full titles, URLs, or serialized objects.
+
+Preferred pattern:
+
+    movies:home
+    movies:search
+    movies:type:movie
+    movies:type:series
+    movies:genre:<short-id>
+    movies:page:<page>
+    movies:detail:<uuid-or-short-id>:<page>
+    movies:favorite:<short-id>
+    movies:trailer:<short-id>
+    movies:provider:<short-id>
+    movies:media:<short-id>
+
+The exact identifiers should be finalized against actual byte lengths before production.
+
+Callback handlers should:
+
+1. Validate callback structure.
+2. Answer the callback promptly.
+3. Load the referenced record from the database.
+4. Verify the record is active/available.
+5. Render the next state.
+6. Record analytics where appropriate.
+
+Existing FINDLY Jobs already follows the general pattern of dedicated callback handling and same-message navigation; Movies should reuse that pattern.
+
+### 27.5 Same-message navigation
+
+Telegram supports inline keyboards and message editing. FINDLY should use message editing for Movies screens whenever practical.
+
+Target:
+
+    Category
+       ↓ edit
+    Search / list
+       ↓ edit
+    Details
+       ↓ edit
+    Trailer / provider choices
+       ↓ edit
+    Back
+
+This avoids creating unnecessary message spam and keeps the category feeling like a compact Telegram application.
+
+### 27.6 Deep links
+
+Telegram supports t.me deep links. Movies should use a stable internal identifier rather than a title in the deep-link payload.
+
+Preferred pattern:
+
+    https://t.me/FindlySearch2026Bot?start=movie_<id>
+
+The deep-link handler should resolve the internal ID from the database and then render the title.
+
+Do not encode mutable titles, provider URLs, or large metadata objects in deep links.
+
+### 27.7 Movie data provider strategy
+
+TMDB's current API supports separate search flows for movies and TV, detailed queries, image data, and external-ID lookup. Its documentation also describes search as matching original, translated, and alternative names.
+
+This makes a metadata-provider adapter appropriate:
+
+    src/lib/movie-provider-tmdb.js
+
+rather than scattering TMDB HTTP calls throughout movies.js.
+
+The adapter should own:
+
+- authentication
+- endpoint construction
+- request handling
+- normalization of TMDB responses
+- provider-specific identifiers
+- rate-limit/error handling
+
+The internal FINDLY catalog should not depend on TMDB response shapes.
+
+### 27.8 Provider availability
+
+TMDB currently exposes watch-provider information through its API, powered by a JustWatch partnership. The official documentation states that provider data is country-specific and requires JustWatch attribution, and that the API does not return full provider deep links; it provides enough information to show availability and a TMDB URL.
+
+Therefore:
+
+- Store provider availability as normalized FINDLY data.
+- Store the country/region explicitly.
+- Store verification time.
+- Do not invent provider links.
+- Do not present availability in Morocco based on another country's result.
+- Preserve required attribution where applicable.
+- Verify current TMDB/JustWatch terms before production use.
+
+### 27.9 Images
+
+TMDB image data uses a configuration-derived base URL/size plus a file path. Image URL construction should therefore live in the provider adapter or a dedicated movie image helper, not be duplicated throughout UI code.
+
+### 27.10 Future Telegram media architecture
+
+Open-source Telegram file-management architectures commonly use a private channel as Telegram-native media storage and keep only metadata/file identifiers in the application database. Telegram's Bot API also supports sending an existing Telegram-hosted video by file_id.
+
+For FINDLY's future **authorized** media phase, the preferred architecture is therefore:
+
+    Authorized source
+          |
+          v
+    FINDLY Media Ingestion
+          |
+          v
+    Private FINDLY Media Channel
+          |
+          +--> message_id
+          +--> file_id
+          +--> media metadata
+          +--> rights metadata
+          |
+          v
+    Supabase
+          |
+          v
+    User requests media
+          |
+          v
+    Validate rights + availability
+          |
+          v
+    Bot sends Telegram-hosted media
+
+This avoids designing the application around repeated uploads.
+
+However, Telegram's forwarding rules and protected-content behavior must be respected. The exact choice between sendVideo(file_id), copyMessage, or another supported method must be tested against the final channel configuration and media type during the future delivery phase.
+
+### 27.11 Webhook and runtime conventions
+
+The current FINDLY Worker already uses:
+
+- Telegram webhook routes
+- Telegram secret-token validation
+- Supabase-backed update claiming/idempotency
+- waitUntil for webhook processing
+- scheduled Cloudflare Worker execution
+- native fetch-based Telegram API access
+
+Movies should reuse these runtime conventions.
+
+Do not introduce a second Telegram framework or second webhook receiver only for Movies.
+
+### 27.12 Scheduled synchronization
+
+Movies ingestion should be scheduled through the existing Worker cron architecture.
+
+The scheduled path should not blindly fetch the full catalog every five minutes.
+
+Instead:
+
+    Cron
+      ↓
+    determine due movie sources
+      ↓
+    sync source
+      ↓
+    normalize
+      ↓
+    deduplicate
+      ↓
+    upsert
+      ↓
+    record sync result
+
+The exact interval should be source-specific.
+
+### 27.13 Database conventions
+
+Follow the existing FINDLY migration convention:
+
+    supabase/migrations/
+        chronological_timestamp_name.sql
+
+Use UUID primary keys for internal entities unless an external numeric identifier is intentionally retained as a source identifier.
+
+Keep external provider IDs separate:
+
+    id                  = FINDLY internal UUID
+    tmdb_id             = external provider ID
+
+Do not use external provider IDs as the primary key of the FINDLY domain.
+
+RLS should be designed before exposing user-owned tables such as favorites and preferences.
+
+### 27.14 Media rights separation
+
+Rights-sensitive fields must not be mixed into the basic title record when they represent a different lifecycle.
+
+Use a separate future media/rights model so that:
+
+    Title
+       |
+       +--> public metadata
+       |
+       +--> provider availability
+       |
+       +--> authorized media assets
+                  |
+                  +--> rights status
+                  +--> rights reference
+                  +--> Telegram identifiers
+                  +--> verification
+
+This is the main architectural decision intended to prevent a later media-delivery phase from forcing a database rewrite.
+
+### 27.15 Testing order
+
+Before calling a Movies phase complete:
+
+1. Static/syntax validation.
+2. Database migration validation.
+3. Provider adapter tests with real documented responses or fixtures.
+4. Search normalization tests.
+5. Deduplication tests.
+6. Telegram callback routing tests.
+7. Deep-link tests.
+8. Same-message navigation tests.
+9. Error/fallback tests.
+10. Production smoke test with the real FINDLY bot.
+11. Only then move to the next phase.
+
+### 27.16 Research references
+
+Primary references used for this architecture:
+
+- Telegram Bot API — inline callback data, media sending, forwarding/copying, webhooks.
+- Telegram Deep Links documentation.
+- TMDB API — search, details, images, TV, and watch providers.
+- Relevant open-source Telegram movie/file projects used only to study architecture patterns, not as a source of unauthorized media.
+
+External implementation details must always be revalidated against the current official API documentation before production code is written.
