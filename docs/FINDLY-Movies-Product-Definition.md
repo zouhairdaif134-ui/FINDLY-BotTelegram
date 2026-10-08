@@ -5,7 +5,7 @@
 **Slug:** movies  
 **Parent experience:** FINDLY Master Bot  
 **Scope:** Movies + TV Series discovery, authorized Telegram media delivery, legal viewing guidance, and a scalable Telegram media-library architecture  
-**Version:** v1.2
+**Version:** v1.3
 
 ## 1. Purpose
 
@@ -1218,3 +1218,288 @@ Primary references used for this architecture:
 - Relevant open-source Telegram movie/file projects used only to study architecture patterns, not as a source of unauthorized media.
 
 External implementation details must always be revalidated against the current official API documentation before production code is written.
+
+
+## 28. Agreed Implementation Roadmap
+
+This roadmap is the execution order for FINDLY Movies. It is part of the product definition so that future work can continue from the correct phase without re-deciding the architecture.
+
+### Phase 1 — Infrastructure Foundation
+
+Goal: establish the production database and domain foundation before building the user experience.
+
+Deliverables:
+- Movies/series core schema.
+- Titles, genres, title-genres.
+- Seasons and episodes.
+- Provider and title-provider foundation.
+- Source/external-ID tracking.
+- Favorites foundation with RLS.
+- Minimal analytics foundation where required.
+- Status fields needed to distinguish catalog-only titles from available content.
+- Migration validation.
+
+Exit criteria:
+- Migration applies successfully.
+- RLS is verified.
+- Internal UUIDs and external source IDs are separated.
+- No Telegram media files are stored in Supabase.
+
+### Phase 2 — Metadata Provider + Ingestion
+
+Goal: make FINDLY able to import and maintain real movie/series metadata.
+
+Deliverables:
+- Provider adapter.
+- Search/import flow.
+- Normalization.
+- Deterministic deduplication.
+- Upsert.
+- Sync timestamps and source status.
+- Error/rate-limit handling.
+- Scheduled synchronization through existing Cloudflare cron.
+
+Exit criteria:
+- A real title can be imported.
+- Duplicate imports resolve to the same FINDLY title.
+- Provider failures do not corrupt the catalog.
+- Source provenance is retained.
+
+### Phase 3 — Movies Telegram UX
+
+Goal: make the Movies category usable from the Master Bot.
+
+Deliverables:
+- Movies category entry.
+- Search.
+- Result pagination.
+- Movie/series details.
+- Genres.
+- Popular/recent/top-rated surfaces.
+- Series navigation.
+- Same-message navigation.
+- Compact callback identifiers.
+- Deep links.
+- Trailer action.
+- Verified provider-availability display.
+
+Exit criteria:
+- User can enter Movies, search, open a title, navigate back, and share it.
+- Telegram callback routing is stable.
+- No unnecessary message spam.
+- Morocco-specific provider data is not confused with other regions.
+
+### Phase 4 — Admin Movies Library
+
+Goal: allow the owner/admin to add and manage movies without editing SQL or application code for every new title.
+
+Admin workflow:
+
+    Admin Dashboard
+          ↓
+    + Add Movie / Series
+          ↓
+    Search external metadata
+          ↓
+    Select correct title
+          ↓
+    Import metadata
+          ↓
+    Review / edit allowed internal fields
+          ↓
+    Assign FINDLY categories
+          ↓
+    Save as Draft
+          ↓
+    Publish / Activate
+
+The admin library must support:
+- Search existing catalog.
+- Add movie.
+- Add series.
+- Import metadata from the configured provider.
+- Correct title selection when multiple results exist.
+- Manual internal classification.
+- Draft / active / inactive states.
+- Metadata refresh.
+- Duplicate detection.
+- Season/episode management.
+- Visibility control.
+
+A new movie release must therefore be a normal admin operation, not a code change.
+
+Exit criteria:
+- Admin can add a newly released title through the dashboard.
+- The title appears in FINDLY search after publication.
+- Admin can update classification without touching the database manually.
+
+### Phase 5 — Authorized Media Library + Telegram Delivery
+
+Goal: activate direct in-Telegram watching only for content FINDLY is legally authorized to distribute.
+
+Media workflow:
+
+    Authorized Media
+          ↓
+    Rights verification
+          ↓
+    Upload to FINDLY Private Media Channel
+          ↓
+    Capture Telegram message/file identifiers
+          ↓
+    Link media to Movie / Season / Episode
+          ↓
+    Select quality / variant
+          ↓
+    Verify
+          ↓
+    Publish media availability
+          ↓
+    User presses ▶️ مشاهدة
+          ↓
+    FINDLY Media Flow
+          ↓
+    Telegram delivery
+
+Media administration must support:
+- Movie-level media.
+- Season/episode media.
+- Quality variants.
+- Media type.
+- Telegram message ID.
+- Telegram file ID.
+- Rights status.
+- Rights reference.
+- Verification timestamp.
+- Availability status.
+- Replacement/deactivation of a media asset.
+- Delivery analytics.
+
+Important:
+- A catalog title can exist without media.
+- Watch is shown only when an authorized active media asset exists.
+- Download is shown only when the rights explicitly permit downloading.
+- The private channel is a technical media store, not a copyright workaround.
+- The exact Telegram delivery method must be validated against the final bot/channel configuration and current Telegram API behavior.
+
+Exit criteria:
+- One authorized test title can be ingested, indexed, retrieved, and delivered inside Telegram.
+- Rights validation is enforced before delivery.
+- Media assets remain separate from title metadata.
+
+### Phase 6 — Product Depth
+
+Goal: improve retention and discovery after the core product works.
+
+Deliverables:
+- Favorites.
+- Watchlists.
+- Advanced filters.
+- Similar titles.
+- Recommendations.
+- User preferences.
+- Notifications.
+- Continue exploring.
+- Better series tracking.
+
+Only build features that have a clear product use case and measurable value.
+
+### Phase 7 — Monetization
+
+Goal: add revenue after the free product has real usage.
+
+Potential tracks:
+- FINDLY Premium.
+- Legal commercial partnerships.
+- Provider/referral programs where available and permitted.
+- Sponsorship/advertising where appropriate.
+
+Revenue must not depend on unauthorized movie distribution.
+
+## 29. New Movie / Series Operational Procedure
+
+When a new movie is released and FINDLY wants to add it:
+
+### A. Catalog-only path
+
+1. Open Admin Movies Library.
+2. Select **Add Movie**.
+3. Search the configured metadata provider.
+4. Select the correct title.
+5. Import metadata.
+6. Review metadata.
+7. Assign FINDLY categories.
+8. Save/publish.
+9. The title becomes searchable in FINDLY.
+10. If no authorized media exists, the UI shows metadata/trailer/provider availability only.
+
+### B. Authorized-media path
+
+After the catalog record exists:
+
+1. Verify FINDLY has the right to distribute the specific media.
+2. Open the title in Admin Movies Library.
+3. Add Media.
+4. Upload/ingest the authorized asset into the FINDLY Private Media Channel.
+5. Capture Telegram message ID and file ID.
+6. Select media type and quality.
+7. Link the asset to the movie, season, or episode.
+8. Record rights reference and verification data.
+9. Run delivery verification.
+10. Publish the media asset.
+11. The user now sees **▶️ مشاهدة** only when the asset is active and authorized.
+
+This procedure is designed for repeated use. Adding the next new release must not require a developer to edit source code.
+
+## 30. Final Movies Architecture Decision
+
+The agreed FINDLY Movies architecture is:
+
+    ┌─────────────────────────────┐
+    │       FINDLY Master Bot     │
+    └──────────────┬──────────────┘
+                   │
+                   v
+    ┌─────────────────────────────┐
+    │       Movies Telegram UX    │
+    │ Search / Details / Series   │
+    └──────────────┬──────────────┘
+                   │
+                   v
+    ┌─────────────────────────────┐
+    │        Movies Domain        │
+    │ movies.js / movies-ui.js    │
+    │ providers / media services  │
+    └───────┬───────────┬─────────┘
+            │           │
+            v           v
+      ┌──────────┐   ┌───────────────┐
+      │ Supabase │   │ Movie Provider│
+      │ Catalog  │   │ Adapter/API   │
+      └────┬─────┘   └───────────────┘
+           │
+           │ authorized media index
+           v
+    ┌─────────────────────────────┐
+    │ FINDLY Private Media Channel│
+    │ Telegram message/file refs  │
+    └──────────────┬──────────────┘
+                   │
+                   v
+    ┌─────────────────────────────┐
+    │ FINDLY Media Delivery Flow  │
+    │ rights + availability check │
+    └──────────────┬──────────────┘
+                   │
+                   v
+             User's Telegram
+
+Storage responsibilities:
+
+- Supabase: catalog, metadata, relationships, provider availability, favorites, source IDs, analytics, and media indexes.
+- Telegram Private Media Channel: authorized media assets and Telegram-native media references.
+- Cloudflare Worker: API, webhook routing, domain orchestration, scheduled synchronization.
+- Admin Dashboard: catalog and media-library administration.
+- External storage accounts such as Drive/Dropbox/TeraBox: optional auxiliary storage only; they are not the architectural dependency for Telegram delivery.
+
+The implementation order is now fixed by Sections 28–30. Future work should start from the next unfinished phase rather than redesigning the Movies architecture.
