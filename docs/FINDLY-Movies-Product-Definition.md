@@ -4,20 +4,20 @@
 **Category:** 🎬 الأفلام والمسلسلات  
 **Slug:** movies  
 **Parent experience:** FINDLY Master Bot  
-**Scope:** Movies + TV Series discovery and legal viewing guidance  
-**Version:** v1.0
+**Scope:** Movies + TV Series discovery, legal viewing guidance, and future authorized Telegram media delivery  
+**Version:** v1.1
 
 ## 1. Purpose
 
 The 🎬 Movies & Series category is intended to become a professional entertainment-discovery product inside FINDLY.
 
-It is **not** intended to be a simple Telegram channel containing uploaded movies.
+It is not intended to be a simple Telegram channel containing uploaded movies.
 
 The core idea is:
 
-> Help the user discover a movie or series, understand what it is, watch its trailer, save it, and find a legitimate viewing source when one is available.
+> Help the user discover a movie or series, understand what it is, watch its trailer, save it, find a legitimate viewing source when one is available, and eventually support direct Telegram delivery where FINDLY has the necessary distribution rights.
 
-The user should experience the category as a small **movie hub inside Telegram**, while FINDLY keeps the underlying movie data, search, normalization, analytics, and recommendation logic in its own backend.
+The user should experience the category as a small movie hub inside Telegram, while FINDLY keeps the underlying movie data, search, normalization, analytics, recommendation logic, and media-delivery metadata in its own backend.
 
 ## 2. Product Vision
 
@@ -37,6 +37,7 @@ Target experience:
            +--> ⭐ Top Rated
            +--> ❤️ Favorites
            +--> 🎯 Recommendations
+           +--> ▶️ Watch / Delivery
 
 A user should be able to move from discovery to a useful action without leaving Telegram unnecessarily.
 
@@ -125,7 +126,7 @@ For a series, the detail experience should later support:
 
 ## 6. Legal Viewing Model
 
-FINDLY should **not** become a repository for pirated movies or series.
+FINDLY should not become a repository for pirated movies or series.
 
 The product should not:
 
@@ -146,12 +147,113 @@ Instead, FINDLY should provide a legal discovery layer:
       +--> Official / authorized viewing source
       |
       +--> Availability by country
+      |
+      +--> Authorized FINDLY media delivery (future)
 
 Where reliable provider data is available, the user can see services for streaming, rental, purchase, or another authorized source.
 
-**Important:** Provider integrations must be validated before implementation. Do not invent availability or provider URLs.
+Important: Provider integrations must be validated before implementation. Do not invent availability or provider URLs.
 
-## 7. Trailer Experience
+## 7. Future Authorized Telegram Media Delivery
+
+After the Movies/Series discovery product is complete, FINDLY may add a second delivery layer:
+
+    Bot
+      ↓
+    FINDLY Media Channel / Private Channel
+      ↓
+    Authorized Video / File
+      ↓
+    User
+
+This is a **future product capability** and must be considered in the architecture from the beginning, but it must not be implemented as an unauthorized movie-distribution system.
+
+### Intended model
+
+The future system may use a dedicated Telegram channel as a controlled media storage/distribution layer.
+
+A user could eventually select:
+
+    🎬 Movie / Episode
+           ↓
+    ▶️ Watch / Get in Telegram
+           ↓
+    FINDLY Bot
+           ↓
+    Authorized media source
+           ↓
+    Telegram delivery to user
+
+The implementation may use Telegram's file/message identifiers so FINDLY does not unnecessarily re-upload the same authorized media for every user.
+
+### Authorization requirement
+
+Direct media delivery is allowed in the product design only for content that FINDLY has the legal right to distribute through Telegram.
+
+That may include, depending on rights:
+
+- Public-domain content
+- Content released under a license permitting redistribution
+- Content owned by FINDLY
+- Content for which FINDLY has obtained explicit distribution rights
+- Other content where the rights holder has expressly authorized this delivery model
+
+A private Telegram channel is a technical storage/distribution mechanism; making a channel private does not make unauthorized copyrighted distribution legal.
+
+### Architecture requirement
+
+The initial database and backend design should leave room for future authorized media delivery without coupling it to the public movie catalog.
+
+Conceptually:
+
+    Movie / Series Catalog
+            |
+            +--> Metadata
+            +--> Trailer
+            +--> Legal Provider Availability
+            |
+            +--> Authorized Media Assets (future)
+                         |
+                         +--> Telegram Channel Message ID
+                         +--> Telegram File ID
+                         +--> Media Type
+                         +--> Quality / Variant
+                         +--> Rights Status
+                         +--> Rights / License Reference
+                         +--> Availability Status
+                         +--> Verification Timestamp
+
+Media rights and catalog metadata must be separate concerns.
+
+### Future media lifecycle
+
+    Authorized Asset
+          ↓
+    Rights Verification
+          ↓
+    Ingest to FINDLY Media Channel
+          ↓
+    Store Telegram identifiers
+          ↓
+    Link asset to Movie / Series / Episode
+          ↓
+    User requests delivery
+          ↓
+    Validate asset + rights status
+          ↓
+    Bot sends authorized media
+          ↓
+    Record delivery analytics
+
+The exact Telegram implementation must be designed and reviewed when this phase is activated.
+
+### No premature implementation
+
+The current Movies MVP should focus on discovery, metadata, trailers, legal viewing options, and the core product experience.
+
+The future media-delivery architecture should be **planned now but activated only after rights, storage, operational, and Telegram implementation requirements are verified**.
+
+## 8. Trailer Experience
 
 Trailer is a first-class feature.
 
@@ -165,7 +267,7 @@ The implementation should use an authorized/public trailer source where permitte
 
 Potential provider integrations can be evaluated during implementation. No provider is considered mandatory by this document until its API/data rights, limits, and commercial terms are verified.
 
-## 8. Discovery Features
+## 9. Discovery Features
 
 The first versions should prioritize discovery over complexity.
 
@@ -188,9 +290,12 @@ Later:
 12. Similar series
 13. Trending by region
 
-## 9. Favorites
+## 10. Favorites
 
-Users should eventually be able to save movies and series.
+Users should eventually be able to save:
+
+- Movies
+- Series
 
 Example:
 
@@ -205,7 +310,7 @@ Example:
 
 Favorites should be associated with the authenticated FINDLY user identity, not with a Telegram message alone.
 
-## 10. User Preferences
+## 11. User Preferences
 
 Later versions may store:
 
@@ -219,7 +324,7 @@ Later versions may store:
 
 This enables recommendations without making the first version unnecessarily complex.
 
-## 11. Notifications
+## 12. Notifications
 
 Notifications are planned, but should not be activated prematurely.
 
@@ -234,7 +339,7 @@ Possible future notifications:
 
 The notification system should reuse FINDLY's broader notification architecture instead of creating an isolated movie-only notification system.
 
-## 12. Telegram Architecture
+## 13. Telegram Architecture
 
 The Master Bot remains the primary user-facing entry point.
 
@@ -260,10 +365,11 @@ Target flow:
        +--> Favorites
        +--> Trailer
        +--> Legal provider links
+       +--> Future authorized media delivery
 
 Navigation should prefer editing the existing Telegram message where practical, so the user experiences the bot as a compact application rather than a long stream of unrelated messages.
 
-## 13. Backend Architecture
+## 14. Backend Architecture
 
 Movies should become a dedicated domain.
 
@@ -283,12 +389,13 @@ Conceptually:
            +--> favorites
            +--> source synchronization
            +--> analytics
+           +--> future authorized media assets
 
 Do not mix movie-domain logic into the Jobs implementation.
 
 The Jobs system is a reference for engineering patterns such as ingestion, normalization, deduplication, scheduling, and analytics, but Movies should have its own domain model.
 
-## 14. Data Model Direction
+## 15. Data Model Direction
 
 The exact schema must be designed and reviewed before migration.
 
@@ -364,6 +471,30 @@ Availability relationship between a title and provider, potentially including:
 
 User-to-title relationship.
 
+### Future Media Assets
+
+Separate entity for authorized downloadable/watchable Telegram media.
+
+Potential fields:
+
+- id
+- title_id
+- season_id
+- episode_id
+- media_type
+- telegram_channel_id
+- telegram_message_id
+- telegram_file_id
+- quality
+- rights_status
+- rights_reference
+- availability_status
+- verified_at
+- created_at
+- updated_at
+
+The exact schema must be designed later. Do not create this table until the delivery phase is actually approved and its rights/operational model is defined.
+
 ### Movie Analytics
 
 Potential events:
@@ -375,10 +506,12 @@ Potential events:
 - provider click
 - favorite
 - share
+- future media delivery request
+- future media delivery success
 
 The schema should remain minimal in v1 and expand only when a real feature requires it.
 
-## 15. Ingestion / Synchronization
+## 16. Ingestion / Synchronization
 
 Movies will require a reliable metadata source.
 
@@ -415,7 +548,7 @@ Important rules:
 - Respect API rate limits and terms.
 - Do not activate a source until its availability and permitted use are verified.
 
-## 16. Source Strategy
+## 17. Source Strategy
 
 Potential source categories to evaluate:
 
@@ -445,11 +578,15 @@ For:
 - purchase
 - country-specific availability
 
+### D. Future authorized media source
+
+For content that FINDLY is explicitly permitted to distribute.
+
 These should be evaluated independently.
 
 **No source should be hardcoded into the architecture before technical, licensing, API-limit, and reliability checks are completed.**
 
-## 17. Regionalization
+## 18. Regionalization
 
 FINDLY is initially focused on Morocco.
 
@@ -459,7 +596,9 @@ Provider availability must be treated as country-specific data.
 
 A movie being available on a service in another country must not be presented as available in Morocco without verified regional data.
 
-## 18. Sharing
+Future media delivery rights must also be verified for the intended distribution territory where applicable.
+
+## 19. Sharing
 
 Users should eventually be able to share a FINDLY movie/series result.
 
@@ -471,7 +610,7 @@ The deep link should reopen the relevant FINDLY title.
 
 This follows the existing FINDLY deep-link pattern already used for Jobs.
 
-## 19. Analytics
+## 20. Analytics
 
 Movies should use the existing FINDLY analytics philosophy.
 
@@ -485,12 +624,14 @@ Useful events:
 - movie_favorite_add
 - movie_favorite_remove
 - movie_share
+- future_movie_media_request
+- future_movie_media_delivery
 
 Analytics should be user-aware where an authenticated user exists.
 
 Do not collect unnecessary personal data.
 
-## 20. Premium Opportunities
+## 21. Premium Opportunities
 
 Premium should come later, after the free discovery experience has real usage.
 
@@ -506,7 +647,7 @@ Potential premium features:
 
 The basic movie discovery experience should remain useful without Premium.
 
-## 21. MVP Definition
+## 22. MVP Definition
 
 ### Phase 1 — Foundation
 
@@ -540,13 +681,27 @@ The basic movie discovery experience should remain useful without Premium.
 - Similar titles
 - User preferences
 
-### Phase 4 — Monetization
+### Phase 4 — Future Authorized Telegram Media Delivery
+
+Only after the preceding product is stable and rights are confirmed:
+
+- Rights/authorization model
+- Media asset management
+- FINDLY media channel
+- Telegram message/file identifier storage
+- Authorized media ingestion
+- User delivery flow
+- Delivery analytics
+- Access and rights-status validation
+- Operational monitoring
+
+### Phase 5 — Monetization
 
 - Premium discovery features
 - Commercial partnerships where appropriate
 - Provider/referral opportunities where legally and commercially supported
 
-## 22. What We Must NOT Build
+## 23. What We Must NOT Build
 
 The following are explicitly outside the FINDLY Movies product direction:
 
@@ -558,10 +713,11 @@ The following are explicitly outside the FINDLY Movies product direction:
 - Fake streaming links
 - Fake provider availability
 - Fake ratings or metadata
+- Using a private Telegram channel as a way to bypass copyright restrictions
 
-The product must be built around **discovery + metadata + trailers + legitimate viewing guidance**.
+The product must be built around **discovery + metadata + trailers + legitimate viewing guidance**, with future direct Telegram media delivery limited to content FINDLY is authorized to distribute.
 
-## 23. Engineering Principles
+## 24. Engineering Principles
 
 1. **Inspect before changing.**
 2. **Validate the product requirement before writing code.**
@@ -575,10 +731,13 @@ The product must be built around **discovery + metadata + trailers + legitimate 
 10. **Build the Telegram UX as an application-like experience.**
 11. **Keep callback data compact and deterministic.**
 12. **Treat legal availability as a product requirement, not an afterthought.**
+13. **Design future authorized media delivery separately from movie metadata.**
+14. **Never assume that technical Telegram access equals distribution rights.**
+15. **Do not activate media delivery until authorization and operational requirements are verified.**
 
-## 24. Product Success Criteria
+## 25. Product Success Criteria
 
-The target end-to-end experience is:
+The target end-to-end discovery experience is:
 
     Open FINDLY
        ↓
@@ -596,20 +755,37 @@ The target end-to-end experience is:
        ↓
     Save / Share
 
-If this flow is fast, reliable, visually clean, and based on verified data, FINDLY Movies becomes a genuine product category rather than simply another Telegram menu button.
+The future authorized-delivery experience may additionally become:
 
-## 25. Source of Truth
+    Open FINDLY
+       ↓
+    Select authorized title / episode
+       ↓
+    ▶️ Watch / Get in Telegram
+       ↓
+    FINDLY validates availability + rights status
+       ↓
+    Bot retrieves authorized Telegram media
+       ↓
+    Bot delivers video/file
+       ↓
+    Record delivery event
 
-This document defines the initial product direction for the FINDLY 🎬 Movies & Series category.
+If these flows are fast, reliable, visually clean, and based on verified data and valid rights, FINDLY Movies becomes a genuine product category rather than simply another Telegram menu button.
+
+## 26. Source of Truth
+
+This document defines the initial product direction for the FINDLY 🎬 Movies & Series category, including the planned future authorized Telegram media-delivery capability.
 
 Before implementing the database or application code:
 
 1. Inspect the current FINDLY repository.
 2. Confirm the existing Telegram routing and Master Menu behavior.
-3. Evaluate candidate metadata, trailer, and provider sources.
+3. Evaluate candidate metadata, trailer, provider, and future media sources.
 4. Verify API access, limits, terms, and permitted use.
 5. Design the minimum production database schema.
-6. Implement incrementally.
-7. Verify every production path before moving to the next phase.
+6. Ensure the schema can evolve toward authorized media delivery without coupling rights-sensitive data to the public catalog.
+7. Implement incrementally.
+8. Verify every production path before moving to the next phase.
 
 **This document is a product definition, not permission to implement every feature immediately.**
