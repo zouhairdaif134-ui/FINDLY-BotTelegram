@@ -4,8 +4,8 @@
 **Category:** 🎬 الأفلام والمسلسلات  
 **Slug:** movies  
 **Parent experience:** FINDLY Master Bot  
-**Scope:** Movies + TV Series discovery, legal viewing guidance, and future authorized Telegram media delivery  
-**Version:** v1.1
+**Scope:** Movies + TV Series discovery, authorized Telegram media delivery, legal viewing guidance, and a scalable Telegram media-library architecture  
+**Version:** v1.2
 
 ## 1. Purpose
 
@@ -154,9 +154,9 @@ Where reliable provider data is available, the user can see services for streami
 
 Important: Provider integrations must be validated before implementation. Do not invent availability or provider URLs.
 
-## 7. Future Authorized Telegram Media Delivery
+## 7. Authorized Telegram Media Delivery
 
-After the Movies/Series discovery product is complete, FINDLY may add a second delivery layer:
+The media-delivery layer is part of the Movies architecture from the beginning. It must be implemented only for content FINDLY is legally authorized to distribute, but the database model, media library, bot flow, and Telegram storage architecture should be designed now so the product does not require a later rewrite.
 
     Bot
       ↓
@@ -166,13 +166,13 @@ After the Movies/Series discovery product is complete, FINDLY may add a second d
       ↓
     User
 
-This is a **future product capability** and must be considered in the architecture from the beginning, but it must not be implemented as an unauthorized movie-distribution system.
+This is an **authorized product capability**. It must never be implemented as an unauthorized movie-distribution system.
 
 ### Intended model
 
 The future system may use a dedicated Telegram channel as a controlled media storage/distribution layer.
 
-A user could eventually select:
+A user can select, when an authorized media asset exists:
 
     🎬 Movie / Episode
            ↓
@@ -202,7 +202,7 @@ A private Telegram channel is a technical storage/distribution mechanism; making
 
 ### Architecture requirement
 
-The initial database and backend design should leave room for future authorized media delivery without coupling it to the public movie catalog.
+The database and backend must keep authorized media separate from the public movie catalog while making the delivery path a first-class, production-planned capability.
 
 Conceptually:
 
@@ -471,9 +471,9 @@ Availability relationship between a title and provider, potentially including:
 
 User-to-title relationship.
 
-### Future Media Assets
+### Authorized Media Assets
 
-Separate entity for authorized downloadable/watchable Telegram media.
+Separate entity for authorized watchable/downloadable Telegram media. This is part of the production architecture, while actual assets are populated only after rights verification.
 
 Potential fields:
 
@@ -493,7 +493,7 @@ Potential fields:
 - created_at
 - updated_at
 
-The exact schema must be designed later. Do not create this table until the delivery phase is actually approved and its rights/operational model is defined.
+The exact schema must be finalized before the media migration. The table may be introduced as part of the Movies foundation only after the rights and operational fields are agreed; it must remain separate from title metadata.
 
 ### Movie Analytics
 
@@ -695,7 +695,7 @@ Only after the preceding product is stable and rights are confirmed:
 - Access and rights-status validation
 - Operational monitoring
 
-### Phase 5 — Monetization
+### Phase 6 — Monetization
 
 - Premium discovery features
 - Commercial partnerships where appropriate
@@ -789,6 +789,102 @@ Before implementing the database or application code:
 8. Verify every production path before moving to the next phase.
 
 **This document is a product definition, not permission to implement every feature immediately.**
+
+## 27. Research-Backed Implementation Architecture
+
+This section records the engineering conventions established after reviewing the current FINDLY repository, official Telegram Bot API documentation, relevant open-source Telegram movie/file architectures, and TMDB's current API documentation.
+
+### 27.0 Agreed end-to-end Movies map
+
+The agreed product flow is now:
+
+    FINDLY Master Bot
+          |
+          v
+    🎬 الأفلام والمسلسلات
+          |
+          +--> 🔎 Search by movie/series name
+          |
+          v
+    Search Results
+          |
+          v
+    🎬 Title Details
+          |
+          +--> Poster / Backdrop
+          +--> Title / Original Title
+          +--> Story / Overview
+          +--> Rating
+          +--> Year / Release Date
+          +--> Genres
+          +--> Cast / Credits
+          +--> Trailer
+          +--> Seasons / Episodes (series)
+          +--> Legitimate Provider Availability
+          |
+          +--> ▶️ مشاهدة  [only when authorized media is available]
+          |
+          +--> ⬇️ تحميل   [only when authorized download is permitted]
+          |
+          +--> ❤️ Favorite
+          +--> 📤 Share
+          |
+          v
+    FINDLY Media Flow
+          |
+          +--> FINDLY Media Bot (if deployed as a separate bot)
+          |
+          v
+    FINDLY Private Media Channel
+          |
+          +--> Telegram message_id
+          +--> Telegram file_id
+          +--> Media type / quality
+          +--> Rights status / reference
+          |
+          v
+    User receives authorized media
+
+The catalog and media storage are deliberately separate:
+
+    Supabase = movie/series library + metadata + provider availability
+    Telegram Media Channel = authorized media storage/delivery layer
+
+Supabase does not store the large movie/video files themselves.
+
+### 27.0.1 Media library model
+
+The media library must be indexed, not treated as an unstructured Telegram channel.
+
+Example movie:
+
+    🎬 Interstellar
+       |
+       +--> 1080p -> Telegram message/file reference
+       +--> 720p  -> Telegram message/file reference
+
+Example series:
+
+    📺 Series
+       |
+       +--> Season 1
+       |      +--> Episode 1 -> Telegram media reference
+       |      +--> Episode 2 -> Telegram media reference
+       |
+       +--> Season 2
+              +--> Episode 1 -> Telegram media reference
+
+The user should search and select titles through FINDLY's database, not search Telegram channel history directly.
+
+### 27.0.2 Media delivery rule
+
+A title can exist in the catalog without having FINDLY media. Therefore the UI must distinguish:
+
+- **Catalog only** — information/trailer/provider availability.
+- **Authorized media available** — Watch/Download can be offered.
+- **Media unavailable/blocked** — no delivery action is exposed.
+
+This prevents the product from pretending that every movie in the catalog is directly watchable through FINDLY.
 
 ## 27. Research-Backed Implementation Architecture
 
