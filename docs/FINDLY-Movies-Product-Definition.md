@@ -1503,3 +1503,18 @@ Storage responsibilities:
 - External storage accounts such as Drive/Dropbox/TeraBox: optional auxiliary storage only; they are not the architectural dependency for Telegram delivery.
 
 The implementation order is now fixed by Sections 28–30. Future work should start from the next unfinished phase rather than redesigning the Movies architecture.
+
+## 31. Implementation Status — 2026-10-09
+
+### Phase 1 — Infrastructure Foundation
+
+- [x] Initial schema migration committed: `supabase/migrations/20261008000100_movies_foundation.sql`.
+- [x] Static review performed for the eight core tables, foreign keys, uniqueness, catalog read policies, owner-scoped favorites policies, direct-client write restrictions, and updated-at triggers.
+- [x] Review correction committed: public season/episode reads now require active records and an active parent series.
+- [x] Read-only verification script committed: `supabase/tests/movies_foundation_verification.sql`.
+- [ ] Apply the migration to the **FINDLY Supabase project**.
+- [ ] Run the verification script against that same project and resolve every failed check.
+- [ ] Review Supabase security/performance advisors after deployment.
+
+**Important status rule:** Phase 1 is implemented in the repository, but it is **not database-verified yet**. Do not mark it complete or start Phase 2 deployment until the intended FINDLY database is confirmed, the migration applies successfully, and all verification checks pass. Never apply this migration to an unrelated Supabase project.
+
