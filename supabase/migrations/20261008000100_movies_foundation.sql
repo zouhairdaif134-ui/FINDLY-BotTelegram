@@ -208,9 +208,11 @@ using (
 create policy "Movie seasons are publicly readable for active series"
 on public.movie_seasons for select to anon, authenticated
 using (
-  exists (
+  status = 'active'
+  and exists (
     select 1 from public.movie_titles t
     where t.id = movie_seasons.title_id
+      and t.media_type = 'series'
       and t.status = 'active'
   )
 );
@@ -218,11 +220,14 @@ using (
 create policy "Movie episodes are publicly readable for active series"
 on public.movie_episodes for select to anon, authenticated
 using (
-  exists (
+  status = 'active'
+  and exists (
     select 1
     from public.movie_seasons s
     join public.movie_titles t on t.id = s.title_id
     where s.id = movie_episodes.season_id
+      and s.status = 'active'
+      and t.media_type = 'series'
       and t.status = 'active'
   )
 );
