@@ -215,3 +215,32 @@ The database does not expose a `supabase_migrations.schema_migrations` table. Th
 - Do not claim a title is watchable in FINDLY unless an authorized asset is active.
 - Do not create additional tables before reviewing existing structures and access requirements.
 - Do not enable monetization until provider terms, rights and business model are approved.
+
+## 11. Real Telegram bot implementation status (2026-11-02)
+
+### Implemented on branch `feat/movies-phase1-security-foundation`
+- Added database-backed Telegram discovery/library handlers in `src/lib/movies-bot.js`.
+- Master Movies & Series menu now opens the movie discovery flow instead of the legacy generic `content_items` category response.
+- Movies bot `/start` opens its own menu; `/start movie_<uuid>` resolves a stable internal movie ID.
+- Interactive callbacks cover new releases, top-rated titles, films, series, title details, favorites, search, seasons, episodes, help and home navigation.
+- Search uses the normalized movie title field. Favorites use the existing `movie_favorites` table and Telegram user mapping.
+- Master-to-Movies deep links are only shown after Telegram `getMe` confirms the actual Movies bot username matches the configured database username.
+- Admin Telegram section supports selecting each bot independently. Webhook setup first verifies the Telegram token identity against the bot record.
+- Movies may use a separate Cloudflare secret binding `TELEGRAM_MOVIES_BOT_TOKEN`; this avoids modifying or reading the existing `TELEGRAM_BOT_TOKENS` secret map.
+- Preview configuration is isolated with `SUPABASE_URL=https://preview.invalid`; it does not point at production data or carry production credentials.
+
+### Verified
+- GitHub Actions run `41454838077`: `npm test` PASS and Wrangler `deploy --dry-run` PASS.
+- Cloudflare Worker Preview build for commit `c1d60045254cd28ce02ac74501cf5a127856444e`: SUCCESS.
+- Worker Preview `/health`: returns healthy, version `3.1.0`.
+- These checks validate build and health only; they do not prove live Telegram interaction.
+
+### Required before a real Telegram conversation
+- Create the separate Movies bot in Telegram via `@BotFather`; the current `FindlyMovies2026Bot` database username is not proof that the Telegram identity exists.
+- Update the Movies bot record username to the exact username returned by Telegram `getMe`.
+- Add Cloudflare Worker secret `TELEGRAM_MOVIES_BOT_TOKEN` with the token from BotFather. Do not store the token in Supabase, GitHub, or dashboard settings.
+- Deploy the reviewed Worker branch to production, then use Admin → Telegram → FINDLY Movies → Verify Identity & Connect.
+- Populate the catalog from an approved metadata provider or verified admin entries. The live `movie_titles` table currently has zero rows; no sample or fabricated titles were inserted.
+- Playback remains disabled until a documented authorized media asset and delivery path exist.
+
+The branch is not merged and the production Worker has not been changed by this implementation.
