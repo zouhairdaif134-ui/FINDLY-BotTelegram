@@ -111,7 +111,7 @@ Each bot has its own Telegram token and bot record. The backend selects the bot 
 - `movie_provider_availability`
 - `movie_favorites`
 
-These eight tables were absent from the live FINDLY database during the 2026-11-02 audit. The existing migration has not been applied there.
+The eight Movies Foundation tables are present in the live FINDLY database and were verified on 2026-11-02. The catalog currently contains zero movie_titles rows; no sample titles were inserted.
 
 ### Later data model candidates (do not create until designed)
 - Media assets, Telegram file references and delivery attempts.
@@ -141,30 +141,30 @@ These eight tables were absent from the live FINDLY database during the 2026-11-
 - Restrict privileged RPC execution.
 - Confirm no cross-project access to BERRECHID IMMO.
 
-### Phase 1 — Movies Foundation
-- Apply the existing eight-table migration only to FINDLY.
-- Apply explicit least-privilege table grants.
-- Run schema, RLS, policy, trigger and privilege verification.
-- No media bytes or playback delivery in this phase.
+### Phase 1 — Movies Foundation (applied)
+- Eight-table schema exists only in FINDLY and RLS is enabled.
+- Explicit least-privilege catalog and favorites grants applied and verified.
+- Telegram update-claim RPC restricted to service_role; trigger search paths pinned.
+- Catalog is empty; no media bytes or playback delivery exist.
 
-### Phase 2 — Metadata providers
-- Provider adapter interface.
-- Licensing review and provider attribution.
+### Phase 2 — Admin control plane
+- Complete bot-specific Settings and operational controls.
+- Keep Telegram tokens and API secrets in Cloudflare secrets, never in `bot_settings` or the browser.
+- Add identity/webhook verification for each bot.
+
+### Phase 3 — Metadata providers and catalog
+- Provider adapter interface, licensing review and attribution.
 - Scheduled sync, deduplication and normalized search.
-- New-release and trending ranking inputs.
+- New-release and trending ranking inputs; do not seed fake titles.
 
-### Phase 3 — Master Movie Discovery
-- Search, feeds, filters, details, favorites and country availability.
-- New releases are the default feed priority.
-
-### Phase 4 — Admin Dashboard
-- Complete modules and settings management.
-- Enforce permissions per action and audit sensitive changes.
-
-### Phase 5 — Movies Bot
-- Independent Telegram identity and webhook.
-- Deep-link resolution and catalog browsing.
+### Phase 4 — Master discovery and Movies bot
+- Database-backed search, new releases, top-rated, films, series, details and favorites.
+- Movies bot has its own Telegram identity and webhook; Master-to-Movies uses a stable `movie_id` deep link.
 - Series/season/episode navigation.
+
+### Phase 5 — Authorized media delivery
+- Rights and territory validation before playback.
+- Telegram delivery only for assets with documented distribution rights.
 
 ### Phase 6 — Authorized media delivery
 - Rights and territory validation.
@@ -184,14 +184,16 @@ These eight tables were absent from the live FINDLY database during the 2026-11-
 - Existing Worker: `findly-v3-api`.
 - Worker bindings include Supabase URL, service-role secret, Telegram bot-token map and webhook secret (secret values were not read).
 - Existing bot records include Master (`findly`) and Movies (`movies`).
-- Movies bot record exists, but has no menus, content or bot settings.
+- Movies bot database record exists (`slug=movies`, active) but this does not prove a Telegram bot identity exists. Its configured username is only a database value until Telegram `getMe` verifies it.
+- Movies bot currently has no menu items, catalog entries or bot settings.
+- The new code branch adds database-backed Movies discovery/library handlers; it is not deployed to the production Worker.
 - Master has an active Movies & Series menu item, currently configured as category action `movies`.
-- The eight Movies Foundation tables are absent from the live database.
+- All eight Movies Foundation tables are present in the live database; the movie catalog is currently empty (0 titles).
 - Existing Dashboard has Bots, Categories, Menus, Content, Users, Notifications and Telegram sections; Analytics, Monetization, AI, Admins, Activity Log and Settings are placeholders.
 - GitHub main is at `57d2f45d87404ddb0132baa28e0d6059d7df6bee`.
 
 ### Security finding
-The existing `claim_telegram_update(uuid,bigint,text,integer)` function is SECURITY DEFINER and currently executable by `anon` and `authenticated`. A read-only permission test returned FAIL for both public roles and PASS for `service_role`.
+The existing `claim_telegram_update(uuid,bigint,text,integer)` function is SECURITY DEFINER. Its execution privilege was restricted to `service_role`; post-apply verification returned PASS for `anon` denied, `authenticated` denied, and `service_role` allowed.
 
 Migration `20261102000100_restrict_telegram_update_claim.sql` was applied to FINDLY. Post-apply verification returned PASS: `anon` and `authenticated` cannot execute the function; `service_role` can execute it. Migrations `20261102000300_pin_updated_at_function_search_path.sql` also pinned both trigger functions to `pg_catalog`; both checks returned PASS.
 
@@ -199,7 +201,7 @@ Migration `20261102000100_restrict_telegram_update_claim.sql` was applied to FIN
 The database does not expose a `supabase_migrations.schema_migrations` table. The SQL changes were applied directly and verified, but migration-history synchronization with the repository has not been established. Do not assume CLI migration history is aligned.
 
 ### Still unverified
-- Live Telegram `getMe` and `getWebhookInfo` for Master and Movies.
+- Live Telegram `getMe` and `getWebhookInfo` for Movies; a database username alone is not identity verification.
 - Runtime webhook behavior for `/api/telegram/webhook/movies`.
 - Whether the configured token map contains the correct Movies token (only the secret binding name was inspected).
 - Admin role assignment and live authenticated dashboard access.
