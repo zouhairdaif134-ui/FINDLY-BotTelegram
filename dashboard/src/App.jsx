@@ -2,8 +2,17 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabase.js";
 import NotificationsSection from "./NotificationsSection.jsx";
 
-const API_URL =
+const PRODUCTION_API_URL =
   "https://findly-v3-api.berrchidcity99.workers.dev";
+const PREVIEW_API_URL =
+  "https://feat-movies-phase1-security-foundation-findly-v3-api.berrchidcity99.workers.dev";
+const isPagesPreview =
+  typeof window !== "undefined" &&
+  window.location.hostname.endsWith(".pages.dev") &&
+  window.location.hostname !== "findly-bottelegram.pages.dev";
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (isPagesPreview ? PREVIEW_API_URL : PRODUCTION_API_URL);
 
 const menu = [
   { icon: "🏠", label: "Overview" },
@@ -89,7 +98,8 @@ function App() {
 
   const [activeSection, setActiveSection] =
     useState("Overview");
-  const [telegramLoading, setTelegramLoading] = useState(false);
+  const [telegramBotSlug, setTelegramBotSlug] = useState("findly");
+const [telegramLoading, setTelegramLoading] = useState(false);
 const [telegramStatus, setTelegramStatus] = useState("Not connected");
 const [telegramMessage, setTelegramMessage] = useState("");
 const [telegramError, setTelegramError] = useState("");
@@ -347,6 +357,14 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
     }
   }
 
+  function selectTelegramBot(slug) {
+    setTelegramBotSlug(slug);
+    setTelegramStatus("Not connected");
+    setTelegramMessage("");
+    setTelegramError("");
+    setTelegramWebhookInfo(null);
+  }
+
   async function connectTelegramWebhook() {
     try {
       setTelegramLoading(true);
@@ -354,12 +372,17 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       setTelegramMessage("");
   
       const result = await fetchApi(
-        "/api/telegram/webhook/findly",
+        `/api/telegram/webhook/${telegramBotSlug}`,
         {
           method: "POST"
         }
       );
   
+      const statusResult = await fetchApi(`/api/telegram/webhook/${telegramBotSlug}`);
+      setTelegramWebhookInfo({
+        ...(statusResult?.webhook || {}),
+        identity: statusResult?.identity || null
+      });
       setTelegramStatus("Connected");
       setTelegramMessage(
         result?.webhook
@@ -389,14 +412,20 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       );
 
       const webhook = result?.webhook || null;
-      setTelegramWebhookInfo(webhook);
+      setTelegramWebhookInfo({
+        ...(webhook || {}),
+        identity: result?.identity || null
+      });
 
-      if (webhook?.url) {
+      if (result?.identity?.matches_configured_username && webhook?.url) {
         setTelegramStatus("Connected");
-        setTelegramMessage("Webhook status checked successfully.");
+        setTelegramMessage("Telegram identity and webhook are verified.");
+      } else if (!result?.identity?.matches_configured_username) {
+        setTelegramStatus("Identity mismatch");
+        setTelegramMessage("Telegram token does not match the configured bot username.");
       } else {
         setTelegramStatus("Not connected");
-        setTelegramMessage("No Telegram webhook is currently configured.");
+        setTelegramMessage("Bot identity verified; webhook is not configured.");
       }
     } catch (error) {
       console.error(error);
@@ -1808,6 +1837,9 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
         )}
         {activeSection === "Telegram" && (
   <TelegramSection
+    bots={bots}
+    botSlug={telegramBotSlug}
+    onBotChange={selectTelegramBot}
     status={telegramStatus}
     loading={telegramLoading}
     message={telegramMessage}
@@ -3985,6 +4017,9 @@ function StatusBadge({
   );
 }
 function TelegramSection({
+  bots,
+  botSlug,
+  onBotChange,
   status,
   loading,
   message,
@@ -3995,129 +4030,71 @@ function TelegramSection({
   onDisconnect,
   onCheckWebhook
 }) {
+  const selectedBot = bots.find((bot) => bot.slug === botSlug);
+
   return (
     <section className="panel telegram-panel">
       <div className="panel-header">
         <div>
           <h2>Telegram</h2>
-          <p>
-            Connect and control the FINDLY Master Bot webhook.
-          </p>
+          <p>Verify bot identity and manage each Telegram webhook independently.</p>
         </div>
-
-        <div
-          className={
-            "telegram-status " +
-            (status === "Connected"
-              ? "connected"
-              : status === "Connection failed"
-              ? "failed"
-              : "disconnected")
-          }
-        >
+        <div className={"telegram-status " + (status === "Connected" ? "connected" : status === "Identity mismatch" ? "failed" : "disconnected")}>
           <span />
           {status}
         </div>
       </div>
 
+      <div className="management-toolbar">
+        <div>
+          <strong>Select Telegram bot</strong>
+          <span>Each bot uses its own token and webhook route.</span>
+        </div>
+        <select className="toolbar-select" value={botSlug} onChange={(event) => onBotChange(event.target.value)}>
+          {bots.map((bot) => (
+            <option key={bot.id} value={bot.slug}>{bot.name} ({bot.slug})</option>
+          ))}
+        </select>
+      </div>
+
       <div className="telegram-card">
         <div className="telegram-bot">
           <div className="telegram-bot-icon">🤖</div>
-
           <div>
-            <strong>FINDLY Master Bot</strong>
-            <span>@FindlySearch2026Bot</span>
+            <strong>{selectedBot?.name || "Telegram bot"}</strong>
+            <span>{selectedBot?.telegram_username ? "@" + selectedBot.telegram_username.replace(/^@/, "") : "Username not configured"}</span>
           </div>
         </div>
 
         <div className="telegram-info-grid">
-          <div>
-            <small>Bot role</small>
-            <strong>Master / Admin</strong>
-          </div>
-
-          <div>
-            <small>Webhook endpoint</small>
-            <strong>/telegram/findly</strong>
-          </div>
-
-          <div>
-            <small>Backend</small>
-            <strong>Cloudflare Worker</strong>
-          </div>
+          <div><small>Bot role</small><strong>{selectedBot?.bot_type === "master" ? "Master" : "Child bot"}</strong></div>
+          <div><small>Webhook endpoint</small><strong>/telegram/{botSlug}</strong></div>
+          <div><small>Backend</small><strong>Existing Cloudflare Worker</strong></div>
         </div>
 
-        {message && (
-          <div className="auth-success">
-            {message}
-          </div>
-        )}
+        {message && <div className="auth-success">{message}</div>}
+        {error && <div className="auth-error">{error}</div>}
 
-        {error && (
-          <div className="auth-error">
-            {error}
-          </div>
-        )}
-
-        {webhookInfo && (
+        {webhookInfo?.identity && (
           <div className="telegram-info-grid">
-            <div>
-              <small>Webhook status</small>
-              <strong>
-                {webhookInfo.url ? "Active" : "Not configured"}
-              </strong>
-            </div>
-
-            <div>
-              <small>Pending updates</small>
-              <strong>
-                {Number.isFinite(webhookInfo.pending_update_count)
-                  ? webhookInfo.pending_update_count
-                  : "—"}
-              </strong>
-            </div>
-
-            <div>
-              <small>Last Telegram error</small>
-              <strong>
-                {webhookInfo.last_error_message || "None"}
-              </strong>
-            </div>
+            <div><small>Telegram getMe identity</small><strong>{webhookInfo.identity.identity?.username ? "@" + webhookInfo.identity.identity.username : "Not verified"}</strong></div>
+            <div><small>Configured username match</small><strong>{webhookInfo.identity.matches_configured_username ? "Verified" : "Mismatch / pending"}</strong></div>
+            <div><small>Telegram bot ID</small><strong>{webhookInfo.identity.identity?.id || "—"}</strong></div>
+            <div><small>Webhook status</small><strong>{webhookInfo.url ? "Active" : "Not configured"}</strong></div>
+            <div><small>Pending updates</small><strong>{Number.isFinite(webhookInfo.pending_update_count) ? webhookInfo.pending_update_count : "—"}</strong></div>
+            <div><small>Last Telegram error</small><strong>{webhookInfo.last_error_message || "None"}</strong></div>
           </div>
         )}
 
         <div className="telegram-actions">
-          <button
-            className="primary-button"
-            type="button"
-            onClick={status === "Connected" ? onCheckWebhook : onConnect}
-            disabled={loading || webhookChecking}
-          >
-            {loading
-              ? "Connecting..."
-              : webhookChecking
-              ? "Checking..."
-              : status === "Connected"
-              ? "Refresh Webhook Status"
-              : "Connect Webhook"}
+          <button className="primary-button" type="button" onClick={status === "Connected" ? onCheckWebhook : onConnect} disabled={loading || webhookChecking}>
+            {loading ? "Connecting..." : webhookChecking ? "Checking..." : status === "Connected" ? "Refresh Status" : "Verify Identity & Connect"}
           </button>
-
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={onCheckWebhook}
-            disabled={loading || webhookChecking}
-          >
-            {webhookChecking ? "Checking..." : "Check Webhook"}
+          <button className="secondary-button" type="button" onClick={onCheckWebhook} disabled={loading || webhookChecking}>
+            {webhookChecking ? "Checking..." : "Check Identity / Webhook"}
           </button>
-
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={onDisconnect}
-            disabled={loading || webhookChecking}
-          >
-            Disconnect
+          <button className="secondary-button" type="button" onClick={onDisconnect} disabled={loading || webhookChecking}>
+            Disconnect Webhook
           </button>
         </div>
       </div>
