@@ -16,5 +16,10 @@
     "crons": [
       "*/5 * * * *"
     ]
+  },
+  "previews": {
+    "vars": {
+      "SUPABASE_URL": "https://preview.invalid"
+    }
   }
 }
