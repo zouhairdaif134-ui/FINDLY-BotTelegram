@@ -380,11 +380,11 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   if (parsed.action === "home") await showMoviesHome(env, bot, chatId);
   else if (parsed.action === "help") {
     await sendMessage(env, bot.slug, chatId,
-      "<b>ℹ️ مساعدة FINDLY Movies</b>\\n\\n" +
-      "• اختار الإصدارات الجديدة أو الأعلى تقييماً للتصفح.\\n" +
-      "• استعمل البحث باسم الفيلم أو المسلسل.\\n" +
-      "• افتح أي عنوان لعرض التفاصيل وإضافته للمكتبة.\\n" +
-      "• المسلسلات تعرض المواسم والحلقات المسجلة.\\n\\n" +
+      "<b>ℹ️ مساعدة FINDLY Movies</b>\n\n" +
+      "• اختار الإصدارات الجديدة أو الأعلى تقييماً للتصفح.\n" +
+      "• استعمل البحث باسم الفيلم أو المسلسل.\n" +
+      "• افتح أي عنوان لعرض التفاصيل وإضافته للمكتبة.\n" +
+      "• المسلسلات تعرض المواسم والحلقات المسجلة.\n\n" +
       "المشاهدة داخل Telegram لا تتفعل إلا للمحتوى المرخّص والمجهز للتسليم."
     );
   }
