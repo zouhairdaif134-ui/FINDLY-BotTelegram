@@ -2,8 +2,17 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabase.js";
 import NotificationsSection from "./NotificationsSection.jsx";
 
-const API_URL =
+const PRODUCTION_API_URL =
   "https://findly-v3-api.berrchidcity99.workers.dev";
+const PREVIEW_API_URL =
+  "https://feat-movies-phase1-security-foundation-findly-v3-api.berrchidcity99.workers.dev";
+const isPagesPreview =
+  typeof window !== "undefined" &&
+  window.location.hostname.endsWith(".pages.dev") &&
+  window.location.hostname !== "findly-bottelegram.pages.dev";
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (isPagesPreview ? PREVIEW_API_URL : PRODUCTION_API_URL);
 
 const menu = [
   { icon: "🏠", label: "Overview" },
