@@ -23,6 +23,10 @@ function getBotTokens(env) {
 }
 
 export function getTelegramToken(env, botSlug) {
+  if (botSlug === "movies" && env.TELEGRAM_MOVIES_BOT_TOKEN) {
+    return env.TELEGRAM_MOVIES_BOT_TOKEN;
+  }
+
   const tokens = getBotTokens(env);
   const token = tokens[botSlug];
 
