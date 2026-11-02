@@ -5,7 +5,7 @@ import {
   parseMoviesCallback,
   isMoviesSearchReply
 } from "./movies-bot.js";
-import { getTelegramToken } from "./telegram.js";
+import { getTelegramToken, getTelegramWebhookSecret } from "./telegram.js";
 
 test("normalizes and bounds movie search input", () => {
   assert.equal(normalizeMovieSearch("  Dune  "), "Dune");
@@ -41,5 +41,19 @@ test("Movies token is isolated and never falls back to Master token map", () => 
   assert.equal(
     getTelegramToken({ TELEGRAM_BOT_TOKENS: JSON.stringify({ findly: "MASTER_SECRET" }) }, "findly"),
     "MASTER_SECRET"
+  );
+});
+
+test("Movies webhook secret is isolated from the Master webhook secret", () => {
+  const env = {
+    TELEGRAM_WEBHOOK_SECRET: "MASTER_WEBHOOK_SECRET",
+    TELEGRAM_MOVIES_WEBHOOK_SECRET: "MOVIES_WEBHOOK_SECRET"
+  };
+
+  assert.equal(getTelegramWebhookSecret(env, "movies"), "MOVIES_WEBHOOK_SECRET");
+  assert.equal(getTelegramWebhookSecret(env, "findly"), "MASTER_WEBHOOK_SECRET");
+  assert.throws(
+    () => getTelegramWebhookSecret({ TELEGRAM_WEBHOOK_SECRET: "MASTER_WEBHOOK_SECRET" }, "movies"),
+    (error) => error.code === "TELEGRAM_CONFIG_ERROR"
   );
 });
