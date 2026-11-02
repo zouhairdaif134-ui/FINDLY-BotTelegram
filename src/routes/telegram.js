@@ -9,6 +9,13 @@ import {
   handleJobsCallback
 } from "../lib/jobs-ui.js";
 import { generateAIReply } from "../lib/ai.js";
+import {
+  handleMoviesCallback,
+  handleMoviesText,
+  handleMoviesStart,
+  showMoviesHome,
+  showMoviesSearchPrompt
+} from "../lib/movies-bot.js";
 
 async function getBot(
   env,
@@ -749,6 +756,9 @@ async function handleMenuCallback(
   chatId,
   callbackQuery
 ) {
+  const moviesHandled = await handleMoviesCallback(env, bot, chatId, callbackQuery);
+  if (moviesHandled) return;
+
   if (callbackQuery.data?.startsWith("jobs:")) {
     await handleJobsCallback(env, bot, chatId, callbackQuery);
     return;
@@ -889,13 +899,7 @@ async function handleMenuCallback(
     item.action_type ===
       "search"
   ) {
-    await sendMessage(
-      env,
-      bot.slug,
-      chatId,
-      "<b>🔎 البحث</b>\n\n" +
-        "كتب ليا شنو بغيتي تقلب عليه، وغادي نجهزو ليك البحث داخل FINDLY."
-    );
+    await showMoviesSearchPrompt(env, bot, chatId);
 
     return;
   }
@@ -911,6 +915,8 @@ async function handleMenuCallback(
         bot,
         chatId
       );
+    } else if (item.action_value === "movies" && bot.slug === "findly") {
+      await showMoviesHome(env, bot, chatId);
     } else {
       await sendCategory(
         env,
@@ -1234,6 +1240,11 @@ async function processTelegramUpdate(
         };
       }
     }
+    if (bot.slug === "movies") {
+      await handleMoviesStart(env, bot, chatId, startPayload, telegramUser?.id);
+      return { ok: true };
+    }
+
     if (
       bot.bot_type ===
       "master"
@@ -1250,6 +1261,8 @@ async function processTelegramUpdate(
         chatId,
         telegramUser
       );
+    } else if (bot.slug === "movies") {
+      await showMoviesHome(env, bot, chatId);
     } else {
       await sendChildMenu(
         env,
@@ -1262,6 +1275,14 @@ async function processTelegramUpdate(
       ok: true
     };
   }
+
+  if (bot.slug === "movies" && text === "/search") {
+    await showMoviesSearchPrompt(env, bot, chatId);
+    return { ok: true };
+  }
+
+  const moviesTextHandled = await handleMoviesText(env, bot, chatId, message, telegramUser?.id);
+  if (moviesTextHandled) return { ok: true };
 
   if (
     text === "/help"
