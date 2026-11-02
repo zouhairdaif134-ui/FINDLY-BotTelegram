@@ -16,3 +16,4 @@ jobs:
           node-version: 22
       - run: npm install --no-package-lock
       - run: npm test
+      - run: npx --yes wrangler@4.156.1 deploy --dry-run
