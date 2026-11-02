@@ -10,7 +10,7 @@ const isPagesPreview =
   typeof window !== "undefined" &&
   (window.location.hostname ===
     "feat-findly-movies-runtime-h.findly-bottelegram.pages.dev" ||
-    /^[a-f0-9]{8}\\.findly-bottelegram\\.pages\\.dev$/.test(
+    /^[a-f0-9]{8}\.findly-bottelegram\.pages\.dev$/.test(
       window.location.hostname
     ));
 const API_URL =
