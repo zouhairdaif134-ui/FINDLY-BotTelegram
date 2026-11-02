@@ -405,5 +405,5 @@ export async function handleMoviesStart(env, bot, chatId, startPayload, telegram
     await sendTitle(env, bot, chatId, match[1], telegramUserId);
     return;
   }
-  await sendHome(env, bot, chatId);
+  await showMoviesHome(env, bot, chatId);
 }
