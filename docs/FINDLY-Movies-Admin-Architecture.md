@@ -1,6 +1,6 @@
 # FINDLY Movies + Admin Master — Architecture Specification
 
-**Status:** Draft 0.2 — audit-backed implementation baseline  
+**Status:** Draft 0.3 — Phase 1 applied; runtime verification pending  
 **Updated:** 2026-11-02  
 **Repository:** `zouhairdaif134-ui/FINDLY-BotTelegram`
 
@@ -193,7 +193,10 @@ These eight tables were absent from the live FINDLY database during the 2026-11-
 ### Security finding
 The existing `claim_telegram_update(uuid,bigint,text,integer)` function is SECURITY DEFINER and currently executable by `anon` and `authenticated`. A read-only permission test returned FAIL for both public roles and PASS for `service_role`.
 
-A dedicated migration is proposed to revoke public execution and grant execution only to `service_role`. It must be reviewed and applied before expanding the webhook surface.
+Migration `20261102000100_restrict_telegram_update_claim.sql` was applied to FINDLY. Post-apply verification returned PASS: `anon` and `authenticated` cannot execute the function; `service_role` can execute it.
+
+### Migration tracking note
+The database does not expose a `supabase_migrations.schema_migrations` table. The SQL changes were applied directly and verified, but migration-history synchronization with the repository has not been established. Do not assume CLI migration history is aligned.
 
 ### Still unverified
 - Live Telegram `getMe` and `getWebhookInfo` for Master and Movies.
