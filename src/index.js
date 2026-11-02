@@ -66,7 +66,8 @@ import {
   setWebhook,
   getWebhookInfo,
   deleteWebhook,
-  telegramRequest
+  telegramRequest,
+  getTelegramWebhookSecret
 } from "./lib/telegram.js";
 
 import { authorizeRequest } from "./lib/auth.js";
@@ -448,9 +449,25 @@ export default {
         request.method ===
           "POST"
       ) {
-        if (
-          !env.TELEGRAM_WEBHOOK_SECRET
-        ) {
+        const botSlug =
+          getTelegramSlug(
+            url
+          );
+
+        if (!botSlug) {
+          return withCors(
+            failure(
+              "BAD_REQUEST",
+              "Telegram bot slug is required",
+              400
+            )
+          );
+        }
+
+        let expectedSecret;
+        try {
+          expectedSecret = getTelegramWebhookSecret(env, botSlug);
+        } catch {
           return withCors(
             failure(
               "TELEGRAM_CONFIG_ERROR",
@@ -466,29 +483,13 @@ export default {
           );
 
         if (
-          receivedSecret !==
-          env.TELEGRAM_WEBHOOK_SECRET
+          receivedSecret !== expectedSecret
         ) {
           return withCors(
             failure(
               "UNAUTHORIZED",
               "Invalid Telegram webhook secret",
               401
-            )
-          );
-        }
-
-        const botSlug =
-          getTelegramSlug(
-            url
-          );
-
-        if (!botSlug) {
-          return withCors(
-            failure(
-              "BAD_REQUEST",
-              "Telegram bot slug is required",
-              400
             )
           );
         }
@@ -560,14 +561,6 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
-        }
-
-        if (
-          !env.TELEGRAM_WEBHOOK_SECRET
-        ) {
-          throw new Error(
-            "TELEGRAM_WEBHOOK_SECRET is missing"
           );
         }
 
