@@ -65,7 +65,8 @@ import {
 import {
   setWebhook,
   getWebhookInfo,
-  deleteWebhook
+  deleteWebhook,
+  telegramRequest
 } from "./lib/telegram.js";
 
 import { authorizeRequest } from "./lib/auth.js";
@@ -155,6 +156,35 @@ function withCors(response) {
       headers
     }
   );
+}
+
+async function getTelegramIdentityStatus(env, botSlug) {
+  const supabase = getSupabase(env);
+  const { data: bot, error } = await supabase
+    .from("bots")
+    .select("slug, telegram_username")
+    .eq("slug", botSlug)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  if (!bot) {
+    const missing = new Error("Active bot record was not found");
+    missing.code = "PGRST116";
+    throw missing;
+  }
+  const identity = await telegramRequest(env, botSlug, "getMe");
+  const configured = String(bot.telegram_username || "").replace(/^@/, "").toLowerCase();
+  const actual = String(identity?.username || "").toLowerCase();
+  return {
+    configured_username: bot.telegram_username || null,
+    identity: {
+      id: identity?.id || null,
+      is_bot: Boolean(identity?.is_bot),
+      first_name: identity?.first_name || null,
+      username: identity?.username || null
+    },
+    matches_configured_username: Boolean(configured && actual && configured === actual)
+  };
 }
 
 async function requirePermission(
@@ -555,6 +585,15 @@ export default {
           );
         }
 
+        const identityStatus = await getTelegramIdentityStatus(env, botSlug);
+        if (!identityStatus.matches_configured_username) {
+          return withCors(failure(
+            "TELEGRAM_IDENTITY_MISMATCH",
+            "The Telegram token identity does not match the bot username configured in FINDLY.",
+            409
+          ));
+        }
+
         const webhookUrl =
           `${url.origin}/telegram/${botSlug}`;
 
@@ -621,6 +660,7 @@ export default {
           );
         }
 
+        const identityStatus = await getTelegramIdentityStatus(env, botSlug);
         const result =
           await getWebhookInfo(
             env,
@@ -629,10 +669,9 @@ export default {
 
         return withCors(
           success({
-            bot:
-              botSlug,
-            webhook:
-              result
+            bot: botSlug,
+            identity: identityStatus,
+            webhook: result
           })
         );
       }
