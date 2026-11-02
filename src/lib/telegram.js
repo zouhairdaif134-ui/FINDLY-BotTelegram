@@ -156,25 +156,35 @@ export async function answerCallback(
   );
 }
 
+export function getTelegramWebhookSecret(env, botSlug) {
+  const secret = botSlug === "movies"
+    ? env.TELEGRAM_MOVIES_WEBHOOK_SECRET
+    : env.TELEGRAM_WEBHOOK_SECRET;
+
+  if (!secret) {
+    const variable = botSlug === "movies"
+      ? "TELEGRAM_MOVIES_WEBHOOK_SECRET"
+      : "TELEGRAM_WEBHOOK_SECRET";
+    const error = new Error(`${variable} is missing`);
+    error.code = "TELEGRAM_CONFIG_ERROR";
+    throw error;
+  }
+
+  return secret;
+}
+
 export async function setWebhook(
   env,
   botSlug,
   webhookUrl
 ) {
-  if (!env.TELEGRAM_WEBHOOK_SECRET) {
-    throw new Error(
-      "TELEGRAM_WEBHOOK_SECRET is missing"
-    );
-  }
-
   return telegramRequest(
     env,
     botSlug,
     "setWebhook",
     {
       url: webhookUrl,
-      secret_token:
-        env.TELEGRAM_WEBHOOK_SECRET,
+      secret_token: getTelegramWebhookSecret(env, botSlug),
       allowed_updates: [
         "message",
         "callback_query"
