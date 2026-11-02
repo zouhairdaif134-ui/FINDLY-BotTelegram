@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase.js";
-import { sendMessage, answerCallback } from "./telegram.js";
+import { sendMessage, answerCallback, telegramRequest } from "./telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PAGE_SIZE = 8;
@@ -16,7 +16,7 @@ export function parseMoviesCallback(value) {
   const parts = String(value || "").split(":");
   if (parts[0] !== "movies") return null;
   const action = parts[1] || "";
-  if (["home", "new", "top", "films", "series", "favorites", "search"].includes(action)) {
+  if (["home", "new", "top", "films", "series", "favorites", "search", "help"].includes(action)) {
     const page = Number(parts[2] || 0);
     return { action, page: Number.isInteger(page) && page >= 0 ? page : 0 };
   }
@@ -43,8 +43,15 @@ async function getMoviesBot(env) {
     .eq("slug", "movies")
     .eq("is_active", true)
     .maybeSingle();
-  if (error) throw error;
-  return data;
+  if (error || !data?.telegram_username) return null;
+  try {
+    const identity = await telegramRequest(env, "movies", "getMe");
+    const configuredUsername = data.telegram_username.replace(/^@/, "").toLowerCase();
+    if (!identity?.username || identity.username.toLowerCase() !== configuredUsername) return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 async function getMasterBot(env) {
@@ -93,7 +100,7 @@ export async function showMoviesHome(env, bot, chatId) {
       { text: "🔎 البحث", callback_data: "movies:search" },
       { text: "❤️ مكتبتي", callback_data: "movies:favorites:0" }
     ],
-    [{ text: "ℹ️ المساعدة", callback_data: "movies:home" }]
+    [{ text: "ℹ️ المساعدة", callback_data: "movies:help" }]
   ];
 
   if (bot.slug === "findly") {
@@ -128,10 +135,8 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "") {
   if (action === "films") query = query.eq("media_type", "movie");
   if (action === "series") query = query.eq("media_type", "series");
   if (searchTerm) {
-    const safe = searchTerm.replace(/[,%()]/g, " ").trim();
-    query = query.or(
-      "title.ilike.%" + safe + "%,original_title.ilike.%" + safe + "%,normalized_title.ilike.%" + safe + "%"
-    );
+    const safe = searchTerm.replace(/[%_*]/g, " ").trim();
+    query = query.ilike("normalized_title", "%" + safe + "%");
   } else if (action === "top") {
     query = query.order("rating", { ascending: false, nullsFirst: false });
   } else {
@@ -372,7 +377,17 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   await answerCallback(env, bot.slug, callbackQuery.id);
   const telegramUserId = callbackQuery.from?.id;
 
-  if (parsed.action === "home") await sendHome(env, bot, chatId);
+  if (parsed.action === "home") await showMoviesHome(env, bot, chatId);
+  else if (parsed.action === "help") {
+    await sendMessage(env, bot.slug, chatId,
+      "<b>ℹ️ مساعدة FINDLY Movies</b>\\n\\n" +
+      "• اختار الإصدارات الجديدة أو الأعلى تقييماً للتصفح.\\n" +
+      "• استعمل البحث باسم الفيلم أو المسلسل.\\n" +
+      "• افتح أي عنوان لعرض التفاصيل وإضافته للمكتبة.\\n" +
+      "• المسلسلات تعرض المواسم والحلقات المسجلة.\\n\\n" +
+      "المشاهدة داخل Telegram لا تتفعل إلا للمحتوى المرخّص والمجهز للتسليم."
+    );
+  }
   else if (parsed.action === "search") await showMoviesSearchPrompt(env, bot, chatId);
   else if (parsed.action === "favorites") await sendFavorites(env, bot, chatId, telegramUserId);
   else if (parsed.action === "title") await sendTitle(env, bot, chatId, parsed.id, telegramUserId);
