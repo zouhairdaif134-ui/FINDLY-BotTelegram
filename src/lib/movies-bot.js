@@ -79,7 +79,7 @@ function titleButton(title) {
   };
 }
 
-async function sendHome(env, bot, chatId) {
+export async function showMoviesHome(env, bot, chatId) {
   const keyboard = [
     [
       { text: "🆕 الإصدارات الجديدة", callback_data: "movies:new:0" },
