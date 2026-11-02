@@ -193,7 +193,7 @@ These eight tables were absent from the live FINDLY database during the 2026-11-
 ### Security finding
 The existing `claim_telegram_update(uuid,bigint,text,integer)` function is SECURITY DEFINER and currently executable by `anon` and `authenticated`. A read-only permission test returned FAIL for both public roles and PASS for `service_role`.
 
-Migration `20261102000100_restrict_telegram_update_claim.sql` was applied to FINDLY. Post-apply verification returned PASS: `anon` and `authenticated` cannot execute the function; `service_role` can execute it.
+Migration `20261102000100_restrict_telegram_update_claim.sql` was applied to FINDLY. Post-apply verification returned PASS: `anon` and `authenticated` cannot execute the function; `service_role` can execute it. Migrations `20261102000300_pin_updated_at_function_search_path.sql` also pinned both trigger functions to `pg_catalog`; both checks returned PASS.
 
 ### Migration tracking note
 The database does not expose a `supabase_migrations.schema_migrations` table. The SQL changes were applied directly and verified, but migration-history synchronization with the repository has not been established. Do not assume CLI migration history is aligned.
