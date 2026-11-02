@@ -23,7 +23,12 @@ function getBotTokens(env) {
 }
 
 export function getTelegramToken(env, botSlug) {
-  if (botSlug === "movies" && env.TELEGRAM_MOVIES_BOT_TOKEN) {
+  if (botSlug === "movies") {
+    if (!env.TELEGRAM_MOVIES_BOT_TOKEN) {
+      const error = new Error("Telegram token is not configured for bot: movies");
+      error.code = "TELEGRAM_CONFIG_ERROR";
+      throw error;
+    }
     return env.TELEGRAM_MOVIES_BOT_TOKEN;
   }
 
