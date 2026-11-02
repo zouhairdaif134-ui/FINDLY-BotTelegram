@@ -12,10 +12,34 @@ export function normalizeMovieSearch(value) {
     .slice(0, 80);
 }
 
+function encodeSearchCallback(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+}
+
+function decodeSearchCallback(value) {
+  try {
+    const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+    const binary = atob(base64 + "=".repeat((4 - base64.length % 4) % 4));
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return normalizeMovieSearch(new TextDecoder().decode(bytes));
+  } catch {
+    return "";
+  }
+}
+
 export function parseMoviesCallback(value) {
   const parts = String(value || "").split(":");
   if (parts[0] !== "movies") return null;
   const action = parts[1] || "";
+  if (action === "search" && parts[3]) {
+    const page = Number(parts[2]);
+    const query = decodeSearchCallback(parts.slice(3).join(":"));
+    if (!query || !Number.isInteger(page) || page < 1) return null;
+    return { action, page, query };
+  }
   if (["home", "new", "top", "films", "series", "favorites", "search", "help"].includes(action)) {
     const page = Number(parts[2] || 0);
     return { action, page: Number.isInteger(page) && page >= 0 ? page : 0 };
@@ -155,8 +179,15 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "") {
           : action === "series" ? "المسلسلات" : "الكتالوج";
 
   const keyboard = (data || []).map((item) => [titleButton(item)]);
+  let hasNextPage = false;
   if (data?.length === PAGE_SIZE) {
-    keyboard.push([{ text: "➡️ المزيد", callback_data: "movies:" + action + ":" + (page + 1) }]);
+    const callbackData = action === "search"
+      ? "movies:search:" + (page + 1) + ":" + encodeSearchCallback(searchTerm)
+      : "movies:" + action + ":" + (page + 1);
+    if (callbackData.length <= 64) {
+      keyboard.push([{ text: "➡️ المزيد", callback_data: callbackData }]);
+      hasNextPage = true;
+    }
   }
   keyboard.push([{ text: "🏠 القائمة الرئيسية", callback_data: "movies:home" }]);
 
@@ -165,7 +196,10 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "") {
         (from + index + 1) + ". <b>" + escapeHtml(item.title) + "</b>" +
         (item.release_year ? " · " + item.release_year : "") +
         (item.rating ? " · ⭐ " + Number(item.rating).toFixed(1) : "")
-      ).join("\n")
+      ).join("\n") +
+      (searchTerm && data.length === PAGE_SIZE && !hasNextPage
+        ? "\n\nوصلنا حد طول البحث داخل Telegram. زيد دقّق الاسم باش تضيق النتائج."
+        : "")
     : "مازال ما تزاد حتى عنوان فهاد الكتالوج. ملي يتربط مصدر البيانات أو يضيف المدير العناوين، غادي تبان هنا.";
 
   await sendMessage(env, bot.slug, chatId, "<b>🎞️ " + heading + "</b>\n\n" + body, {
@@ -394,7 +428,7 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   else if (parsed.action === "favorite") await toggleFavorite(env, bot, chatId, parsed.id, telegramUserId);
   else if (parsed.action === "seasons") await sendSeasons(env, bot, chatId, parsed.id);
   else if (parsed.action === "season") await sendEpisodes(env, bot, chatId, parsed.id);
-  else await sendList(env, bot, chatId, parsed.action, parsed.page);
+  else await sendList(env, bot, chatId, parsed.action, parsed.page, parsed.query || "");
 
   return true;
 }
