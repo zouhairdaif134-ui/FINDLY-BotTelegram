@@ -122,22 +122,34 @@ const PERMISSIONS = {
     "settings.manage"
 };
 
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "https://findly-bottelegram.pages.dev",
+function corsHeaders(request) {
+  const origin = request?.headers.get("Origin") || "";
+  const isAllowedPreviewOrigin =
+    /^https:\/\/(?:feat-findly-movies-runtime-h|[a-f0-9]{8})\\.findly-bottelegram\\.pages\\.dev$/.test(origin);
+  const isAllowedOrigin =
+    origin === "https://findly-bottelegram.pages.dev" ||
+    isAllowedPreviewOrigin;
+  const headers = {
     "Access-Control-Allow-Headers":
       "Authorization, Content-Type, X-FINDLY-JOBS-SECRET",
     "Access-Control-Allow-Methods":
-      "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Vary": "Origin"
   };
+
+  if (isAllowedOrigin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+
+  return headers;
 }
 
-function withCors(response) {
+function withCors(response, request) {
   const headers =
     new Headers(response.headers);
 
   Object.entries(
-    corsHeaders()
+    corsHeaders(request)
   ).forEach(
     ([key, value]) => {
       headers.set(
@@ -295,7 +307,7 @@ export default {
               status: 204
             }
           )
-        );
+        , request);
       }
 
       /*
@@ -319,7 +331,7 @@ export default {
             status:
               "healthy"
           })
-        );
+        , request);
       }
 
       /*
@@ -346,7 +358,7 @@ export default {
               "Operational secret is missing",
               500
             )
-          );
+          , request);
         }
 
         const receivedSecret = request.headers.get(
@@ -360,7 +372,7 @@ export default {
               "Invalid jobs operational secret",
               401
             )
-          );
+          , request);
         }
 
         const sync = await runJobsAutomation(env);
@@ -369,7 +381,7 @@ export default {
           success({
             sync
           })
-        );
+        , request);
       }
 
       /*
@@ -461,7 +473,7 @@ export default {
               "Telegram bot slug is required",
               400
             )
-          );
+          , request);
         }
 
         let expectedSecret;
@@ -474,7 +486,7 @@ export default {
               "Telegram webhook secret is missing",
               500
             )
-          );
+          , request);
         }
 
         const receivedSecret =
@@ -491,7 +503,7 @@ export default {
               "Invalid Telegram webhook secret",
               401
             )
-          );
+          , request);
         }
 
         const update =
@@ -530,7 +542,7 @@ export default {
           success({
             ok: true
           })
-        );
+        , request);
       }
 
       /*
@@ -561,7 +573,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const parts =
@@ -584,7 +596,7 @@ export default {
             "TELEGRAM_IDENTITY_MISMATCH",
             "The Telegram token identity does not match the bot username configured in FINDLY.",
             409
-          ));
+          ), request);
         }
 
         const webhookUrl =
@@ -605,7 +617,7 @@ export default {
               webhookUrl,
             result
           })
-        );
+        , request);
       }
 
       /*
@@ -636,7 +648,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const parts =
@@ -666,7 +678,7 @@ export default {
             identity: identityStatus,
             webhook: result
           })
-        );
+        , request);
       }
 
       /*
@@ -697,7 +709,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const parts =
@@ -726,7 +738,7 @@ export default {
               botSlug,
             result
           })
-        );
+        , request);
       }
 
       /*
@@ -751,7 +763,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const data =
@@ -764,7 +776,7 @@ export default {
 
         return withCors(
           success(data)
-        );
+        , request);
       }
 
       if (
@@ -784,7 +796,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const data =
@@ -798,7 +810,7 @@ export default {
 
         return withCors(
           success(data)
-        );
+        , request);
       }
 
       if (
@@ -818,7 +830,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const data =
@@ -829,7 +841,7 @@ export default {
 
         return withCors(
           success(data)
-        );
+        , request);
       }
 
       if (
@@ -848,7 +860,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -857,7 +869,7 @@ export default {
               env
             )
           )
-        );
+        , request);
       }
 
       /*
@@ -882,7 +894,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -891,7 +903,7 @@ export default {
               env
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -910,7 +922,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -922,7 +934,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -942,7 +954,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -955,7 +967,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -975,7 +987,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -985,7 +997,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       /*
@@ -1010,7 +1022,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1022,7 +1034,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1041,7 +1053,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1053,7 +1065,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1073,7 +1085,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1086,7 +1098,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1106,7 +1118,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1116,7 +1128,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       /*
@@ -1141,7 +1153,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1156,7 +1168,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1175,7 +1187,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1187,7 +1199,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1207,7 +1219,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1220,7 +1232,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1240,7 +1252,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1250,7 +1262,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       /*
@@ -1275,7 +1287,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1287,7 +1299,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1307,7 +1319,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1320,7 +1332,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       /*
@@ -1345,7 +1357,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1357,7 +1369,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1376,7 +1388,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1388,7 +1400,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1408,7 +1420,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1418,7 +1430,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1437,7 +1449,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1452,7 +1464,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1471,7 +1483,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1483,7 +1495,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1503,7 +1515,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1516,7 +1528,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1536,7 +1548,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1546,7 +1558,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1565,7 +1577,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1583,7 +1595,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1602,7 +1614,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1614,7 +1626,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1633,7 +1645,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1645,7 +1657,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1665,7 +1677,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1678,7 +1690,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1698,7 +1710,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1708,7 +1720,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       return withCors(
@@ -1717,7 +1729,7 @@ export default {
           "Endpoint not found",
           404
         )
-      );
+      , request);
     } catch (error) {
       console.error(
         error
@@ -1730,7 +1742,7 @@ export default {
             error.message,
             500
           )
-        );
+        , request);
       }
 
       if (error?.code === "TELEGRAM_API_ERROR") {
@@ -1740,7 +1752,7 @@ export default {
             error.message,
             502
           )
-        );
+        , request);
       }
 
       if (error?.code === "PGRST116") {
@@ -1750,7 +1762,7 @@ export default {
             "Resource not found",
             404
           )
-        );
+        , request);
       }
 
       if (error?.code === "23505") {
@@ -1760,7 +1772,7 @@ export default {
             "Resource already exists",
             409
           )
-        );
+        , request);
       }
 
       const validationErrors = new Set([
@@ -1802,7 +1814,7 @@ export default {
             "Invalid request",
             400
           )
-        );
+        , request);
       }
 
       if (
@@ -1817,7 +1829,7 @@ export default {
             "Request could not be processed",
             error.status
           )
-        );
+        , request);
       }
 
       return withCors(
@@ -1826,7 +1838,7 @@ export default {
           "Internal server error",
           500
         )
-      );
+      , request);
     }
   }
 };
