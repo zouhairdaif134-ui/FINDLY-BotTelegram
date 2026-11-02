@@ -5,6 +5,7 @@ import {
   parseMoviesCallback,
   isMoviesSearchReply
 } from "../src/lib/movies-bot.js";
+import { getTelegramToken } from "../src/lib/telegram.js";
 
 test("parses valid discovery and pagination callbacks", () => {
   assert.deepEqual(parseMoviesCallback("movies:new:2"), { action: "new", page: 2 });
@@ -35,4 +36,10 @@ test("detects only explicit replies to the Movies search prompt", () => {
   assert.equal(isMoviesSearchReply({ reply_to_message: { text: "🔎 بحث FINDLY Movies" } }), true);
   assert.equal(isMoviesSearchReply({ reply_to_message: { text: "another message" } }), false);
   assert.equal(isMoviesSearchReply({ text: "Dune" }), false);
+});
+
+test("uses a dedicated Movies token without modifying the existing multi-bot token map", () => {
+  assert.equal(getTelegramToken({ TELEGRAM_MOVIES_BOT_TOKEN: "movies-token" }, "movies"), "movies-token");
+  assert.equal(getTelegramToken({ TELEGRAM_BOT_TOKENS: '{"findly":"master-token"}' }, "findly"), "master-token");
+  assert.throws(() => getTelegramToken({ TELEGRAM_BOT_TOKENS: '{"findly":"master-token"}' }, "movies"), /not configured/);
 });
