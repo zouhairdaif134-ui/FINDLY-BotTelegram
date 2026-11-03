@@ -471,3 +471,45 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
   }
   return saved;
 }
+
+
+// Authorized Telegram media is stored separately from public catalog metadata.
+const MOVIE_MEDIA_FIELDS = "id,title_id,telegram_file_id,telegram_file_unique_id,media_kind,quality,rights_status,rights_reference,is_active,created_at,updated_at";
+
+export async function getMovieMediaAsset(env, titleId) {
+  if (!titleId) throw new Error("Movie id is required");
+  const { data, error } = await getSupabase(env)
+    .from("movie_media_assets").select(MOVIE_MEDIA_FIELDS)
+    .eq("title_id", titleId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveMovieMediaAsset(env, titleId, body = {}) {
+  if (!titleId) throw new Error("Movie id is required");
+  const updates = {};
+  for (const key of ["telegram_file_id", "telegram_file_unique_id", "quality", "rights_reference"]) {
+    if (body[key] !== undefined) updates[key] = typeof body[key] === "string" ? body[key].trim() || null : body[key];
+  }
+  if (body.rights_status !== undefined) {
+    if (!["pending", "authorized", "revoked"].includes(body.rights_status)) throw new Error("Invalid rights status");
+    updates.rights_status = body.rights_status;
+  }
+  if (body.is_active !== undefined) updates.is_active = Boolean(body.is_active);
+  if (!Object.keys(updates).length) throw new Error("No media fields to update");
+  if (updates.telegram_file_id === "") throw new Error("Telegram file id is required");
+  const supabase = getSupabase(env);
+  const { data: title, error: titleError } = await supabase.from("movie_titles")
+    .select("id").eq("id", titleId).maybeSingle();
+  if (titleError) throw titleError;
+  if (!title) {
+    const missing = new Error("Movie not found");
+    missing.code = "PGRST116";
+    throw missing;
+  }
+  const { data, error } = await supabase.from("movie_media_assets")
+    .upsert({ title_id: titleId, ...updates }, { onConflict: "title_id" })
+    .select(MOVIE_MEDIA_FIELDS).single();
+  if (error) throw error;
+  return data;
+}
