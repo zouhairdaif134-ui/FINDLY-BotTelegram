@@ -469,3 +469,47 @@ export async function handleMoviesStart(env, bot, chatId, startPayload, telegram
   }
   await showMoviesHome(env, bot, chatId);
 }
+
+
+// Admin uploads an authorized candidate video directly to the Movies Bot.
+// Caption format: /attachmovie <movie_uuid> <rights_reference>
+export async function handleMovieVideoUpload(env, bot, message) {
+  if (bot.slug !== "movies" || !message?.video) return false;
+  const allowed = String(env.TELEGRAM_MOVIES_ADMIN_IDS || "")
+    .split(",").map((value) => value.trim()).filter(Boolean);
+  const senderId = String(message.from?.id || "");
+  if (!senderId || !allowed.includes(senderId)) return false;
+
+  const match = /^\/attachmovie\s+([0-9a-f-]{36})\s+(\S{3,200})$/i.exec(String(message.caption || "").trim());
+  if (!match || !UUID_RE.test(match[1])) {
+    await sendMessage(env, bot.slug, message.chat.id,
+      "صيغة رفع الفيديو غير صحيحة. استعمل:\n/attachmovie <movie_id> <rights_reference>");
+    return true;
+  }
+
+  const supabase = getSupabase(env);
+  const { data: title, error: titleError } = await supabase.from("movie_titles")
+    .select("id,title").eq("id", match[1]).maybeSingle();
+  if (titleError) throw titleError;
+  if (!title) {
+    await sendMessage(env, bot.slug, message.chat.id, "ما لقيتش الفيلم بهذا المعرّف.");
+    return true;
+  }
+
+  const { error } = await supabase.from("movie_media_assets").upsert({
+    title_id: title.id,
+    telegram_file_id: message.video.file_id,
+    telegram_file_unique_id: message.video.file_unique_id || null,
+    media_kind: "video",
+    quality: message.video.width && message.video.height ? message.video.width + "x" + message.video.height : null,
+    rights_status: "pending",
+    rights_reference: match[2],
+    is_active: true,
+    uploaded_by_telegram_user_id: senderId
+  }, { onConflict: "title_id" });
+  if (error) throw error;
+
+  await sendMessage(env, bot.slug, message.chat.id,
+    "تسجل الفيديو ديال <b>" + escapeHtml(title.title) + "</b> بنجاح، ولكن بقى فحالة انتظار التحقق من حقوق التوزيع. ما غاديش يتبعت للمستخدمين حتى يتصادق عليه المدير من Dashboard.");
+  return true;
+}
