@@ -518,7 +518,10 @@ export async function handleMovieVideoUpload(env, bot, message) {
   const allowed = String(env.TELEGRAM_MOVIES_ADMIN_IDS || "")
     .split(",").map((value) => value.trim()).filter(Boolean);
   const senderId = String(message.from?.id || "");
-  if (!senderId || !allowed.includes(senderId)) return false;
+  if (!senderId || !allowed.includes(senderId)) {
+    await sendMessage(env, bot.slug, message.chat.id, "رفع الفيديوهات مخصص لمدير البوت فقط.");
+    return true;
+  }
 
   const upload = parseMovieVideoUploadCaption(message.caption);
   if (!upload) {
