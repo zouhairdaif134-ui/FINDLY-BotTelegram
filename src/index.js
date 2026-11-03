@@ -27,7 +27,9 @@ import {
   getMoviesCatalog,
   createMovieCatalogItem,
   updateMovieCatalogItem,
-  deleteMovieCatalogItem
+  deleteMovieCatalogItem,
+  searchTmdbCatalog,
+  importTmdbCatalogItem
 } from "./routes/content.js";
 
 import {
@@ -1141,6 +1143,21 @@ export default {
        * =========================
        * Protected by existing FINDLY content permissions.
        */
+
+      if (url.pathname === "/api/movies/tmdb/search" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentView);
+        if (auth.response) return withCors(auth.response, request);
+        const results = await searchTmdbCatalog(env, url.searchParams.get("query"), url.searchParams.get("media_type") || "movie", url.searchParams.get("page") || 1);
+        return withCors(success(results), request);
+      }
+
+      if (url.pathname === "/api/movies/tmdb/import" && request.method === "POST") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentCreate);
+        if (auth.response) return withCors(auth.response, request);
+        const body = await readJson(request);
+        const result = await importTmdbCatalogItem(env, body.tmdb_id, body.media_type || "movie");
+        return withCors(success(result), request);
+      }
 
       if (url.pathname === "/api/movies" && request.method === "GET") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentView);
