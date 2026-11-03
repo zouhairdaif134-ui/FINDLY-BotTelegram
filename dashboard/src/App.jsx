@@ -2,8 +2,20 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabase.js";
 import NotificationsSection from "./NotificationsSection.jsx";
 
-const API_URL =
+const PRODUCTION_API_URL =
   "https://findly-v3-api.berrchidcity99.workers.dev";
+const PREVIEW_API_URL =
+  "https://feat-findly-movies-runtime-hardening-findly-v3-api.berrchidcity99.workers.dev";
+const isPagesPreview =
+  typeof window !== "undefined" &&
+  (window.location.hostname ===
+    "feat-findly-movies-runtime-h.findly-bottelegram.pages.dev" ||
+    /^[a-f0-9]{8}\.findly-bottelegram\.pages\.dev$/.test(
+      window.location.hostname
+    ));
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (isPagesPreview ? PREVIEW_API_URL : PRODUCTION_API_URL);
 
 const menu = [
   { icon: "🏠", label: "Overview" },
@@ -11,6 +23,7 @@ const menu = [
   { icon: "🗂️", label: "Categories" },
   { icon: "🔘", label: "Menus" },
   { icon: "🗃️", label: "Content" },
+  { icon: "🎬", label: "Movies" },
   { icon: "👥", label: "Users" },
   { icon: "🔔", label: "Notifications" },
   { icon: "📊", label: "Analytics" },
@@ -89,7 +102,8 @@ function App() {
 
   const [activeSection, setActiveSection] =
     useState("Overview");
-  const [telegramLoading, setTelegramLoading] = useState(false);
+  const [telegramBotSlug, setTelegramBotSlug] = useState("findly");
+const [telegramLoading, setTelegramLoading] = useState(false);
 const [telegramStatus, setTelegramStatus] = useState("Not connected");
 const [telegramMessage, setTelegramMessage] = useState("");
 const [telegramError, setTelegramError] = useState("");
@@ -101,6 +115,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
   const [menus, setMenus] = useState([]);
   const [users, setUsers] = useState([]);
   const [content, setContent] = useState([]);
+  const [movies, setMovies] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
@@ -347,6 +362,14 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
     }
   }
 
+  function selectTelegramBot(slug) {
+    setTelegramBotSlug(slug);
+    setTelegramStatus("Not connected");
+    setTelegramMessage("");
+    setTelegramError("");
+    setTelegramWebhookInfo(null);
+  }
+
   async function connectTelegramWebhook() {
     try {
       setTelegramLoading(true);
@@ -354,12 +377,17 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       setTelegramMessage("");
   
       const result = await fetchApi(
-        "/api/telegram/webhook/findly",
+        `/api/telegram/webhook/${telegramBotSlug}`,
         {
           method: "POST"
         }
       );
   
+      const statusResult = await fetchApi(`/api/telegram/webhook/${telegramBotSlug}`);
+      setTelegramWebhookInfo({
+        ...(statusResult?.webhook || {}),
+        identity: statusResult?.identity || null
+      });
       setTelegramStatus("Connected");
       setTelegramMessage(
         result?.webhook
@@ -389,14 +417,20 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       );
 
       const webhook = result?.webhook || null;
-      setTelegramWebhookInfo(webhook);
+      setTelegramWebhookInfo({
+        ...(webhook || {}),
+        identity: result?.identity || null
+      });
 
-      if (webhook?.url) {
+      if (result?.identity?.matches_configured_username && webhook?.url) {
         setTelegramStatus("Connected");
-        setTelegramMessage("Webhook status checked successfully.");
+        setTelegramMessage("Telegram identity and webhook are verified.");
+      } else if (!result?.identity?.matches_configured_username) {
+        setTelegramStatus("Identity mismatch");
+        setTelegramMessage("Telegram token does not match the configured bot username.");
       } else {
         setTelegramStatus("Not connected");
-        setTelegramMessage("No Telegram webhook is currently configured.");
+        setTelegramMessage("Bot identity verified; webhook is not configured.");
       }
     } catch (error) {
       console.error(error);
@@ -497,12 +531,14 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
         botsData,
         categoriesData,
         usersData,
-        contentData
+        contentData,
+        moviesData
       ] = await Promise.all([
         fetchApi("/api/bots"),
         fetchApi("/api/categories"),
         fetchApi("/api/users"),
-        fetchApi("/api/content")
+        fetchApi("/api/content"),
+        fetchApi("/api/movies")
       ]);
 
       setBots(botsData || []);
@@ -511,6 +547,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       );
       setUsers(usersData || []);
       setContent(contentData || []);
+      setMovies(moviesData || []);
 
       if (menuBotFilter) {
         const menusData =
@@ -578,6 +615,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       setMenus([]);
       setUsers([]);
       setContent([]);
+      setMovies([]);
       setLoading(false);
       return;
     }
@@ -1806,8 +1844,18 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
             }
           />
         )}
+        {activeSection === "Movies" && (
+          <MoviesSection
+            movies={movies}
+            fetchApi={fetchApi}
+            onRefresh={async () => setMovies(await fetchApi("/api/movies"))}
+          />
+        )}
         {activeSection === "Telegram" && (
   <TelegramSection
+    bots={bots}
+    botSlug={telegramBotSlug}
+    onBotChange={selectTelegramBot}
     status={telegramStatus}
     loading={telegramLoading}
     message={telegramMessage}
@@ -3984,7 +4032,108 @@ function StatusBadge({
     </div>
   );
 }
+
+function MoviesSection({ movies, fetchApi, onRefresh }) {
+  const empty = { media_type: "movie", title: "", original_title: "", overview: "", release_date: "", release_year: "", runtime_minutes: "", rating: "", poster_path: "", backdrop_path: "", status: "draft", metadata_status: "metadata_only" };
+  const [form, setForm] = useState(empty);
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [tmdbQuery, setTmdbQuery] = useState("");
+  const [tmdbType, setTmdbType] = useState("movie");
+  const [tmdbResults, setTmdbResults] = useState([]);
+  const [tmdbLoading, setTmdbLoading] = useState(false);
+  const [importingId, setImportingId] = useState(null);
+  const visible = movies.filter((item) => filter === "all" || item.status === filter);
+  async function searchTmdb(event) {
+    event.preventDefault();
+    if (!tmdbQuery.trim()) return;
+    setTmdbLoading(true); setError("");
+    try {
+      const params = new URLSearchParams({ query: tmdbQuery.trim(), media_type: tmdbType });
+      setTmdbResults(await fetchApi("/api/movies/tmdb/search?" + params.toString()));
+    } catch (e) { setError(e.message || "TMDB search failed"); }
+    finally { setTmdbLoading(false); }
+  }
+  async function importTmdb(item) {
+    setImportingId(item.tmdb_id); setError("");
+    try {
+      const imported = await fetchApi("/api/movies/tmdb/import", { method: "POST", body: JSON.stringify({ tmdb_id: item.tmdb_id, media_type: item.media_type }) });
+      setTmdbResults(results => results.filter(result => result.tmdb_id !== item.tmdb_id));
+      await onRefresh();
+      edit(imported);
+    } catch (e) { setError(e.message || "TMDB import failed"); }
+    finally { setImportingId(null); }
+  }
+  function edit(item) {
+    setEditing(item.id);
+    setForm({ ...empty, ...item, release_date: item.release_date || "", release_year: item.release_year || "", runtime_minutes: item.runtime_minutes || "", rating: item.rating ?? "" });
+    setError("");
+  }
+  async function save(event) {
+    event.preventDefault();
+    setSaving(true); setError("");
+    try {
+      const payload = { ...form, release_year: form.release_year === "" ? null : Number(form.release_year), runtime_minutes: form.runtime_minutes === "" ? null : Number(form.runtime_minutes), rating: form.rating === "" ? null : Number(form.rating) };
+      await fetchApi(editing ? "/api/movies/" + editing : "/api/movies", { method: editing ? "PUT" : "POST", body: JSON.stringify(payload) });
+      setForm(empty); setEditing(null); await onRefresh();
+    } catch (e) { setError(e.message || "Unable to save movie"); }
+    finally { setSaving(false); }
+  }
+  async function changeStatus(item, status) {
+    try { await fetchApi("/api/movies/" + item.id, { method: "PUT", body: JSON.stringify({ status }) }); await onRefresh(); }
+    catch (e) { setError(e.message || "Unable to update movie"); }
+  }
+  async function remove(item) {
+    if (!window.confirm("Delete this catalog entry permanently?")) return;
+    try { await fetchApi("/api/movies/" + item.id, { method: "DELETE" }); await onRefresh(); }
+    catch (e) { setError(e.message || "Unable to delete movie"); }
+  }
+  return (
+    <section className="panel">
+      <div className="panel-header"><div><h2>Movies catalog</h2><p>Add and manage movie / series metadata. Publishing makes an item visible in Telegram.</p></div><strong>{movies.length} titles</strong></div>
+      {error && <div className="auth-error">{error}</div>}
+      <form className="management-form" onSubmit={searchTmdb}>
+        <div className="panel-header"><div><h3>Import metadata from TMDB</h3><p>Search official movie and TV metadata. Imported titles are saved as drafts.</p></div></div>
+        <div className="management-toolbar">
+          <select className="toolbar-select" value={tmdbType} onChange={e => setTmdbType(e.target.value)}><option value="movie">Movies</option><option value="series">TV series</option></select>
+          <input aria-label="TMDB search" placeholder="Search title..." value={tmdbQuery} onChange={e => setTmdbQuery(e.target.value)} />
+          <button className="primary-button" disabled={tmdbLoading || !tmdbQuery.trim()}>{tmdbLoading ? "Searching..." : "Search TMDB"}</button>
+        </div>
+      </form>
+      {tmdbResults.length > 0 && <div className="table-wrap"><table><thead><tr><th>Poster</th><th>Title</th><th>Year</th><th>Rating</th><th>Import</th></tr></thead><tbody>
+        {tmdbResults.map(item => <tr key={item.tmdb_id}><td>{item.poster_path ? <img src={item.poster_path} alt="" loading="lazy" style={{ width: 48, borderRadius: 6 }} /> : "—"}</td><td><strong>{item.title}</strong><small>{item.overview}</small></td><td>{item.release_year || "—"}</td><td>{item.rating ?? "—"}</td><td><button className="secondary-button" type="button" disabled={importingId === item.tmdb_id} onClick={() => importTmdb(item)}>{importingId === item.tmdb_id ? "Importing..." : "Import draft"}</button></td></tr>)}
+      </tbody></table></div>}
+      <form className="management-form" onSubmit={save}>
+        <div className="form-grid">
+          <label>Type<select value={form.media_type} onChange={e => setForm({ ...form, media_type: e.target.value })}><option value="movie">Movie</option><option value="series">Series</option></select></label>
+          <label>Title<input required maxLength="200" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label>
+          <label>Original title<input value={form.original_title || ""} onChange={e => setForm({ ...form, original_title: e.target.value })} /></label>
+          <label>Release date<input type="date" value={form.release_date || ""} onChange={e => setForm({ ...form, release_date: e.target.value })} /></label>
+          <label>Year<input type="number" min="1888" max="2200" value={form.release_year} onChange={e => setForm({ ...form, release_year: e.target.value })} /></label>
+          <label>Runtime (minutes)<input type="number" min="1" value={form.runtime_minutes} onChange={e => setForm({ ...form, runtime_minutes: e.target.value })} /></label>
+          <label>Rating / 10<input type="number" min="0" max="10" step="0.1" value={form.rating} onChange={e => setForm({ ...form, rating: e.target.value })} /></label>
+          <label>Poster path / URL<input value={form.poster_path || ""} onChange={e => setForm({ ...form, poster_path: e.target.value })} /></label>
+          <label>Backdrop path / URL<input value={form.backdrop_path || ""} onChange={e => setForm({ ...form, backdrop_path: e.target.value })} /></label>
+          <label>Status<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}><option value="draft">Draft</option><option value="active">Published</option><option value="inactive">Paused</option></select></label>
+          <label className="full-width">Synopsis<textarea rows="4" value={form.overview || ""} onChange={e => setForm({ ...form, overview: e.target.value })} /></label>
+        </div>
+        <div className="management-actions"><button className="primary-button" disabled={saving}>{saving ? "Saving..." : editing ? "Save changes" : "Add title"}</button>{editing && <button type="button" className="secondary-button" onClick={() => { setEditing(null); setForm(empty); }}>Cancel</button>}</div>
+      </form>
+      <div className="management-toolbar"><strong>Catalog entries</strong><select className="toolbar-select" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option><option value="draft">Draft</option><option value="active">Published</option><option value="inactive">Paused</option></select><button className="secondary-button" type="button" onClick={onRefresh}>Refresh</button></div>
+      <div className="table-wrap"><table><thead><tr><th>Title</th><th>Type</th><th>Year</th><th>Rating</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        {visible.map(item => <tr key={item.id}><td><strong>{item.title}</strong><small>{item.original_title || ""}</small></td><td>{item.media_type}</td><td>{item.release_year || "—"}</td><td>{item.rating ?? "—"}</td><td>{item.status}</td><td><div className="management-actions"><button className="secondary-button" type="button" onClick={() => edit(item)}>Edit</button>{item.status !== "active" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "active")}>Publish</button>}{item.status !== "inactive" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "inactive")}>Pause</button>}<button className="secondary-button" type="button" onClick={() => remove(item)}>Delete</button></div></td></tr>)}
+        {!visible.length && <tr><td colSpan="6">No catalog entries yet.</td></tr>}
+      </tbody></table></div>
+    </section>
+  );
+}
+
 function TelegramSection({
+  bots,
+  botSlug,
+  onBotChange,
   status,
   loading,
   message,
@@ -3995,129 +4144,71 @@ function TelegramSection({
   onDisconnect,
   onCheckWebhook
 }) {
+  const selectedBot = bots.find((bot) => bot.slug === botSlug);
+
   return (
     <section className="panel telegram-panel">
       <div className="panel-header">
         <div>
           <h2>Telegram</h2>
-          <p>
-            Connect and control the FINDLY Master Bot webhook.
-          </p>
+          <p>Verify bot identity and manage each Telegram webhook independently.</p>
         </div>
-
-        <div
-          className={
-            "telegram-status " +
-            (status === "Connected"
-              ? "connected"
-              : status === "Connection failed"
-              ? "failed"
-              : "disconnected")
-          }
-        >
+        <div className={"telegram-status " + (status === "Connected" ? "connected" : status === "Identity mismatch" ? "failed" : "disconnected")}>
           <span />
           {status}
         </div>
       </div>
 
+      <div className="management-toolbar">
+        <div>
+          <strong>Select Telegram bot</strong>
+          <span>Each bot uses its own token and webhook route.</span>
+        </div>
+        <select className="toolbar-select" value={botSlug} onChange={(event) => onBotChange(event.target.value)}>
+          {bots.map((bot) => (
+            <option key={bot.id} value={bot.slug}>{bot.name} ({bot.slug})</option>
+          ))}
+        </select>
+      </div>
+
       <div className="telegram-card">
         <div className="telegram-bot">
           <div className="telegram-bot-icon">🤖</div>
-
           <div>
-            <strong>FINDLY Master Bot</strong>
-            <span>@FindlySearch2026Bot</span>
+            <strong>{selectedBot?.name || "Telegram bot"}</strong>
+            <span>{selectedBot?.telegram_username ? "@" + selectedBot.telegram_username.replace(/^@/, "") : "Username not configured"}</span>
           </div>
         </div>
 
         <div className="telegram-info-grid">
-          <div>
-            <small>Bot role</small>
-            <strong>Master / Admin</strong>
-          </div>
-
-          <div>
-            <small>Webhook endpoint</small>
-            <strong>/telegram/findly</strong>
-          </div>
-
-          <div>
-            <small>Backend</small>
-            <strong>Cloudflare Worker</strong>
-          </div>
+          <div><small>Bot role</small><strong>{selectedBot?.bot_type === "master" ? "Master" : "Child bot"}</strong></div>
+          <div><small>Webhook endpoint</small><strong>/telegram/{botSlug}</strong></div>
+          <div><small>Backend</small><strong>Existing Cloudflare Worker</strong></div>
         </div>
 
-        {message && (
-          <div className="auth-success">
-            {message}
-          </div>
-        )}
+        {message && <div className="auth-success">{message}</div>}
+        {error && <div className="auth-error">{error}</div>}
 
-        {error && (
-          <div className="auth-error">
-            {error}
-          </div>
-        )}
-
-        {webhookInfo && (
+        {webhookInfo?.identity && (
           <div className="telegram-info-grid">
-            <div>
-              <small>Webhook status</small>
-              <strong>
-                {webhookInfo.url ? "Active" : "Not configured"}
-              </strong>
-            </div>
-
-            <div>
-              <small>Pending updates</small>
-              <strong>
-                {Number.isFinite(webhookInfo.pending_update_count)
-                  ? webhookInfo.pending_update_count
-                  : "—"}
-              </strong>
-            </div>
-
-            <div>
-              <small>Last Telegram error</small>
-              <strong>
-                {webhookInfo.last_error_message || "None"}
-              </strong>
-            </div>
+            <div><small>Telegram getMe identity</small><strong>{webhookInfo.identity.identity?.username ? "@" + webhookInfo.identity.identity.username : "Not verified"}</strong></div>
+            <div><small>Configured username match</small><strong>{webhookInfo.identity.matches_configured_username ? "Verified" : "Mismatch / pending"}</strong></div>
+            <div><small>Telegram bot ID</small><strong>{webhookInfo.identity.identity?.id || "—"}</strong></div>
+            <div><small>Webhook status</small><strong>{webhookInfo.url ? "Active" : "Not configured"}</strong></div>
+            <div><small>Pending updates</small><strong>{Number.isFinite(webhookInfo.pending_update_count) ? webhookInfo.pending_update_count : "—"}</strong></div>
+            <div><small>Last Telegram error</small><strong>{webhookInfo.last_error_message || "None"}</strong></div>
           </div>
         )}
 
         <div className="telegram-actions">
-          <button
-            className="primary-button"
-            type="button"
-            onClick={status === "Connected" ? onCheckWebhook : onConnect}
-            disabled={loading || webhookChecking}
-          >
-            {loading
-              ? "Connecting..."
-              : webhookChecking
-              ? "Checking..."
-              : status === "Connected"
-              ? "Refresh Webhook Status"
-              : "Connect Webhook"}
+          <button className="primary-button" type="button" onClick={status === "Connected" ? onCheckWebhook : onConnect} disabled={loading || webhookChecking}>
+            {loading ? "Connecting..." : webhookChecking ? "Checking..." : status === "Connected" ? "Refresh Status" : "Verify Identity & Connect"}
           </button>
-
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={onCheckWebhook}
-            disabled={loading || webhookChecking}
-          >
-            {webhookChecking ? "Checking..." : "Check Webhook"}
+          <button className="secondary-button" type="button" onClick={onCheckWebhook} disabled={loading || webhookChecking}>
+            {webhookChecking ? "Checking..." : "Check Identity / Webhook"}
           </button>
-
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={onDisconnect}
-            disabled={loading || webhookChecking}
-          >
-            Disconnect
+          <button className="secondary-button" type="button" onClick={onDisconnect} disabled={loading || webhookChecking}>
+            Disconnect Webhook
           </button>
         </div>
       </div>

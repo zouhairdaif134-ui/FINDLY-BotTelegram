@@ -23,7 +23,13 @@ import {
   getContent,
   createContent,
   updateContent,
-  deleteContent
+  deleteContent,
+  getMoviesCatalog,
+  createMovieCatalogItem,
+  updateMovieCatalogItem,
+  deleteMovieCatalogItem,
+  searchTmdbCatalog,
+  importTmdbCatalogItem
 } from "./routes/content.js";
 
 import {
@@ -65,7 +71,9 @@ import {
 import {
   setWebhook,
   getWebhookInfo,
-  deleteWebhook
+  deleteWebhook,
+  telegramRequest,
+  getTelegramWebhookSecret
 } from "./lib/telegram.js";
 
 import { authorizeRequest } from "./lib/auth.js";
@@ -120,22 +128,34 @@ const PERMISSIONS = {
     "settings.manage"
 };
 
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "https://findly-bottelegram.pages.dev",
+function corsHeaders(request) {
+  const origin = request?.headers.get("Origin") || "";
+  const isAllowedPreviewOrigin =
+    /^https:\/\/(?:feat-findly-movies-runtime-h|[a-f0-9]{8})\.findly-bottelegram\.pages\.dev$/.test(origin);
+  const isAllowedOrigin =
+    origin === "https://findly-bottelegram.pages.dev" ||
+    isAllowedPreviewOrigin;
+  const headers = {
     "Access-Control-Allow-Headers":
       "Authorization, Content-Type, X-FINDLY-JOBS-SECRET",
     "Access-Control-Allow-Methods":
-      "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Vary": "Origin"
   };
+
+  if (isAllowedOrigin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+
+  return headers;
 }
 
-function withCors(response) {
+function withCors(response, request) {
   const headers =
     new Headers(response.headers);
 
   Object.entries(
-    corsHeaders()
+    corsHeaders(request)
   ).forEach(
     ([key, value]) => {
       headers.set(
@@ -155,6 +175,35 @@ function withCors(response) {
       headers
     }
   );
+}
+
+async function getTelegramIdentityStatus(env, botSlug) {
+  const supabase = getSupabase(env);
+  const { data: bot, error } = await supabase
+    .from("bots")
+    .select("slug, telegram_username")
+    .eq("slug", botSlug)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  if (!bot) {
+    const missing = new Error("Active bot record was not found");
+    missing.code = "PGRST116";
+    throw missing;
+  }
+  const identity = await telegramRequest(env, botSlug, "getMe");
+  const configured = String(bot.telegram_username || "").replace(/^@/, "").toLowerCase();
+  const actual = String(identity?.username || "").toLowerCase();
+  return {
+    configured_username: bot.telegram_username || null,
+    identity: {
+      id: identity?.id || null,
+      is_bot: Boolean(identity?.is_bot),
+      first_name: identity?.first_name || null,
+      username: identity?.username || null
+    },
+    matches_configured_username: Boolean(configured && actual && configured === actual)
+  };
 }
 
 async function requirePermission(
@@ -264,7 +313,7 @@ export default {
               status: 204
             }
           )
-        );
+        , request);
       }
 
       /*
@@ -288,7 +337,7 @@ export default {
             status:
               "healthy"
           })
-        );
+        , request);
       }
 
       /*
@@ -315,7 +364,7 @@ export default {
               "Operational secret is missing",
               500
             )
-          );
+          , request);
         }
 
         const receivedSecret = request.headers.get(
@@ -329,7 +378,7 @@ export default {
               "Invalid jobs operational secret",
               401
             )
-          );
+          , request);
         }
 
         const sync = await runJobsAutomation(env);
@@ -338,7 +387,7 @@ export default {
           success({
             sync
           })
-        );
+        , request);
       }
 
       /*
@@ -418,36 +467,6 @@ export default {
         request.method ===
           "POST"
       ) {
-        if (
-          !env.TELEGRAM_WEBHOOK_SECRET
-        ) {
-          return withCors(
-            failure(
-              "TELEGRAM_CONFIG_ERROR",
-              "Telegram webhook secret is missing",
-              500
-            )
-          );
-        }
-
-        const receivedSecret =
-          request.headers.get(
-            "X-Telegram-Bot-Api-Secret-Token"
-          );
-
-        if (
-          receivedSecret !==
-          env.TELEGRAM_WEBHOOK_SECRET
-        ) {
-          return withCors(
-            failure(
-              "UNAUTHORIZED",
-              "Invalid Telegram webhook secret",
-              401
-            )
-          );
-        }
-
         const botSlug =
           getTelegramSlug(
             url
@@ -460,7 +479,37 @@ export default {
               "Telegram bot slug is required",
               400
             )
+          , request);
+        }
+
+        let expectedSecret;
+        try {
+          expectedSecret = getTelegramWebhookSecret(env, botSlug);
+        } catch {
+          return withCors(
+            failure(
+              "TELEGRAM_CONFIG_ERROR",
+              "Telegram webhook secret is missing",
+              500
+            )
+          , request);
+        }
+
+        const receivedSecret =
+          request.headers.get(
+            "X-Telegram-Bot-Api-Secret-Token"
           );
+
+        if (
+          receivedSecret !== expectedSecret
+        ) {
+          return withCors(
+            failure(
+              "UNAUTHORIZED",
+              "Invalid Telegram webhook secret",
+              401
+            )
+          , request);
         }
 
         const update =
@@ -499,7 +548,7 @@ export default {
           success({
             ok: true
           })
-        );
+        , request);
       }
 
       /*
@@ -530,15 +579,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
-        }
-
-        if (
-          !env.TELEGRAM_WEBHOOK_SECRET
-        ) {
-          throw new Error(
-            "TELEGRAM_WEBHOOK_SECRET is missing"
-          );
+          , request);
         }
 
         const parts =
@@ -553,6 +594,15 @@ export default {
           throw new Error(
             "Bot slug is required"
           );
+        }
+
+        const identityStatus = await getTelegramIdentityStatus(env, botSlug);
+        if (!identityStatus.matches_configured_username) {
+          return withCors(failure(
+            "TELEGRAM_IDENTITY_MISMATCH",
+            "The Telegram token identity does not match the bot username configured in FINDLY.",
+            409
+          ), request);
         }
 
         const webhookUrl =
@@ -573,7 +623,7 @@ export default {
               webhookUrl,
             result
           })
-        );
+        , request);
       }
 
       /*
@@ -604,7 +654,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const parts =
@@ -621,6 +671,7 @@ export default {
           );
         }
 
+        const identityStatus = await getTelegramIdentityStatus(env, botSlug);
         const result =
           await getWebhookInfo(
             env,
@@ -629,12 +680,11 @@ export default {
 
         return withCors(
           success({
-            bot:
-              botSlug,
-            webhook:
-              result
+            bot: botSlug,
+            identity: identityStatus,
+            webhook: result
           })
-        );
+        , request);
       }
 
       /*
@@ -665,7 +715,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const parts =
@@ -694,7 +744,7 @@ export default {
               botSlug,
             result
           })
-        );
+        , request);
       }
 
       /*
@@ -719,7 +769,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const data =
@@ -732,7 +782,7 @@ export default {
 
         return withCors(
           success(data)
-        );
+        , request);
       }
 
       if (
@@ -752,7 +802,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const data =
@@ -766,7 +816,7 @@ export default {
 
         return withCors(
           success(data)
-        );
+        , request);
       }
 
       if (
@@ -786,7 +836,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         const data =
@@ -797,7 +847,7 @@ export default {
 
         return withCors(
           success(data)
-        );
+        , request);
       }
 
       if (
@@ -816,7 +866,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -825,7 +875,7 @@ export default {
               env
             )
           )
-        );
+        , request);
       }
 
       /*
@@ -850,7 +900,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -859,7 +909,7 @@ export default {
               env
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -878,7 +928,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -890,7 +940,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -910,7 +960,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -923,7 +973,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -943,7 +993,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -953,7 +1003,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       /*
@@ -978,7 +1028,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -990,7 +1040,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1009,7 +1059,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1021,7 +1071,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1041,7 +1091,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1054,7 +1104,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1074,7 +1124,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1084,7 +1134,53 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
+      }
+
+      /*
+       * =========================
+       * MOVIES CATALOG
+       * =========================
+       * Protected by existing FINDLY content permissions.
+       */
+
+      if (url.pathname === "/api/movies/tmdb/search" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentView);
+        if (auth.response) return withCors(auth.response, request);
+        const results = await searchTmdbCatalog(env, url.searchParams.get("query"), url.searchParams.get("media_type") || "movie", url.searchParams.get("page") || 1);
+        return withCors(success(results), request);
+      }
+
+      if (url.pathname === "/api/movies/tmdb/import" && request.method === "POST") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentCreate);
+        if (auth.response) return withCors(auth.response, request);
+        const body = await readJson(request);
+        const result = await importTmdbCatalogItem(env, body.tmdb_id, body.media_type || "movie");
+        return withCors(success(result), request);
+      }
+
+      if (url.pathname === "/api/movies" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentView);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await getMoviesCatalog(env, url.searchParams.get("status"))), request);
+      }
+
+      if (url.pathname === "/api/movies" && request.method === "POST") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentCreate);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await createMovieCatalogItem(env, await readJson(request))), request);
+      }
+
+      if (url.pathname.startsWith("/api/movies/") && request.method === "PUT") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentUpdate);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await updateMovieCatalogItem(env, getId(url), await readJson(request))), request);
+      }
+
+      if (url.pathname.startsWith("/api/movies/") && request.method === "DELETE") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentDelete);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await deleteMovieCatalogItem(env, getId(url))), request);
       }
 
       /*
@@ -1109,7 +1205,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1124,7 +1220,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1143,7 +1239,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1155,7 +1251,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1175,7 +1271,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1188,7 +1284,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1208,7 +1304,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1218,7 +1314,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       /*
@@ -1243,7 +1339,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1255,7 +1351,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1275,7 +1371,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1288,7 +1384,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       /*
@@ -1313,7 +1409,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1325,7 +1421,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1344,7 +1440,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1356,7 +1452,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1376,7 +1472,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1386,7 +1482,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1405,7 +1501,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1420,7 +1516,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1439,7 +1535,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1451,7 +1547,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1471,7 +1567,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1484,7 +1580,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1504,7 +1600,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1514,7 +1610,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1533,7 +1629,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1551,7 +1647,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1570,7 +1666,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1582,7 +1678,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1601,7 +1697,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1613,7 +1709,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1633,7 +1729,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1646,7 +1742,7 @@ export default {
               )
             )
           )
-        );
+        , request);
       }
 
       if (
@@ -1666,7 +1762,7 @@ export default {
         if (auth.response) {
           return withCors(
             auth.response
-          );
+          , request);
         }
 
         return withCors(
@@ -1676,7 +1772,7 @@ export default {
               getId(url)
             )
           )
-        );
+        , request);
       }
 
       return withCors(
@@ -1685,7 +1781,7 @@ export default {
           "Endpoint not found",
           404
         )
-      );
+      , request);
     } catch (error) {
       console.error(
         error
@@ -1698,7 +1794,7 @@ export default {
             error.message,
             500
           )
-        );
+        , request);
       }
 
       if (error?.code === "TELEGRAM_API_ERROR") {
@@ -1708,7 +1804,7 @@ export default {
             error.message,
             502
           )
-        );
+        , request);
       }
 
       if (error?.code === "PGRST116") {
@@ -1718,7 +1814,7 @@ export default {
             "Resource not found",
             404
           )
-        );
+        , request);
       }
 
       if (error?.code === "23505") {
@@ -1728,7 +1824,7 @@ export default {
             "Resource already exists",
             409
           )
-        );
+        , request);
       }
 
       const validationErrors = new Set([
@@ -1770,7 +1866,7 @@ export default {
             "Invalid request",
             400
           )
-        );
+        , request);
       }
 
       if (
@@ -1785,7 +1881,7 @@ export default {
             "Request could not be processed",
             error.status
           )
-        );
+        , request);
       }
 
       return withCors(
@@ -1794,7 +1890,7 @@ export default {
           "Internal server error",
           500
         )
-      );
+      , request);
     }
   }
 };
