@@ -406,6 +406,7 @@ export async function handleMoviesText(env, bot, chatId, message, telegramUserId
 }
 
 export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
+  if (bot.slug !== "findly" && bot.slug !== "movies") return false;
   const parsed = parseMoviesCallback(callbackQuery?.data);
   if (!parsed) return false;
   await answerCallback(env, bot.slug, callbackQuery.id);
