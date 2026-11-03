@@ -23,6 +23,7 @@ const menu = [
   { icon: "🗂️", label: "Categories" },
   { icon: "🔘", label: "Menus" },
   { icon: "🗃️", label: "Content" },
+  { icon: "🎬", label: "Movies" },
   { icon: "👥", label: "Users" },
   { icon: "🔔", label: "Notifications" },
   { icon: "📊", label: "Analytics" },
@@ -114,6 +115,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
   const [menus, setMenus] = useState([]);
   const [users, setUsers] = useState([]);
   const [content, setContent] = useState([]);
+  const [movies, setMovies] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
@@ -529,12 +531,14 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
         botsData,
         categoriesData,
         usersData,
-        contentData
+        contentData,
+        moviesData
       ] = await Promise.all([
         fetchApi("/api/bots"),
         fetchApi("/api/categories"),
         fetchApi("/api/users"),
-        fetchApi("/api/content")
+        fetchApi("/api/content"),
+        fetchApi("/api/movies")
       ]);
 
       setBots(botsData || []);
@@ -543,6 +547,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       );
       setUsers(usersData || []);
       setContent(contentData || []);
+      setMovies(moviesData || []);
 
       if (menuBotFilter) {
         const menusData =
@@ -610,6 +615,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       setMenus([]);
       setUsers([]);
       setContent([]);
+      setMovies([]);
       setLoading(false);
       return;
     }
@@ -1836,6 +1842,13 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
             onToggle={
               toggleContent
             }
+          />
+        )}
+        {activeSection === "Movies" && (
+          <MoviesSection
+            movies={movies}
+            fetchApi={fetchApi}
+            onRefresh={async () => setMovies(await fetchApi("/api/movies"))}
           />
         )}
         {activeSection === "Telegram" && (
@@ -4019,6 +4032,68 @@ function StatusBadge({
     </div>
   );
 }
+
+function MoviesSection({ movies, fetchApi, onRefresh }) {
+  const empty = { media_type: "movie", title: "", original_title: "", overview: "", release_date: "", release_year: "", runtime_minutes: "", rating: "", poster_path: "", backdrop_path: "", status: "draft", metadata_status: "metadata_only" };
+  const [form, setForm] = useState(empty);
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [filter, setFilter] = useState("all");
+  const visible = movies.filter((item) => filter === "all" || item.status === filter);
+  function edit(item) {
+    setEditing(item.id);
+    setForm({ ...empty, ...item, release_date: item.release_date || "", release_year: item.release_year || "", runtime_minutes: item.runtime_minutes || "", rating: item.rating ?? "" });
+    setError("");
+  }
+  async function save(event) {
+    event.preventDefault();
+    setSaving(true); setError("");
+    try {
+      const payload = { ...form, release_year: form.release_year === "" ? null : Number(form.release_year), runtime_minutes: form.runtime_minutes === "" ? null : Number(form.runtime_minutes), rating: form.rating === "" ? null : Number(form.rating) };
+      await fetchApi(editing ? "/api/movies/" + editing : "/api/movies", { method: editing ? "PUT" : "POST", body: JSON.stringify(payload) });
+      setForm(empty); setEditing(null); await onRefresh();
+    } catch (e) { setError(e.message || "Unable to save movie"); }
+    finally { setSaving(false); }
+  }
+  async function changeStatus(item, status) {
+    try { await fetchApi("/api/movies/" + item.id, { method: "PUT", body: JSON.stringify({ status }) }); await onRefresh(); }
+    catch (e) { setError(e.message || "Unable to update movie"); }
+  }
+  async function remove(item) {
+    if (!window.confirm("Delete this catalog entry permanently?")) return;
+    try { await fetchApi("/api/movies/" + item.id, { method: "DELETE" }); await onRefresh(); }
+    catch (e) { setError(e.message || "Unable to delete movie"); }
+  }
+  return (
+    <section className="panel">
+      <div className="panel-header"><div><h2>Movies catalog</h2><p>Add and manage movie / series metadata. Publishing makes an item visible in Telegram.</p></div><strong>{movies.length} titles</strong></div>
+      {error && <div className="auth-error">{error}</div>}
+      <form className="management-form" onSubmit={save}>
+        <div className="form-grid">
+          <label>Type<select value={form.media_type} onChange={e => setForm({ ...form, media_type: e.target.value })}><option value="movie">Movie</option><option value="series">Series</option></select></label>
+          <label>Title<input required maxLength="200" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label>
+          <label>Original title<input value={form.original_title || ""} onChange={e => setForm({ ...form, original_title: e.target.value })} /></label>
+          <label>Release date<input type="date" value={form.release_date || ""} onChange={e => setForm({ ...form, release_date: e.target.value })} /></label>
+          <label>Year<input type="number" min="1888" max="2200" value={form.release_year} onChange={e => setForm({ ...form, release_year: e.target.value })} /></label>
+          <label>Runtime (minutes)<input type="number" min="1" value={form.runtime_minutes} onChange={e => setForm({ ...form, runtime_minutes: e.target.value })} /></label>
+          <label>Rating / 10<input type="number" min="0" max="10" step="0.1" value={form.rating} onChange={e => setForm({ ...form, rating: e.target.value })} /></label>
+          <label>Poster path / URL<input value={form.poster_path || ""} onChange={e => setForm({ ...form, poster_path: e.target.value })} /></label>
+          <label>Backdrop path / URL<input value={form.backdrop_path || ""} onChange={e => setForm({ ...form, backdrop_path: e.target.value })} /></label>
+          <label>Status<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}><option value="draft">Draft</option><option value="active">Published</option><option value="inactive">Paused</option></select></label>
+          <label className="full-width">Synopsis<textarea rows="4" value={form.overview || ""} onChange={e => setForm({ ...form, overview: e.target.value })} /></label>
+        </div>
+        <div className="management-actions"><button className="primary-button" disabled={saving}>{saving ? "Saving..." : editing ? "Save changes" : "Add title"}</button>{editing && <button type="button" className="secondary-button" onClick={() => { setEditing(null); setForm(empty); }}>Cancel</button>}</div>
+      </form>
+      <div className="management-toolbar"><strong>Catalog entries</strong><select className="toolbar-select" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option><option value="draft">Draft</option><option value="active">Published</option><option value="inactive">Paused</option></select><button className="secondary-button" type="button" onClick={onRefresh}>Refresh</button></div>
+      <div className="table-wrap"><table><thead><tr><th>Title</th><th>Type</th><th>Year</th><th>Rating</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        {visible.map(item => <tr key={item.id}><td><strong>{item.title}</strong><small>{item.original_title || ""}</small></td><td>{item.media_type}</td><td>{item.release_year || "—"}</td><td>{item.rating ?? "—"}</td><td>{item.status}</td><td><div className="management-actions"><button className="secondary-button" type="button" onClick={() => edit(item)}>Edit</button>{item.status !== "active" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "active")}>Publish</button>}{item.status !== "inactive" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "inactive")}>Pause</button>}<button className="secondary-button" type="button" onClick={() => remove(item)}>Delete</button></div></td></tr>)}
+        {!visible.length && <tr><td colSpan="6">No catalog entries yet.</td></tr>}
+      </tbody></table></div>
+    </section>
+  );
+}
+
 function TelegramSection({
   bots,
   botSlug,
