@@ -259,7 +259,7 @@ function normalizeMovie(body = {}, partial = false) {
   if (item.title !== undefined) {
     if (typeof item.title !== "string" || !item.title.trim()) throw new Error("Movie title is required");
     item.title = item.title.trim().slice(0, 200);
-    item.normalized_title = item.title.toLocaleLowerCase().normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^\\p{L}\\p{N}]+/gu, " ").trim();
+    item.normalized_title = item.title.toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   }
   if (item.media_type !== undefined && !["movie", "series"].includes(item.media_type)) throw new Error("media_type must be movie or series");
   if (item.status !== undefined && !["draft", "active", "inactive"].includes(item.status)) throw new Error("Invalid catalog status");
@@ -308,4 +308,113 @@ export async function deleteMovieCatalogItem(env, id) {
   const { data, error } = await getSupabase(env).from("movie_titles").delete().eq("id", id).select("id").single();
   if (error) throw error;
   return data;
+}
+
+
+function tmdbImage(path, size = "w500") {
+  return path ? "https://image.tmdb.org/t/p/" + size + path : null;
+}
+
+async function tmdbRequest(env, path, params = {}) {
+  if (!env.TMDB_API_KEY) {
+    const error = new Error("TMDB_API_KEY is not configured on the Worker");
+    error.code = "TMDB_NOT_CONFIGURED";
+    throw error;
+  }
+  const url = new URL("https://api.themoviedb.org/3" + path);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+  }
+  const response = await fetch(url, {
+    headers: { Authorization: "Bearer " + env.TMDB_API_KEY, Accept: "application/json" }
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(payload.status_message || "TMDB request failed (" + response.status + ")");
+    error.code = "TMDB_UPSTREAM_ERROR";
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
+export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1) {
+  const query = String(term || "").trim().slice(0, 100);
+  if (!query) throw new Error("Search term is required");
+  if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
+  const data = await tmdbRequest(env, mediaType === "series" ? "/search/tv" : "/search/movie", {
+    query, page: Math.min(5, Math.max(1, Number(page) || 1)), include_adult: false
+  });
+  return (data.results || []).map((item) => ({
+    tmdb_id: item.id,
+    media_type: mediaType,
+    title: mediaType === "series" ? item.name : item.title,
+    original_title: mediaType === "series" ? item.original_name : item.original_title,
+    overview: item.overview || "",
+    release_date: mediaType === "series" ? item.first_air_date || null : item.release_date || null,
+    release_year: Number(String(mediaType === "series" ? item.first_air_date : item.release_date || "").slice(0, 4)) || null,
+    rating: Number.isFinite(Number(item.vote_average)) ? Math.round(Number(item.vote_average) * 10) / 10 : null,
+    poster_path: tmdbImage(item.poster_path),
+    backdrop_path: tmdbImage(item.backdrop_path, "w780"),
+    genre_ids: item.genre_ids || [],
+    popularity: item.popularity || 0
+  }));
+}
+
+export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
+  if (!/^\\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
+  if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
+  const isSeries = mediaType === "series";
+  const details = await tmdbRequest(env, (isSeries ? "/tv/" : "/movie/") + tmdbId, {
+    append_to_response: "external_ids"
+  });
+  const title = isSeries ? details.name : details.title;
+  const originalTitle = isSeries ? details.original_name : details.original_title;
+  const releaseDate = isSeries ? details.first_air_date : details.release_date;
+  const releaseYear = Number(String(releaseDate || "").slice(0, 4)) || null;
+  const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  if (!title) throw new Error("TMDB response does not contain a title");
+  const supabase = getSupabase(env);
+  const { data: existingId, error: lookupError } = await supabase
+    .from("movie_external_ids").select("title_id").eq("provider", "tmdb").eq("external_id", String(tmdbId)).maybeSingle();
+  if (lookupError) throw lookupError;
+  const record = {
+    media_type: mediaType, title, original_title: originalTitle || null,
+    normalized_title: normalized, overview: details.overview || null,
+    release_date: releaseDate || null, release_year,
+    runtime_minutes: isSeries ? null : details.runtime || null,
+    rating: Number.isFinite(Number(details.vote_average)) ? Math.round(Number(details.vote_average) * 10) / 10 : null,
+    poster_path: tmdbImage(details.poster_path), backdrop_path: tmdbImage(details.backdrop_path),
+    status: "draft", metadata_status: "metadata_only"
+  };
+  let saved;
+  if (existingId?.title_id) {
+    const { data, error } = await supabase.from("movie_titles").update(record).eq("id", existingId.title_id).select(MOVIE_FIELDS).single();
+    if (error) throw error;
+    saved = data;
+  } else {
+    const { data, error } = await supabase.from("movie_titles").insert(record).select(MOVIE_FIELDS).single();
+    if (error) throw error;
+    saved = data;
+    const { error: externalError } = await supabase.from("movie_external_ids").insert({
+      title_id: saved.id, provider: "tmdb", external_id: String(tmdbId), external_type: mediaType
+    });
+    if (externalError) throw externalError;
+  }
+  const genreRows = (details.genres || []).map((genre) => ({
+    name: genre.name, slug: "tmdb-" + genre.id, source: "provider", external_id: String(genre.id)
+  }));
+  for (const genre of genreRows) {
+    const { error } = await supabase.from("movie_genres").upsert(genre, { onConflict: "source,external_id" });
+    if (error) throw error;
+  }
+  if (genreRows.length) {
+    const ids = genreRows.map((genre) => genre.external_id);
+    const { data: genres, error: genreError } = await supabase.from("movie_genres").select("id,external_id").eq("source", "provider").in("external_id", ids);
+    if (genreError) throw genreError;
+    const links = (genres || []).map((genre) => ({ title_id: saved.id, genre_id: genre.id }));
+    const { error: linkError } = await supabase.from("movie_title_genres").upsert(links, { onConflict: "title_id,genre_id" });
+    if (linkError) throw linkError;
+  }
+  return saved;
 }
