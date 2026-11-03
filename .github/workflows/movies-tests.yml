@@ -6,7 +6,7 @@ on:
       - feat/findly-movies-runtime-hardening
   pull_request:
     branches:
-      - feat/movies-phase1-security-foundation
+      - main
     paths:
       - "src/**"
       - "dashboard/**"
