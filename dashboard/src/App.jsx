@@ -4040,7 +4040,32 @@ function MoviesSection({ movies, fetchApi, onRefresh }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
+  const [tmdbQuery, setTmdbQuery] = useState("");
+  const [tmdbType, setTmdbType] = useState("movie");
+  const [tmdbResults, setTmdbResults] = useState([]);
+  const [tmdbLoading, setTmdbLoading] = useState(false);
+  const [importingId, setImportingId] = useState(null);
   const visible = movies.filter((item) => filter === "all" || item.status === filter);
+  async function searchTmdb(event) {
+    event.preventDefault();
+    if (!tmdbQuery.trim()) return;
+    setTmdbLoading(true); setError("");
+    try {
+      const params = new URLSearchParams({ query: tmdbQuery.trim(), media_type: tmdbType });
+      setTmdbResults(await fetchApi("/api/movies/tmdb/search?" + params.toString()));
+    } catch (e) { setError(e.message || "TMDB search failed"); }
+    finally { setTmdbLoading(false); }
+  }
+  async function importTmdb(item) {
+    setImportingId(item.tmdb_id); setError("");
+    try {
+      const imported = await fetchApi("/api/movies/tmdb/import", { method: "POST", body: JSON.stringify({ tmdb_id: item.tmdb_id, media_type: item.media_type }) });
+      setTmdbResults(results => results.filter(result => result.tmdb_id !== item.tmdb_id));
+      await onRefresh();
+      edit(imported);
+    } catch (e) { setError(e.message || "TMDB import failed"); }
+    finally { setImportingId(null); }
+  }
   function edit(item) {
     setEditing(item.id);
     setForm({ ...empty, ...item, release_date: item.release_date || "", release_year: item.release_year || "", runtime_minutes: item.runtime_minutes || "", rating: item.rating ?? "" });
@@ -4069,6 +4094,17 @@ function MoviesSection({ movies, fetchApi, onRefresh }) {
     <section className="panel">
       <div className="panel-header"><div><h2>Movies catalog</h2><p>Add and manage movie / series metadata. Publishing makes an item visible in Telegram.</p></div><strong>{movies.length} titles</strong></div>
       {error && <div className="auth-error">{error}</div>}
+      <form className="management-form" onSubmit={searchTmdb}>
+        <div className="panel-header"><div><h3>Import metadata from TMDB</h3><p>Search official movie and TV metadata. Imported titles are saved as drafts.</p></div></div>
+        <div className="management-toolbar">
+          <select className="toolbar-select" value={tmdbType} onChange={e => setTmdbType(e.target.value)}><option value="movie">Movies</option><option value="series">TV series</option></select>
+          <input aria-label="TMDB search" placeholder="Search title..." value={tmdbQuery} onChange={e => setTmdbQuery(e.target.value)} />
+          <button className="primary-button" disabled={tmdbLoading || !tmdbQuery.trim()}>{tmdbLoading ? "Searching..." : "Search TMDB"}</button>
+        </div>
+      </form>
+      {tmdbResults.length > 0 && <div className="table-wrap"><table><thead><tr><th>Poster</th><th>Title</th><th>Year</th><th>Rating</th><th>Import</th></tr></thead><tbody>
+        {tmdbResults.map(item => <tr key={item.tmdb_id}><td>{item.poster_path ? <img src={item.poster_path} alt="" loading="lazy" style={{ width: 48, borderRadius: 6 }} /> : "—"}</td><td><strong>{item.title}</strong><small>{item.overview}</small></td><td>{item.release_year || "—"}</td><td>{item.rating ?? "—"}</td><td><button className="secondary-button" type="button" disabled={importingId === item.tmdb_id} onClick={() => importTmdb(item)}>{importingId === item.tmdb_id ? "Importing..." : "Import draft"}</button></td></tr>)}
+      </tbody></table></div>}
       <form className="management-form" onSubmit={save}>
         <div className="form-grid">
           <label>Type<select value={form.media_type} onChange={e => setForm({ ...form, media_type: e.target.value })}><option value="movie">Movie</option><option value="series">Series</option></select></label>
