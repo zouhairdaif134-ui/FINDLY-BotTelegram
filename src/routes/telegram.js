@@ -895,13 +895,17 @@ async function handleMenuCallback(
     return;
   }
 
-  if (
-    item.action_type ===
-      "search"
-  ) {
-    await showMoviesSearchPrompt(env, bot, chatId);
-
+  if (item.action_type === "search") {
+    if (bot.slug === "findly" || bot.slug === "movies") {
+      await showMoviesSearchPrompt(env, bot, chatId);
+    } else {
+      await sendMessage(env, bot.slug, chatId,
+        "<b>🔎 البحث</b>\\n\\n" +
+        "كتب ليا شنو بغيتي تقلب عليه، وغادي نجهزو ليك البحث داخل FINDLY."
+      );
+    }
     return;
+  }
   }
 
   if (
