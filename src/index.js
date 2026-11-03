@@ -23,7 +23,11 @@ import {
   getContent,
   createContent,
   updateContent,
-  deleteContent
+  deleteContent,
+  getMoviesCatalog,
+  createMovieCatalogItem,
+  updateMovieCatalogItem,
+  deleteMovieCatalogItem
 } from "./routes/content.js";
 
 import {
@@ -1129,6 +1133,37 @@ export default {
             )
           )
         , request);
+      }
+
+      /*
+       * =========================
+       * MOVIES CATALOG
+       * =========================
+       * Protected by existing FINDLY content permissions.
+       */
+
+      if (url.pathname === "/api/movies" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentView);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await getMoviesCatalog(env, url.searchParams.get("status"))), request);
+      }
+
+      if (url.pathname === "/api/movies" && request.method === "POST") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentCreate);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await createMovieCatalogItem(env, await readJson(request))), request);
+      }
+
+      if (url.pathname.startsWith("/api/movies/") && request.method === "PUT") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentUpdate);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await updateMovieCatalogItem(env, getId(url), await readJson(request))), request);
+      }
+
+      if (url.pathname.startsWith("/api/movies/") && request.method === "DELETE") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentDelete);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await deleteMovieCatalogItem(env, getId(url))), request);
       }
 
       /*
