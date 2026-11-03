@@ -242,3 +242,70 @@ export async function deleteContent(
     }
   );
 }
+
+
+// FINDLY Movies catalog administration. All writes run through the
+// authenticated Worker using its service-role Supabase client.
+const MOVIE_FIELDS = "id,media_type,title,original_title,normalized_title,overview,release_date,release_year,runtime_minutes,rating,poster_path,backdrop_path,status,metadata_status,created_at,updated_at";
+
+function normalizeMovie(body = {}, partial = false) {
+  const item = {};
+  const allowed = ["media_type", "title", "original_title", "overview", "release_date", "release_year", "runtime_minutes", "rating", "poster_path", "backdrop_path", "status", "metadata_status"];
+  for (const key of allowed) {
+    if (body[key] !== undefined || !partial && ["media_type", "title"].includes(key)) {
+      item[key] = body[key] === "" ? null : body[key];
+    }
+  }
+  if (item.title !== undefined) {
+    if (typeof item.title !== "string" || !item.title.trim()) throw new Error("Movie title is required");
+    item.title = item.title.trim().slice(0, 200);
+    item.normalized_title = item.title.toLocaleLowerCase().normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^\\p{L}\\p{N}]+/gu, " ").trim();
+  }
+  if (item.media_type !== undefined && !["movie", "series"].includes(item.media_type)) throw new Error("media_type must be movie or series");
+  if (item.status !== undefined && !["draft", "active", "inactive"].includes(item.status)) throw new Error("Invalid catalog status");
+  if (item.metadata_status !== undefined && !["metadata_only", "provider_available", "authorized_media_available", "delivery_blocked"].includes(item.metadata_status)) throw new Error("Invalid metadata status");
+  if (item.rating !== undefined && item.rating !== null && (!Number.isFinite(Number(item.rating)) || Number(item.rating) < 0 || Number(item.rating) > 10)) throw new Error("Rating must be between 0 and 10");
+  for (const key of ["release_year", "runtime_minutes"]) {
+    if (item[key] !== undefined && item[key] !== null) {
+      item[key] = Number(item[key]);
+      if (!Number.isInteger(item[key]) || item[key] < 1) throw new Error("Invalid " + key);
+    }
+  }
+  if (item.rating !== undefined && item.rating !== null) item.rating = Number(item.rating);
+  for (const key of ["original_title", "overview", "release_date", "poster_path", "backdrop_path"]) {
+    if (item[key] !== undefined && typeof item[key] === "string") item[key] = item[key].trim() || null;
+  }
+  return item;
+}
+
+export async function getMoviesCatalog(env, status = null) {
+  let query = getSupabase(env).from("movie_titles").select(MOVIE_FIELDS).order("updated_at", { ascending: false }).limit(500);
+  if (status && ["draft", "active", "inactive"].includes(status)) query = query.eq("status", status);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createMovieCatalogItem(env, body) {
+  const item = normalizeMovie(body);
+  if (!item.media_type || !item.title) throw new Error("media_type and title are required");
+  const { data, error } = await getSupabase(env).from("movie_titles").insert(item).select(MOVIE_FIELDS).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateMovieCatalogItem(env, id, body) {
+  if (!id) throw new Error("Movie id is required");
+  const updates = normalizeMovie(body, true);
+  if (!Object.keys(updates).length) throw new Error("No fields to update");
+  const { data, error } = await getSupabase(env).from("movie_titles").update(updates).eq("id", id).select(MOVIE_FIELDS).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteMovieCatalogItem(env, id) {
+  if (!id) throw new Error("Movie id is required");
+  const { data, error } = await getSupabase(env).from("movie_titles").delete().eq("id", id).select("id").single();
+  if (error) throw error;
+  return data;
+}
