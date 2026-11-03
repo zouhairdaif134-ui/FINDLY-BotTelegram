@@ -21,5 +21,6 @@
     "vars": {
       "SUPABASE_URL": "https://preview.invalid"
     }
-  }
+  },
+  "keep_vars": true
 }
