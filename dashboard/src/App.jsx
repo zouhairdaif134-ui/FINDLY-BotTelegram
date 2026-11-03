@@ -4045,6 +4045,8 @@ function MoviesSection({ movies, fetchApi, onRefresh }) {
   const [tmdbResults, setTmdbResults] = useState([]);
   const [tmdbLoading, setTmdbLoading] = useState(false);
   const [importingId, setImportingId] = useState(null);
+  const [mediaForm, setMediaForm] = useState({ rights_status: "pending", rights_reference: "", quality: "", is_active: true, has_asset: false });
+  const [mediaSaving, setMediaSaving] = useState(false);
   const visible = movies.filter((item) => filter === "all" || item.status === filter);
   async function searchTmdb(event) {
     event.preventDefault();
@@ -4066,10 +4068,25 @@ function MoviesSection({ movies, fetchApi, onRefresh }) {
     } catch (e) { setError(e.message || "TMDB import failed"); }
     finally { setImportingId(null); }
   }
-  function edit(item) {
+  async function edit(item) {
     setEditing(item.id);
     setForm({ ...empty, ...item, release_date: item.release_date || "", release_year: item.release_year || "", runtime_minutes: item.runtime_minutes || "", rating: item.rating ?? "" });
+    setMediaForm({ rights_status: "pending", rights_reference: "", quality: "", is_active: true, has_asset: false });
     setError("");
+    try {
+      const asset = await fetchApi("/api/movies/" + item.id + "/media");
+      if (asset) setMediaForm({ rights_status: asset.rights_status || "pending", rights_reference: asset.rights_reference || "", quality: asset.quality || "", is_active: asset.is_active !== false, has_asset: true });
+    } catch (e) { setError(e.message || "Unable to load media asset"); }
+  }
+  async function saveMedia() {
+    if (!editing) return;
+    setMediaSaving(true); setError("");
+    try {
+      await fetchApi("/api/movies/" + editing + "/media", { method: "PUT", body: JSON.stringify({ rights_status: mediaForm.rights_status, rights_reference: mediaForm.rights_reference, quality: mediaForm.quality, is_active: mediaForm.is_active }) });
+      setMediaForm({ ...mediaForm, has_asset: true });
+      await onRefresh();
+    } catch (e) { setError(e.message || "Unable to save media rights"); }
+    finally { setMediaSaving(false); }
   }
   async function save(event) {
     event.preventDefault();
@@ -4121,6 +4138,16 @@ function MoviesSection({ movies, fetchApi, onRefresh }) {
         </div>
         <div className="management-actions"><button className="primary-button" disabled={saving}>{saving ? "Saving..." : editing ? "Save changes" : "Add title"}</button>{editing && <button type="button" className="secondary-button" onClick={() => { setEditing(null); setForm(empty); }}>Cancel</button>}</div>
       </form>
+      {editing && <div className="management-form">
+        <div className="panel-header"><div><h3>Telegram video delivery</h3><p>Send the video to FINDLY Movies Bot with caption: /attachmovie {editing} LICENSE_REFERENCE. The bot stores it as pending until you authorize it here.</p></div><strong>{mediaForm.has_asset ? "Video received" : "No video received"}</strong></div>
+        <div className="form-grid">
+          <label>Rights verification<select value={mediaForm.rights_status} onChange={e => setMediaForm({ ...mediaForm, rights_status: e.target.value })}><option value="pending">Pending review</option><option value="authorized">Authorized for distribution</option><option value="revoked">Revoked / blocked</option></select></label>
+          <label>License / rights reference<input value={mediaForm.rights_reference} onChange={e => setMediaForm({ ...mediaForm, rights_reference: e.target.value })} placeholder="Contract or permission reference" /></label>
+          <label>Video quality<input value={mediaForm.quality} onChange={e => setMediaForm({ ...mediaForm, quality: e.target.value })} placeholder="e.g. 1920x1080" /></label>
+          <label><span>Delivery enabled</span><input type="checkbox" checked={mediaForm.is_active} onChange={e => setMediaForm({ ...mediaForm, is_active: e.target.checked })} /></label>
+        </div>
+        <div className="management-actions"><button className="primary-button" type="button" disabled={mediaSaving || !mediaForm.has_asset} onClick={saveMedia}>{mediaSaving ? "Saving..." : "Save delivery authorization"}</button></div>
+      </div>}
       <div className="management-toolbar"><strong>Catalog entries</strong><select className="toolbar-select" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option><option value="draft">Draft</option><option value="active">Published</option><option value="inactive">Paused</option></select><button className="secondary-button" type="button" onClick={onRefresh}>Refresh</button></div>
       <div className="table-wrap"><table><thead><tr><th>Title</th><th>Type</th><th>Year</th><th>Rating</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         {visible.map(item => <tr key={item.id}><td><strong>{item.title}</strong><small>{item.original_title || ""}</small></td><td>{item.media_type}</td><td>{item.release_year || "—"}</td><td>{item.rating ?? "—"}</td><td>{item.status}</td><td><div className="management-actions"><button className="secondary-button" type="button" onClick={() => edit(item)}>Edit</button>{item.status !== "active" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "active")}>Publish</button>}{item.status !== "inactive" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "inactive")}>Pause</button>}<button className="secondary-button" type="button" onClick={() => remove(item)}>Delete</button></div></td></tr>)}
