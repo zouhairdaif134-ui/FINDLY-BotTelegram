@@ -900,12 +900,11 @@ async function handleMenuCallback(
       await showMoviesSearchPrompt(env, bot, chatId);
     } else {
       await sendMessage(env, bot.slug, chatId,
-        "<b>🔎 البحث</b>\\n\\n" +
+        "<b>🔎 البحث</b>\n\n" +
         "كتب ليا شنو بغيتي تقلب عليه، وغادي نجهزو ليك البحث داخل FINDLY."
       );
     }
     return;
-  }
   }
 
   if (
