@@ -392,6 +392,7 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
   };
 
   let saved;
+  let insertedNewTitle = false;
   if (external?.title_id) {
     const { data, error } = await supabase.from("movie_titles").update(metadata)
       .eq("id", external.title_id).select(MOVIE_FIELDS).single();
@@ -401,8 +402,10 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
     // Recover a prior partial import by its catalog natural key before inserting.
     const naturalQuery = supabase.from("movie_titles").select(MOVIE_FIELDS)
       .eq("media_type", mediaType).eq("normalized_title", normalized);
-    const { data: naturalMatches, error: naturalError } = await naturalQuery
-      .eq("release_year", releaseYear).limit(1);
+    const yearQuery = releaseYear === null
+      ? naturalQuery.is("release_year", null)
+      : naturalQuery.eq("release_year", releaseYear);
+    const { data: naturalMatches, error: naturalError } = await yearQuery.limit(1);
     if (naturalError) throw naturalError;
 
     if (naturalMatches?.length) {
@@ -417,13 +420,16 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
       }).select(MOVIE_FIELDS).single();
       if (error) {
         // A concurrent import may have won the unique natural-key race.
-        const { data: raced, error: raceError } = await supabase.from("movie_titles")
+        const raceBase = supabase.from("movie_titles")
           .select(MOVIE_FIELDS).eq("media_type", mediaType)
-          .eq("normalized_title", normalized).eq("release_year", releaseYear).limit(1);
+          .eq("normalized_title", normalized);
+        const raceQuery = releaseYear === null ? raceBase.is("release_year", null) : raceBase.eq("release_year", releaseYear);
+        const { data: raced, error: raceError } = await raceQuery.limit(1);
         if (raceError || !raced?.length) throw error;
         saved = raced[0];
       } else {
         saved = data;
+        insertedNewTitle = true;
       }
     }
 
@@ -435,6 +441,12 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
       const { data: mapping, error: mappingError } = await supabase.from("movie_external_ids")
         .select("title_id").eq("provider", "tmdb").eq("external_id", externalId).maybeSingle();
       if (mappingError || mapping?.title_id !== saved.id) {
+        if (insertedNewTitle) {
+          const { error: cleanupError } = await supabase.from("movie_titles").delete().eq("id", saved.id);
+          if (cleanupError) {
+            throw new Error("TMDB mapping failed and catalog cleanup also failed; manual recovery is required. " + cleanupError.message);
+          }
+        }
         throw new Error("TMDB mapping could not be saved; retry the import. " + externalError.message);
       }
     }
