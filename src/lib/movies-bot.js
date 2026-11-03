@@ -475,11 +475,11 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
 
 export async function handleMoviesStart(env, bot, chatId, startPayload, telegramUserId) {
   const match = /^movie_([0-9a-f-]{36})$/i.exec(startPayload || "");
-  if (match && UUID_RE.test(upload.titleId)) {
+  if (match && UUID_RE.test(match[1])) {
     const supabase = getSupabase(env);
     const { data: title, error } = await supabase.from("movie_titles")
       .select("id,title,status,metadata_status")
-      .eq("id", upload.titleId).eq("status", "active").maybeSingle();
+      .eq("id", match[1]).eq("status", "active").maybeSingle();
     if (error) throw error;
     if (!title) {
       await sendMessage(env, bot.slug, chatId, "هاد الفيلم ما بقاش متاح.");
@@ -498,7 +498,7 @@ export async function handleMoviesStart(env, bot, chatId, startPayload, telegram
     await sendMessage(env, bot.slug, chatId,
       "الفيديو ديال <b>" + escapeHtml(title.title) + "</b> مازال ما تجهزش للمشاهدة أو الترخيص ديالو ما تأكدش."
     );
-    await sendTitle(env, bot, chatId, upload.titleId, telegramUserId);
+    await sendTitle(env, bot, chatId, match[1], telegramUserId);
     return;
   }
   await showMoviesHome(env, bot, chatId);
@@ -507,8 +507,8 @@ export async function handleMoviesStart(env, bot, chatId, startPayload, telegram
 
 export function parseMovieVideoUploadCaption(value) {
   const match = /^\/attachmovie\s+([0-9a-f-]{36})\s+(\S{3,200})$/i.exec(String(value || "").trim());
-  if (!match || !UUID_RE.test(upload.titleId)) return null;
-  return { titleId: upload.titleId, rightsReference: upload.rightsReference };
+  if (!match || !UUID_RE.test(match[1])) return null;
+  return { titleId: match[1], rightsReference: match[2] };
 }
 
 // Admin uploads an authorized candidate video directly to the Movies Bot.
