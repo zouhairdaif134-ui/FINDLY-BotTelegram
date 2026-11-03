@@ -153,7 +153,7 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "") {
   const supabase = getSupabase(env);
   let query = supabase
     .from("movie_titles")
-    .select("id,title,original_title,media_type,release_year,release_date,rating,overview,metadata_status")
+    .select("id,title,original_title,media_type,release_year,release_date,rating,overview,poster_path,metadata_status")
     .eq("status", "active");
 
   if (action === "films") query = query.eq("media_type", "movie");
@@ -178,31 +178,65 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "") {
         : action === "films" ? "الأفلام"
           : action === "series" ? "المسلسلات" : "الكتالوج";
 
-  const keyboard = (data || []).map((item) => [titleButton(item)]);
-  let hasNextPage = false;
-  if (data?.length === PAGE_SIZE) {
+  if (!data?.length) {
+    await sendMessage(env, bot.slug, chatId,
+      "<b>🎞️ " + heading + "</b>\n\nمازال ما تزاد حتى عنوان نشط فهاد الكتالوج.");
+    return;
+  }
+
+  let moviesBot = null;
+  if (bot.slug === "findly") moviesBot = await getMoviesBot(env);
+  const moviesUsername = moviesBot?.telegram_username?.replace(/^@/, "");
+  const titleIds = data.map((item) => item.id);
+  const { data: genreLinks, error: genreError } = await supabase
+    .from("movie_title_genres").select("title_id,movie_genres(name)")
+    .in("title_id", titleIds);
+  if (genreError) throw genreError;
+  const genresByTitle = new Map();
+  for (const link of genreLinks || []) {
+    const name = link.movie_genres?.name;
+    if (!name) continue;
+    if (!genresByTitle.has(link.title_id)) genresByTitle.set(link.title_id, []);
+    genresByTitle.get(link.title_id).push(name);
+  }
+
+  await sendMessage(env, bot.slug, chatId, "<b>🎞️ " + heading + "</b>");
+  for (const item of data) {
+    const lines = [
+      "<b>" + escapeHtml(item.title) + "</b>",
+      [item.release_year, item.media_type === "series" ? "مسلسل" : "فيلم", item.rating != null ? "⭐ " + Number(item.rating).toFixed(1) + "/10" : null].filter(Boolean).join(" · "),
+      (genresByTitle.get(item.id) || []).join("، ") ? "🎭 " + escapeHtml((genresByTitle.get(item.id) || []).join("، ")) : null,
+      "",
+      escapeHtml(String(item.overview || "لا يتوفر ملخص لهذا العنوان حالياً.").slice(0, 650))
+    ].filter((line) => line !== null);
+    const keyboard = [];
+    if (bot.slug === "findly" && moviesUsername) {
+      keyboard.push([{ text: "▶️ مشاهدة الفيلم", url: "https://t.me/" + moviesUsername + "?start=movie_" + item.id }]);
+    } else {
+      keyboard.push([{ text: "▶️ عرض التفاصيل / المشاهدة", callback_data: "movies:title:" + item.id }]);
+    }
+    const caption = lines.join("\n").slice(0, 1000);
+    if (item.poster_path) {
+      await sendPhoto(env, bot.slug, chatId, item.poster_path, {
+        caption, parse_mode: "HTML",
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } else {
+      await sendMessage(env, bot.slug, chatId, caption, {
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    }
+  }
+
+  const keyboard = [];
+  if (data.length === PAGE_SIZE) {
     const callbackData = action === "search"
       ? "movies:search:" + (page + 1) + ":" + encodeSearchCallback(searchTerm)
       : "movies:" + action + ":" + (page + 1);
-    if (callbackData.length <= 64) {
-      keyboard.push([{ text: "➡️ المزيد", callback_data: callbackData }]);
-      hasNextPage = true;
-    }
+    if (callbackData.length <= 64) keyboard.push([{ text: "➡️ المزيد", callback_data: callbackData }]);
   }
   keyboard.push([{ text: "🏠 القائمة الرئيسية", callback_data: "movies:home" }]);
-
-  const body = data?.length
-    ? (data || []).map((item, index) =>
-        (from + index + 1) + ". <b>" + escapeHtml(item.title) + "</b>" +
-        (item.release_year ? " · " + item.release_year : "") +
-        (item.rating ? " · ⭐ " + Number(item.rating).toFixed(1) : "")
-      ).join("\n") +
-      (searchTerm && data.length === PAGE_SIZE && !hasNextPage
-        ? "\n\nوصلنا حد طول البحث داخل Telegram. زيد دقّق الاسم باش تضيق النتائج."
-        : "")
-    : "مازال ما تزاد حتى عنوان فهاد الكتالوج. ملي يتربط مصدر البيانات أو يضيف المدير العناوين، غادي تبان هنا.";
-
-  await sendMessage(env, bot.slug, chatId, "<b>🎞️ " + heading + "</b>\n\n" + body, {
+  await sendMessage(env, bot.slug, chatId, "التنقل بين الكتالوغ:", {
     reply_markup: { inline_keyboard: keyboard }
   });
 }
