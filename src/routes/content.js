@@ -362,7 +362,7 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
 }
 
 export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
-  if (!/^\\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
+  if (!/^\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
   if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
   const isSeries = mediaType === "series";
   const details = await tmdbRequest(env, (isSeries ? "/tv/" : "/movie/") + tmdbId, {
@@ -372,7 +372,7 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
   const originalTitle = isSeries ? details.original_name : details.original_title;
   const releaseDate = isSeries ? details.first_air_date : details.release_date;
   const releaseYear = Number(String(releaseDate || "").slice(0, 4)) || null;
-  const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^\\p{L}\\p{N}]+/gu, " ").trim();
+  const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   if (!title) throw new Error("TMDB response does not contain a title");
 
   const supabase = getSupabase(env);
