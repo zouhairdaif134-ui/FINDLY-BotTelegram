@@ -13,6 +13,7 @@ import {
   handleMoviesCallback,
   handleMoviesText,
   handleMoviesStart,
+  handleMovieVideoUpload,
   showMoviesHome,
   showMoviesSearchPrompt
 } from "../lib/movies-bot.js";
@@ -1216,6 +1217,11 @@ async function processTelegramUpdate(
     return {
       ok: true
     };
+  }
+
+  if (bot.slug === "movies" && message.video) {
+    const mediaHandled = await handleMovieVideoUpload(env, bot, message);
+    if (mediaHandled) return { ok: true };
   }
 
   const text =
