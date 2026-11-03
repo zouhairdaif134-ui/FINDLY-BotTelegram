@@ -475,11 +475,11 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
 
 export async function handleMoviesStart(env, bot, chatId, startPayload, telegramUserId) {
   const match = /^movie_([0-9a-f-]{36})$/i.exec(startPayload || "");
-  if (match && UUID_RE.test(match[1])) {
+  if (match && UUID_RE.test(upload.titleId)) {
     const supabase = getSupabase(env);
     const { data: title, error } = await supabase.from("movie_titles")
       .select("id,title,status,metadata_status")
-      .eq("id", match[1]).eq("status", "active").maybeSingle();
+      .eq("id", upload.titleId).eq("status", "active").maybeSingle();
     if (error) throw error;
     if (!title) {
       await sendMessage(env, bot.slug, chatId, "هاد الفيلم ما بقاش متاح.");
@@ -498,12 +498,18 @@ export async function handleMoviesStart(env, bot, chatId, startPayload, telegram
     await sendMessage(env, bot.slug, chatId,
       "الفيديو ديال <b>" + escapeHtml(title.title) + "</b> مازال ما تجهزش للمشاهدة أو الترخيص ديالو ما تأكدش."
     );
-    await sendTitle(env, bot, chatId, match[1], telegramUserId);
+    await sendTitle(env, bot, chatId, upload.titleId, telegramUserId);
     return;
   }
   await showMoviesHome(env, bot, chatId);
 }
 
+
+export function parseMovieVideoUploadCaption(value) {
+  const match = /^\/attachmovie\s+([0-9a-f-]{36})\s+(\S{3,200})$/i.exec(String(value || "").trim());
+  if (!match || !UUID_RE.test(upload.titleId)) return null;
+  return { titleId: upload.titleId, rightsReference: upload.rightsReference };
+}
 
 // Admin uploads an authorized candidate video directly to the Movies Bot.
 // Caption format: /attachmovie <movie_uuid> <rights_reference>
@@ -514,8 +520,8 @@ export async function handleMovieVideoUpload(env, bot, message) {
   const senderId = String(message.from?.id || "");
   if (!senderId || !allowed.includes(senderId)) return false;
 
-  const match = /^\/attachmovie\s+([0-9a-f-]{36})\s+(\S{3,200})$/i.exec(String(message.caption || "").trim());
-  if (!match || !UUID_RE.test(match[1])) {
+  const upload = parseMovieVideoUploadCaption(message.caption);
+  if (!upload) {
     await sendMessage(env, bot.slug, message.chat.id,
       "صيغة رفع الفيديو غير صحيحة. استعمل:\n/attachmovie <movie_id> <rights_reference>");
     return true;
@@ -523,7 +529,7 @@ export async function handleMovieVideoUpload(env, bot, message) {
 
   const supabase = getSupabase(env);
   const { data: title, error: titleError } = await supabase.from("movie_titles")
-    .select("id,title").eq("id", match[1]).maybeSingle();
+    .select("id,title").eq("id", upload.titleId).maybeSingle();
   if (titleError) throw titleError;
   if (!title) {
     await sendMessage(env, bot.slug, message.chat.id, "ما لقيتش الفيلم بهذا المعرّف.");
@@ -537,7 +543,7 @@ export async function handleMovieVideoUpload(env, bot, message) {
     media_kind: "video",
     quality: message.video.width && message.video.height ? message.video.width + "x" + message.video.height : null,
     rights_status: "pending",
-    rights_reference: match[2],
+    rights_reference: upload.rightsReference,
     is_active: true,
     uploaded_by_telegram_user_id: senderId
   }, { onConflict: "title_id" });
