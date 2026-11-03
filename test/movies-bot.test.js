@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   normalizeMovieSearch,
   parseMoviesCallback,
-  isMoviesSearchReply
+  isMoviesSearchReply,
+  parseMovieVideoUploadCaption
 } from "../src/lib/movies-bot.js";
 import { getTelegramToken } from "../src/lib/telegram.js";
 
@@ -42,4 +43,15 @@ test("uses a dedicated Movies token without modifying the existing multi-bot tok
   assert.equal(getTelegramToken({ TELEGRAM_MOVIES_BOT_TOKEN: "movies-token" }, "movies"), "movies-token");
   assert.equal(getTelegramToken({ TELEGRAM_BOT_TOKENS: '{"findly":"master-token"}' }, "findly"), "master-token");
   assert.throws(() => getTelegramToken({ TELEGRAM_BOT_TOKENS: '{"findly":"master-token"}' }, "movies"), /not configured/);
+});
+
+test("accepts only a UUID and a non-empty rights reference for admin video intake", () => {
+  const id = "123e4567-e89b-42d3-a456-426614174000";
+  assert.deepEqual(parseMovieVideoUploadCaption("/attachmovie " + id + " LICENSE-2026-01"), {
+    titleId: id,
+    rightsReference: "LICENSE-2026-01"
+  });
+  assert.equal(parseMovieVideoUploadCaption("/attachmovie not-a-uuid LICENSE-2026-01"), null);
+  assert.equal(parseMovieVideoUploadCaption("/attachmovie " + id), null);
+  assert.equal(parseMovieVideoUploadCaption("attachmovie " + id + " LICENSE-2026-01"), null);
 });

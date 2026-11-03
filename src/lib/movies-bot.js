@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase.js";
-import { sendMessage, answerCallback, telegramRequest } from "./telegram.js";
+import { sendMessage, sendPhoto, sendVideo, answerCallback, telegramRequest } from "./telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PAGE_SIZE = 8;
@@ -153,7 +153,7 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "") {
   const supabase = getSupabase(env);
   let query = supabase
     .from("movie_titles")
-    .select("id,title,original_title,media_type,release_year,release_date,rating,overview,metadata_status")
+    .select("id,title,original_title,media_type,release_year,release_date,rating,overview,poster_path,metadata_status")
     .eq("status", "active");
 
   if (action === "films") query = query.eq("media_type", "movie");
@@ -178,31 +178,65 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "") {
         : action === "films" ? "الأفلام"
           : action === "series" ? "المسلسلات" : "الكتالوج";
 
-  const keyboard = (data || []).map((item) => [titleButton(item)]);
-  let hasNextPage = false;
-  if (data?.length === PAGE_SIZE) {
+  if (!data?.length) {
+    await sendMessage(env, bot.slug, chatId,
+      "<b>🎞️ " + heading + "</b>\n\nمازال ما تزاد حتى عنوان نشط فهاد الكتالوج.");
+    return;
+  }
+
+  let moviesBot = null;
+  if (bot.slug === "findly") moviesBot = await getMoviesBot(env);
+  const moviesUsername = moviesBot?.telegram_username?.replace(/^@/, "");
+  const titleIds = data.map((item) => item.id);
+  const { data: genreLinks, error: genreError } = await supabase
+    .from("movie_title_genres").select("title_id,movie_genres(name)")
+    .in("title_id", titleIds);
+  if (genreError) throw genreError;
+  const genresByTitle = new Map();
+  for (const link of genreLinks || []) {
+    const name = link.movie_genres?.name;
+    if (!name) continue;
+    if (!genresByTitle.has(link.title_id)) genresByTitle.set(link.title_id, []);
+    genresByTitle.get(link.title_id).push(name);
+  }
+
+  await sendMessage(env, bot.slug, chatId, "<b>🎞️ " + heading + "</b>");
+  for (const item of data) {
+    const lines = [
+      "<b>" + escapeHtml(item.title) + "</b>",
+      [item.release_year, item.media_type === "series" ? "مسلسل" : "فيلم", item.rating != null ? "⭐ " + Number(item.rating).toFixed(1) + "/10" : null].filter(Boolean).join(" · "),
+      (genresByTitle.get(item.id) || []).join("، ") ? "🎭 " + escapeHtml((genresByTitle.get(item.id) || []).join("، ")) : null,
+      "",
+      escapeHtml(String(item.overview || "لا يتوفر ملخص لهذا العنوان حالياً.").slice(0, 650))
+    ].filter((line) => line !== null);
+    const keyboard = [];
+    if (bot.slug === "findly" && moviesUsername) {
+      keyboard.push([{ text: "▶️ مشاهدة الفيلم", url: "https://t.me/" + moviesUsername + "?start=movie_" + item.id }]);
+    } else {
+      keyboard.push([{ text: "▶️ عرض التفاصيل / المشاهدة", callback_data: "movies:title:" + item.id }]);
+    }
+    const caption = lines.join("\n").slice(0, 1000);
+    if (item.poster_path) {
+      await sendPhoto(env, bot.slug, chatId, item.poster_path, {
+        caption, parse_mode: "HTML",
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } else {
+      await sendMessage(env, bot.slug, chatId, caption, {
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    }
+  }
+
+  const keyboard = [];
+  if (data.length === PAGE_SIZE) {
     const callbackData = action === "search"
       ? "movies:search:" + (page + 1) + ":" + encodeSearchCallback(searchTerm)
       : "movies:" + action + ":" + (page + 1);
-    if (callbackData.length <= 64) {
-      keyboard.push([{ text: "➡️ المزيد", callback_data: callbackData }]);
-      hasNextPage = true;
-    }
+    if (callbackData.length <= 64) keyboard.push([{ text: "➡️ المزيد", callback_data: callbackData }]);
   }
   keyboard.push([{ text: "🏠 القائمة الرئيسية", callback_data: "movies:home" }]);
-
-  const body = data?.length
-    ? (data || []).map((item, index) =>
-        (from + index + 1) + ". <b>" + escapeHtml(item.title) + "</b>" +
-        (item.release_year ? " · " + item.release_year : "") +
-        (item.rating ? " · ⭐ " + Number(item.rating).toFixed(1) : "")
-      ).join("\n") +
-      (searchTerm && data.length === PAGE_SIZE && !hasNextPage
-        ? "\n\nوصلنا حد طول البحث داخل Telegram. زيد دقّق الاسم باش تضيق النتائج."
-        : "")
-    : "مازال ما تزاد حتى عنوان فهاد الكتالوج. ملي يتربط مصدر البيانات أو يضيف المدير العناوين، غادي تبان هنا.";
-
-  await sendMessage(env, bot.slug, chatId, "<b>🎞️ " + heading + "</b>\n\n" + body, {
+  await sendMessage(env, bot.slug, chatId, "التنقل بين الكتالوغ:", {
     reply_markup: { inline_keyboard: keyboard }
   });
 }
@@ -216,7 +250,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   const supabase = getSupabase(env);
   const { data: title, error } = await supabase
     .from("movie_titles")
-    .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,metadata_status")
+    .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,poster_path,metadata_status")
     .eq("id", titleId)
     .eq("status", "active")
     .maybeSingle();
@@ -245,11 +279,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     [title.release_year, title.media_type === "series" ? "مسلسل" : "فيلم", title.runtime_minutes ? title.runtime_minutes + " دقيقة" : null].filter(Boolean).join(" · "),
     title.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : null,
     "",
-    escapeHtml(title.overview || "لا يتوفر ملخص لهذا العنوان حالياً."),
-    "",
-    title.metadata_status === "authorized_media_available"
-      ? "المحتوى مسجل كمتاح بترخيص، لكن مسار التسليم داخل Telegram لم يتم تفعيله بعد."
-      : "المشاهدة داخل FINDLY غير متاحة حالياً. لن نعرض رابطاً غير موثوق أو محتوى غير مرخّص."
+    escapeHtml(title.overview || "لا يتوفر ملخص لهذا العنوان حالياً.")
   ].filter((line) => line !== null);
 
   const keyboard = [];
@@ -274,9 +304,18 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   }
   keyboard.push([{ text: "⬅️ رجوع للقائمة", callback_data: "movies:home" }]);
 
-  await sendMessage(env, bot.slug, chatId, lines.join("\n"), {
-    reply_markup: { inline_keyboard: keyboard }
-  });
+  const caption = lines.join("\n").slice(0, 1000);
+  if (title.poster_path) {
+    await sendPhoto(env, bot.slug, chatId, title.poster_path, {
+      caption,
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  } else {
+    await sendMessage(env, bot.slug, chatId, caption, {
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  }
 }
 
 async function toggleFavorite(env, bot, chatId, titleId, telegramUserId) {
@@ -437,8 +476,83 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
 export async function handleMoviesStart(env, bot, chatId, startPayload, telegramUserId) {
   const match = /^movie_([0-9a-f-]{36})$/i.exec(startPayload || "");
   if (match && UUID_RE.test(match[1])) {
+    const supabase = getSupabase(env);
+    const { data: title, error } = await supabase.from("movie_titles")
+      .select("id,title,status,metadata_status")
+      .eq("id", match[1]).eq("status", "active").maybeSingle();
+    if (error) throw error;
+    if (!title) {
+      await sendMessage(env, bot.slug, chatId, "هاد الفيلم ما بقاش متاح.");
+      return;
+    }
+    const { data: asset, error: assetError } = await supabase.from("movie_media_assets")
+      .select("telegram_file_id,rights_status,is_active")
+      .eq("title_id", title.id).eq("is_active", true).maybeSingle();
+    if (assetError) throw assetError;
+    if (asset?.telegram_file_id && asset.rights_status === "authorized") {
+      await sendVideo(env, bot.slug, chatId, asset.telegram_file_id, {
+        caption: "🎬 <b>" + escapeHtml(title.title) + "</b>\nمشاهدة داخل Telegram"
+      });
+      return;
+    }
+    await sendMessage(env, bot.slug, chatId,
+      "الفيديو ديال <b>" + escapeHtml(title.title) + "</b> مازال ما تجهزش للمشاهدة أو الترخيص ديالو ما تأكدش."
+    );
     await sendTitle(env, bot, chatId, match[1], telegramUserId);
     return;
   }
   await showMoviesHome(env, bot, chatId);
+}
+
+
+export function parseMovieVideoUploadCaption(value) {
+  const match = /^\/attachmovie\s+([0-9a-f-]{36})\s+(\S{3,200})$/i.exec(String(value || "").trim());
+  if (!match || !UUID_RE.test(match[1])) return null;
+  return { titleId: match[1], rightsReference: match[2] };
+}
+
+// Admin uploads an authorized candidate video directly to the Movies Bot.
+// Caption format: /attachmovie <movie_uuid> <rights_reference>
+export async function handleMovieVideoUpload(env, bot, message) {
+  if (bot.slug !== "movies" || !message?.video) return false;
+  const allowed = String(env.TELEGRAM_MOVIES_ADMIN_IDS || "")
+    .split(",").map((value) => value.trim()).filter(Boolean);
+  const senderId = String(message.from?.id || "");
+  if (!senderId || !allowed.includes(senderId)) {
+    await sendMessage(env, bot.slug, message.chat.id, "رفع الفيديوهات مخصص لمدير البوت فقط.");
+    return true;
+  }
+
+  const upload = parseMovieVideoUploadCaption(message.caption);
+  if (!upload) {
+    await sendMessage(env, bot.slug, message.chat.id,
+      "صيغة رفع الفيديو غير صحيحة. استعمل:\n/attachmovie <movie_id> <rights_reference>");
+    return true;
+  }
+
+  const supabase = getSupabase(env);
+  const { data: title, error: titleError } = await supabase.from("movie_titles")
+    .select("id,title").eq("id", upload.titleId).maybeSingle();
+  if (titleError) throw titleError;
+  if (!title) {
+    await sendMessage(env, bot.slug, message.chat.id, "ما لقيتش الفيلم بهذا المعرّف.");
+    return true;
+  }
+
+  const { error } = await supabase.from("movie_media_assets").upsert({
+    title_id: title.id,
+    telegram_file_id: message.video.file_id,
+    telegram_file_unique_id: message.video.file_unique_id || null,
+    media_kind: "video",
+    quality: message.video.width && message.video.height ? message.video.width + "x" + message.video.height : null,
+    rights_status: "pending",
+    rights_reference: upload.rightsReference,
+    is_active: true,
+    uploaded_by_telegram_user_id: senderId
+  }, { onConflict: "title_id" });
+  if (error) throw error;
+
+  await sendMessage(env, bot.slug, message.chat.id,
+    "تسجل الفيديو ديال <b>" + escapeHtml(title.title) + "</b> بنجاح، ولكن بقى فحالة انتظار التحقق من حقوق التوزيع. ما غاديش يتبعت للمستخدمين حتى يتصادق عليه المدير من Dashboard.");
+  return true;
 }

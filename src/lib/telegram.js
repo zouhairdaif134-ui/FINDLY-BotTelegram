@@ -217,3 +217,22 @@ export async function deleteWebhook(
     }
   );
 }
+
+export async function sendVideo(env, botSlug, chatId, video, options = {}) {
+  if (!video) throw new Error("Telegram video file_id is required");
+  return telegramRequest(env, botSlug, "sendVideo", {
+    chat_id: chatId,
+    video,
+    supports_streaming: true,
+    ...options
+  });
+}
+
+export async function sendPhoto(env, botSlug, chatId, photo, options = {}) {
+  if (!photo) throw new Error("Telegram photo URL or file_id is required");
+  return telegramRequest(env, botSlug, "sendPhoto", {
+    chat_id: chatId,
+    photo,
+    ...options
+  });
+}

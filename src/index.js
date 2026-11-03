@@ -29,7 +29,9 @@ import {
   updateMovieCatalogItem,
   deleteMovieCatalogItem,
   searchTmdbCatalog,
-  importTmdbCatalogItem
+  importTmdbCatalogItem,
+  getMovieMediaAsset,
+  saveMovieMediaAsset
 } from "./routes/content.js";
 
 import {
@@ -1169,6 +1171,20 @@ export default {
         const auth = await requirePermission(env, request, PERMISSIONS.contentCreate);
         if (auth.response) return withCors(auth.response, request);
         return withCors(success(await createMovieCatalogItem(env, await readJson(request))), request);
+      }
+
+      if (/^\/api\/movies\/[0-9a-f-]{36}\/media$/.test(url.pathname) && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentView);
+        if (auth.response) return withCors(auth.response, request);
+        const titleId = url.pathname.split("/")[3];
+        return withCors(success(await getMovieMediaAsset(env, titleId)), request);
+      }
+
+      if (/^\/api\/movies\/[0-9a-f-]{36}\/media$/.test(url.pathname) && request.method === "PUT") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentUpdate);
+        if (auth.response) return withCors(auth.response, request);
+        const titleId = url.pathname.split("/")[3];
+        return withCors(success(await saveMovieMediaAsset(env, titleId, await readJson(request))), request);
       }
 
       if (url.pathname.startsWith("/api/movies/") && request.method === "PUT") {
