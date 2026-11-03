@@ -362,7 +362,7 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
 }
 
 export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
-  if (!/^\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
+  if (!/^\\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
   if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
   const isSeries = mediaType === "series";
   const details = await tmdbRequest(env, (isSeries ? "/tv/" : "/movie/") + tmdbId, {
@@ -372,35 +372,74 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
   const originalTitle = isSeries ? details.original_name : details.original_title;
   const releaseDate = isSeries ? details.first_air_date : details.release_date;
   const releaseYear = Number(String(releaseDate || "").slice(0, 4)) || null;
-  const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^\\p{L}\\p{N}]+/gu, " ").trim();
   if (!title) throw new Error("TMDB response does not contain a title");
+
   const supabase = getSupabase(env);
-  const { data: existingId, error: lookupError } = await supabase
-    .from("movie_external_ids").select("title_id").eq("provider", "tmdb").eq("external_id", String(tmdbId)).maybeSingle();
+  const externalId = String(tmdbId);
+  const { data: external, error: lookupError } = await supabase
+    .from("movie_external_ids").select("title_id").eq("provider", "tmdb").eq("external_id", externalId).maybeSingle();
   if (lookupError) throw lookupError;
-  const record = {
+
+  // Provider refreshes may update descriptive metadata, but never editorial state.
+  const metadata = {
     media_type: mediaType, title, original_title: originalTitle || null,
     normalized_title: normalized, overview: details.overview || null,
-    release_date: releaseDate || null, release_year,
+    release_date: releaseDate || null, release_year: releaseYear,
     runtime_minutes: isSeries ? null : details.runtime || null,
     rating: Number.isFinite(Number(details.vote_average)) ? Math.round(Number(details.vote_average) * 10) / 10 : null,
-    poster_path: tmdbImage(details.poster_path), backdrop_path: tmdbImage(details.backdrop_path),
-    status: "draft", metadata_status: "metadata_only"
+    poster_path: tmdbImage(details.poster_path), backdrop_path: tmdbImage(details.backdrop_path)
   };
+
   let saved;
-  if (existingId?.title_id) {
-    const { data, error } = await supabase.from("movie_titles").update(record).eq("id", existingId.title_id).select(MOVIE_FIELDS).single();
+  if (external?.title_id) {
+    const { data, error } = await supabase.from("movie_titles").update(metadata)
+      .eq("id", external.title_id).select(MOVIE_FIELDS).single();
     if (error) throw error;
     saved = data;
   } else {
-    const { data, error } = await supabase.from("movie_titles").insert(record).select(MOVIE_FIELDS).single();
-    if (error) throw error;
-    saved = data;
+    // Recover a prior partial import by its catalog natural key before inserting.
+    const naturalQuery = supabase.from("movie_titles").select(MOVIE_FIELDS)
+      .eq("media_type", mediaType).eq("normalized_title", normalized);
+    const { data: naturalMatches, error: naturalError } = await naturalQuery
+      .eq("release_year", releaseYear).limit(1);
+    if (naturalError) throw naturalError;
+
+    if (naturalMatches?.length) {
+      saved = naturalMatches[0];
+      const { data, error } = await supabase.from("movie_titles").update(metadata)
+        .eq("id", saved.id).select(MOVIE_FIELDS).single();
+      if (error) throw error;
+      saved = data;
+    } else {
+      const { data, error } = await supabase.from("movie_titles").insert({
+        ...metadata, status: "draft", metadata_status: "metadata_only"
+      }).select(MOVIE_FIELDS).single();
+      if (error) {
+        // A concurrent import may have won the unique natural-key race.
+        const { data: raced, error: raceError } = await supabase.from("movie_titles")
+          .select(MOVIE_FIELDS).eq("media_type", mediaType)
+          .eq("normalized_title", normalized).eq("release_year", releaseYear).limit(1);
+        if (raceError || !raced?.length) throw error;
+        saved = raced[0];
+      } else {
+        saved = data;
+      }
+    }
+
     const { error: externalError } = await supabase.from("movie_external_ids").insert({
-      title_id: saved.id, provider: "tmdb", external_id: String(tmdbId), external_type: mediaType
+      title_id: saved.id, provider: "tmdb", external_id: externalId, external_type: mediaType
     });
-    if (externalError) throw externalError;
+    if (externalError) {
+      // Never leave an unlinked new title behind when its provider mapping fails.
+      const { data: mapping, error: mappingError } = await supabase.from("movie_external_ids")
+        .select("title_id").eq("provider", "tmdb").eq("external_id", externalId).maybeSingle();
+      if (mappingError || mapping?.title_id !== saved.id) {
+        throw new Error("TMDB mapping could not be saved; retry the import. " + externalError.message);
+      }
+    }
   }
+
   const genreRows = (details.genres || []).map((genre) => ({
     name: genre.name, slug: "tmdb-" + genre.id, source: "provider", external_id: String(genre.id)
   }));
@@ -410,10 +449,12 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
   }
   if (genreRows.length) {
     const ids = genreRows.map((genre) => genre.external_id);
-    const { data: genres, error: genreError } = await supabase.from("movie_genres").select("id,external_id").eq("source", "provider").in("external_id", ids);
+    const { data: genres, error: genreError } = await supabase.from("movie_genres")
+      .select("id,external_id").eq("source", "provider").in("external_id", ids);
     if (genreError) throw genreError;
     const links = (genres || []).map((genre) => ({ title_id: saved.id, genre_id: genre.id }));
-    const { error: linkError } = await supabase.from("movie_title_genres").upsert(links, { onConflict: "title_id,genre_id" });
+    const { error: linkError } = await supabase.from("movie_title_genres")
+      .upsert(links, { onConflict: "title_id,genre_id" });
     if (linkError) throw linkError;
   }
   return saved;
