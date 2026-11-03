@@ -362,7 +362,7 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
 }
 
 export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
-  if (!/^\\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
+  if (!/^\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
   if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
   const isSeries = mediaType === "series";
   const details = await tmdbRequest(env, (isSeries ? "/tv/" : "/movie/") + tmdbId, {
