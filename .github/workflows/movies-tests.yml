@@ -9,6 +9,7 @@ on:
       - feat/movies-phase1-security-foundation
     paths:
       - "src/**"
+      - "dashboard/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/**"
@@ -31,3 +32,10 @@ jobs:
         run: npm install --no-package-lock
       - name: Run tests
         run: npm test
+
+      - name: Install dashboard dependencies
+        run: npm install --no-package-lock
+        working-directory: dashboard
+      - name: Build dashboard
+        run: npm run build
+        working-directory: dashboard
