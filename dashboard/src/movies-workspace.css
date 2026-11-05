@@ -1,0 +1,273 @@
+/* FINDLY Movies workspace: focused, responsive editorial admin surface */
+.main:has(.panel > .management-form) {
+  background: #f5f7fb;
+}
+.main:has(.panel > .management-form) > .header {
+  margin-bottom: 22px;
+}
+.main:has(.panel > .management-form) .panel:has(> .management-form) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.82fr);
+  gap: 18px;
+  align-items: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.main:has(.panel > .management-form) .panel:has(> .management-form) > .panel-header,
+.main:has(.panel > .management-form) .panel:has(> .management-form) > .auth-error,
+.main:has(.panel > .management-form) .panel:has(> .management-form) > .management-form:has(.form-grid),
+.main:has(.panel > .management-form) .panel:has(> .management-form) > .management-toolbar:has(+ .table-wrap),
+.main:has(.panel > .management-form) .panel:has(> .management-form) > .table-wrap {
+  grid-column: 1 / -1;
+}
+.main:has(.panel > .management-form) .panel:has(> .management-form) > .panel-header {
+  align-items: flex-start;
+  padding: 24px 26px;
+  margin: 0;
+  border: 1px solid #e1e7f0;
+  border-radius: 18px;
+  background: linear-gradient(120deg, #ffffff 0%, #f0f5ff 100%);
+}
+.main:has(.panel > .management-form) .panel-header h2 {
+  color: #14243d;
+  font-size: clamp(21px, 2vw, 27px);
+  letter-spacing: -0.7px;
+}
+.main:has(.panel > .management-form) .panel-header p {
+  margin-top: 7px;
+  color: #64748b;
+  font-size: 13px;
+}
+.main:has(.panel > .management-form) .panel-header > strong {
+  padding: 9px 13px;
+  border: 1px solid #dce6f5;
+  border-radius: 12px;
+  background: #fff;
+  color: #244c82;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.main:has(.panel > .management-form) .management-form {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #e1e7f0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(27, 48, 79, 0.035);
+}
+.main:has(.panel > .management-form) .management-form > .panel-header {
+  margin-bottom: 16px;
+}
+.main:has(.panel > .management-form) .management-form h3 {
+  margin: 0;
+  color: #1b2c45;
+  font-size: 16px;
+}
+.main:has(.panel > .management-form) .management-form .panel-header p {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.main:has(.panel > .management-form) .management-toolbar {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.main:has(.panel > .management-form) .management-toolbar input,
+.main:has(.panel > .management-form) .management-toolbar .toolbar-select,
+.main:has(.panel > .management-form) .form-grid input,
+.main:has(.panel > .management-form) .form-grid select,
+.main:has(.panel > .management-form) .form-grid textarea {
+  min-height: 43px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #d8e0eb;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: #1e293b;
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.main:has(.panel > .management-form) .management-toolbar input {
+  flex: 1 1 180px;
+}
+.main:has(.panel > .management-form) .management-toolbar input:focus,
+.main:has(.panel > .management-form) .form-grid input:focus,
+.main:has(.panel > .management-form) .form-grid select:focus,
+.main:has(.panel > .management-form) .form-grid textarea:focus {
+  border-color: #3977c7;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(57, 119, 199, .12);
+}
+.main:has(.panel > .management-form) .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.main:has(.panel > .management-form) .form-grid > label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  color: #43536a;
+  font-size: 12px;
+  font-weight: 650;
+}
+.main:has(.panel > .management-form) .form-grid .full-width {
+  grid-column: 1 / -1;
+}
+.main:has(.panel > .management-form) .form-grid textarea {
+  min-height: 190px;
+  resize: vertical;
+  line-height: 1.65;
+}
+.main:has(.panel > .management-form) .management-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.main:has(.panel > .management-form) .primary-button {
+  min-height: 41px;
+  padding: 10px 17px;
+  border-radius: 10px;
+  background: #183b67;
+  box-shadow: 0 4px 10px rgba(24, 59, 103, .13);
+  font-size: 12px;
+}
+.main:has(.panel > .management-form) .primary-button:hover:not(:disabled) {
+  background: #24558e;
+  opacity: 1;
+}
+.main:has(.panel > .management-form) .secondary-button {
+  min-height: 38px;
+  padding: 9px 13px;
+  border-color: #dce4ef;
+  border-radius: 9px;
+  color: #34445b;
+  font-size: 11px;
+}
+.main:has(.panel > .management-form) .secondary-button:hover {
+  background: #f1f5fa;
+}
+.main:has(.panel > .management-form) .panel:has(> .management-form) > .management-toolbar:has(+ .table-wrap) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 19px;
+  border: 1px solid #e1e7f0;
+  border-radius: 14px 14px 0 0;
+  background: #fff;
+}
+.main:has(.panel > .management-form) .panel:has(> .management-form) > .management-toolbar:has(+ .table-wrap) strong {
+  color: #1b2c45;
+  font-size: 15px;
+}
+.main:has(.panel > .management-form) .panel:has(> .management-form) > .table-wrap {
+  overflow-x: auto;
+  margin-top: -18px;
+  padding: 0 14px 12px;
+  border: 1px solid #e1e7f0;
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  background: #fff;
+}
+.main:has(.panel > .management-form) .table-wrap table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 690px;
+}
+.main:has(.panel > .management-form) .table-wrap th {
+  padding: 12px 10px;
+  background: #f6f8fb;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+.main:has(.panel > .management-form) .table-wrap td {
+  padding: 13px 10px;
+  border-bottom: 1px solid #edf1f6;
+  color: #3c4c62;
+  font-size: 11px;
+  vertical-align: middle;
+}
+.main:has(.panel > .management-form) .table-wrap tr:last-child td {
+  border-bottom: 0;
+}
+.main:has(.panel > .management-form) .table-wrap td strong {
+  color: #1c2e47;
+  font-size: 12px;
+}
+.main:has(.panel > .management-form) .table-wrap td small {
+  display: block;
+  max-width: 300px;
+  margin-top: 4px;
+  color: #8290a3;
+  line-height: 1.45;
+}
+.main:has(.panel > .management-form) .table-wrap tbody tr:hover td {
+  background: #fafcff;
+}
+.main:has(.panel > .management-form) .auth-error {
+  border: 1px solid #fecaca;
+  border-radius: 11px;
+}
+.main:has(.panel > .management-form) .table-wrap img {
+  display: block;
+  width: 48px;
+  height: 66px;
+  object-fit: cover;
+  border-radius: 7px;
+}
+@media (max-width: 900px) {
+  .main:has(.panel > .management-form) .panel:has(> .management-form) {
+    grid-template-columns: 1fr;
+  }
+  .main:has(.panel > .management-form) .panel:has(> .management-form) > .management-form:not(:has(.form-grid)) {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 600px) {
+  .main:has(.panel > .management-form) {
+    padding: 12px;
+  }
+  .main:has(.panel > .management-form) .panel:has(> .management-form) > .panel-header {
+    padding: 18px;
+    gap: 12px;
+  }
+  .main:has(.panel > .management-form) .panel-header h2 {
+    font-size: 21px;
+  }
+  .main:has(.panel > .management-form) .panel-header > strong {
+    padding: 7px 9px;
+    font-size: 11px;
+  }
+  .main:has(.panel > .management-form) .management-form {
+    padding: 15px;
+  }
+  .main:has(.panel > .management-form) .form-grid {
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+  .main:has(.panel > .management-form) .form-grid .full-width {
+    grid-column: auto;
+  }
+  .main:has(.panel > .management-form) .form-grid textarea {
+    min-height: 170px;
+  }
+  .main:has(.panel > .management-form) .management-toolbar:has(+ .table-wrap) {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .main:has(.panel > .management-form) .management-toolbar .primary-button {
+    width: 100%;
+  }
+}
