@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - feat/findly-movies-runtime-hardening
+      - feat/findly-movies-workspace-redesign
   pull_request:
     branches:
       - main
+      - feat/findly-movies-runtime-hardening
     paths:
       - "src/**"
       - "dashboard/**"
