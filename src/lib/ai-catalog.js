@@ -1,5 +1,6 @@
 const MAX_QUERY_LENGTH = 80;
 const MAX_RESULTS = 5;
+const MAX_SIMILAR_CANDIDATES = 100;
 
 export const AI_CATALOG_TOOLS = [
   {
@@ -32,6 +33,23 @@ export const AI_CATALOG_TOOLS = [
           sort: { type: "string", enum: ["top_rated", "newest"] },
           limit: { type: "integer", minimum: 1, maximum: 5 }
         }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "find_similar_titles",
+      description: "Find published FINDLY titles similar to a movie or series by shared catalog genres. Use when the user asks for titles like, similar to, or related to a named title.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          title: { type: "string", minLength: 1, maxLength: 80 },
+          media_type: { type: "string", enum: ["movie", "series"] },
+          limit: { type: "integer", minimum: 1, maximum: 5 }
+        },
+        required: ["title"]
       }
     }
   }
@@ -96,7 +114,7 @@ function relevanceScore(row, query) {
   if (original === needle) return 3;
   if (original.startsWith(needle)) return 4;
   if (original.includes(needle)) return 5;
-  return 4;
+  return 6;
 }
 
 export async function searchCatalog(supabase, input = {}) {
@@ -175,6 +193,56 @@ export async function recommendCatalogTitles(supabase, input = {}) {
   return attachGenres(supabase, data || []);
 }
 
+export async function findSimilarCatalogTitles(supabase, input = {}) {
+  const titleQuery = cleanQuery(input.title);
+  if (!titleQuery) return [];
+  const limit = Number.isInteger(input.limit) ? Math.min(MAX_RESULTS, Math.max(1, input.limit)) : 5;
+  const mediaType = ["movie", "series"].includes(input.media_type) ? input.media_type : null;
+  const matches = await searchCatalog(supabase, { query: titleQuery, media_type: mediaType || undefined });
+  const reference = matches[0];
+  if (!reference) return [];
+
+  const { data: referenceGenres, error: referenceGenreError } = await supabase
+    .from("movie_title_genres")
+    .select("genre_id")
+    .eq("title_id", reference.id)
+    .limit(10);
+  if (referenceGenreError) throw referenceGenreError;
+  const genreIds = [...new Set((referenceGenres || []).map((item) => item.genre_id).filter(Boolean))];
+  if (!genreIds.length) return [];
+
+  const { data: relations, error: relationError } = await supabase
+    .from("movie_title_genres")
+    .select("title_id,genre_id")
+    .in("genre_id", genreIds)
+    .limit(200);
+  if (relationError) throw relationError;
+
+  const overlap = new Map();
+  for (const relation of relations || []) {
+    if (!relation?.title_id || relation.title_id === reference.id) continue;
+    overlap.set(relation.title_id, (overlap.get(relation.title_id) || 0) + 1);
+  }
+  const candidateIds = [...overlap.keys()].slice(0, MAX_SIMILAR_CANDIDATES);
+  if (!candidateIds.length) return [];
+
+  let request = supabase
+    .from("movie_titles")
+    .select("id,title,original_title,media_type,release_year,release_date,rating,runtime_minutes,overview")
+    .eq("status", "active")
+    .in("id", candidateIds);
+  if (mediaType) request = request.eq("media_type", mediaType);
+  const { data, error } = await request.limit(MAX_SIMILAR_CANDIDATES);
+  if (error) throw error;
+
+  const ranked = (data || []).sort((a, b) =>
+    (overlap.get(b.id) || 0) - (overlap.get(a.id) || 0) ||
+    (Number(b.rating) || 0) - (Number(a.rating) || 0) ||
+    String(b.release_date || "").localeCompare(String(a.release_date || ""))
+  ).slice(0, limit);
+  return attachGenres(supabase, ranked);
+}
+
 export async function executeCatalogTool(supabase, name, rawArguments) {
   let args;
   try {
@@ -192,6 +260,10 @@ export async function executeCatalogTool(supabase, name, rawArguments) {
     }
     if (name === "recommend_catalog_titles") {
       const results = await recommendCatalogTitles(supabase, args);
+      return { count: results.length, results };
+    }
+    if (name === "find_similar_titles") {
+      const results = await findSimilarCatalogTitles(supabase, args);
       return { count: results.length, results };
     }
     return { error: "Unsupported catalog tool." };
