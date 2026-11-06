@@ -10,7 +10,10 @@ alter table public.ad_campaigns
   add column if not exists max_deliveries integer,
   add column if not exists priority integer not null default 100;
 
+-- Website campaigns are independent of Telegram bots; Telegram campaigns still
+-- require bot_id through service validation before they can be saved.
 alter table public.ad_campaigns
+  alter column bot_id drop not null,
   alter column status set default 'draft';
 
 alter table public.ad_campaigns
