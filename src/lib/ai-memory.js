@@ -122,7 +122,8 @@ export async function setAIMemoryConsent(supabase, userId, botId, status) {
     user_id: userId,
     bot_id: botId,
     consent_status: status,
-    consented_at: status === "granted" ? new Date().toISOString() : null
+    consented_at: status === "granted" ? new Date().toISOString() : null,
+    ...(status === "denied" ? { preferences: [], pending_preference: null } : {})
   };
   const { data, error } = await supabase
     .from("ai_user_memory_preferences")
