@@ -55,30 +55,6 @@ export async function recordAdminMutation(env, actor, event) {
   }
 }
 
-export async function recordAdminMovieImport(env, actor, event) {
-  const id = actorId(actor);
-  try {
-    const { data, error } = await getSupabase(env).rpc("admin_audit_import_movie", {
-      p_actor_id: id,
-      p_tmdb_id: String(event.tmdbId),
-      p_media_type: event.mediaType,
-      p_movie: event.movie,
-      p_genres: event.genres || []
-    });
-    if (error) throw error;
-    return data?.record ?? data;
-  } catch (error) {
-    await recordAdminFailure(env, actor, {
-      action: "movie.import_tmdb",
-      entityType: "movie",
-      entityId: null,
-      failureCode: error?.code || "MOVIE_IMPORT_FAILED",
-      failureType: error?.name || "Error"
-    });
-    throw error;
-  }
-}
-
 export async function recordAdminEvent(env, actor, event) {
   const id = actorId(actor);
   const { data, error } = await getSupabase(env).rpc("admin_audit_record_event", {
