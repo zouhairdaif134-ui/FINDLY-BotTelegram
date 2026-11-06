@@ -42,7 +42,7 @@ Unauthenticated read-only endpoint:
 
 `GET /api/monetization/public/placements?page=home&slot=home-top&visitor=<random-uuid>&view=<random-uuid>`
 
-The consumer website generates one random `visitor` UUID and persists it in first-party storage, then generates a fresh random `view` UUID for each page view. Do not place email addresses, phone numbers, Telegram IDs, or other personal information in these fields. The Worker hashes the visitor UUID with SHA-256 before storing it and atomically applies the website frequency policy before returning each placement.
+The consumer website must configure the same hostname in the provider Zone's `site_domain`. The API checks the request `Origin` (or `Referer` when Origin is absent) against that hostname and its subdomains. The consumer website generates one random `visitor` UUID and persists it in first-party storage, then generates a fresh random `view` UUID for each page view. Do not place email addresses, phone numbers, Telegram IDs, or other personal information in these fields. The Worker hashes the visitor UUID with SHA-256 before storing it and atomically applies the website frequency policy before returning each placement.
 
 Allowed page keys: `home`, `search`, `movie_details`, `watch`, `future`.
 
