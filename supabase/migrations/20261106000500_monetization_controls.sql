@@ -365,3 +365,149 @@ update public.ad_providers
 set is_active = false,
     updated_at = now()
 where slug in ('monetag','adsterra');
+
+
+-- A channel default policy exists even before an Owner creates campaign overrides.
+insert into public.ad_frequency_policies (
+  channel, max_per_user, cooldown_seconds, max_per_session,
+  rolling_window_minutes, is_enabled
+)
+values
+  ('website', 3, 3600, 1, 1440, true),
+  ('telegram', 3, 3600, 1, 1440, true)
+on conflict do nothing;
+
+-- Atomically reserve one Telegram ad delivery. The reservation is written before
+-- calling Telegram so concurrent webhook updates cannot exceed frequency caps.
+create or replace function public.claim_monetization_ad_delivery(
+  p_idempotency_key text,
+  p_campaign_id uuid,
+  p_placement_id uuid,
+  p_provider_zone_id uuid,
+  p_user_id uuid,
+  p_bot_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_campaign public.ad_campaigns%rowtype;
+  v_placement public.ad_placements%rowtype;
+  v_zone public.ad_provider_zones%rowtype;
+  v_provider public.ad_providers%rowtype;
+  v_policy public.ad_frequency_policies%rowtype;
+  v_attempt_count bigint;
+  v_last_attempt timestamptz;
+  v_sent_count bigint;
+  v_inserted integer;
+begin
+  if p_idempotency_key is null or length(p_idempotency_key) < 8 or length(p_idempotency_key) > 200
+     or p_campaign_id is null or p_placement_id is null or p_provider_zone_id is null
+     or p_user_id is null or p_bot_id is null then
+    return false;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_user_id::text || ':telegram', 0));
+
+  select * into v_campaign
+  from public.ad_campaigns
+  where id = p_campaign_id and bot_id = p_bot_id
+    and channel = 'telegram' and campaign_type = 'external'
+    and status = 'active'
+    and (starts_at is null or starts_at <= now())
+    and (ends_at is null or ends_at > now())
+  for share;
+  if not found then return false; end if;
+
+  select * into v_placement
+  from public.ad_placements
+  where id = p_placement_id and channel = 'telegram'
+    and format = v_campaign.format and is_enabled = true
+    and position = 'interaction_trigger'
+    and (starts_at is null or starts_at <= now())
+    and (ends_at is null or ends_at > now())
+  for share;
+  if not found or v_placement.provider_zone_id <> p_provider_zone_id then return false; end if;
+
+  if not exists (
+    select 1 from public.ad_campaign_placements cp
+    where cp.campaign_id = p_campaign_id and cp.placement_id = p_placement_id
+  ) then return false; end if;
+
+  select * into v_zone
+  from public.ad_provider_zones
+  where id = p_provider_zone_id and provider_id = v_campaign.provider_id
+    and channel = 'telegram' and format = v_campaign.format
+    and is_verified = true and is_active = true
+  for share;
+  if not found then return false; end if;
+
+  select * into v_provider
+  from public.ad_providers
+  where id = v_campaign.provider_id and provider_type = 'external' and is_active = true
+  for share;
+  if not found then return false; end if;
+
+  if exists (
+    select 1 from public.monetization_user_exclusions e where e.user_id = p_user_id
+  ) then return false; end if;
+
+  select * into v_policy
+  from public.ad_frequency_policies
+  where channel = 'telegram'
+    and (
+      campaign_id = p_campaign_id
+      or placement_id = p_placement_id
+      or (campaign_id is null and placement_id is null)
+    )
+  order by
+    case when campaign_id = p_campaign_id then 0
+         when placement_id = p_placement_id then 1
+         else 2 end
+  limit 1;
+  if not found or v_policy.is_enabled = false then return false; end if;
+
+  select count(*), max(occurred_at)
+    into v_attempt_count, v_last_attempt
+  from public.ad_delivery_events
+  where user_id = p_user_id and channel = 'telegram'
+    and event_type = 'attempted'
+    and occurred_at >= now() - make_interval(mins => v_policy.rolling_window_minutes)
+    and (
+      (v_policy.campaign_id is not null and campaign_id = v_policy.campaign_id)
+      or (v_policy.placement_id is not null and placement_id = v_policy.placement_id)
+      or (v_policy.campaign_id is null and v_policy.placement_id is null)
+    );
+
+  if v_attempt_count >= v_policy.max_per_session then return false; end if;
+  if v_attempt_count >= v_policy.max_per_user then return false; end if;
+  if v_last_attempt is not null
+     and v_last_attempt > now() - make_interval(secs => v_policy.cooldown_seconds) then
+    return false;
+  end if;
+
+  if v_campaign.max_deliveries is not null then
+    select count(*) into v_sent_count
+    from public.ad_delivery_events
+    where campaign_id = p_campaign_id and event_type = 'sent';
+    if v_sent_count >= v_campaign.max_deliveries then return false; end if;
+  end if;
+
+  insert into public.ad_delivery_events (
+    idempotency_key, campaign_id, placement_id, provider_zone_id,
+    user_id, bot_id, channel, event_type, metadata
+  ) values (
+    p_idempotency_key, p_campaign_id, p_placement_id, p_provider_zone_id,
+    p_user_id, p_bot_id, 'telegram', 'attempted', jsonb_build_object('trigger','telegram_interaction')
+  )
+  on conflict (idempotency_key) do nothing;
+
+  get diagnostics v_inserted = row_count;
+  return v_inserted = 1;
+end;
+$$;
+
+revoke all on function public.claim_monetization_ad_delivery(text,uuid,uuid,uuid,uuid,uuid) from public, anon, authenticated;
+grant execute on function public.claim_monetization_ad_delivery(text,uuid,uuid,uuid,uuid,uuid) to service_role;
