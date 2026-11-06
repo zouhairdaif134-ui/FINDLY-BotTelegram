@@ -87,3 +87,16 @@ test("returns 404 for unknown Monetization endpoints", async () => {
   assert.equal(response.status, 404);
   assert.deepEqual(helpers.permissions, []);
 });
+
+test("rejects unsupported public website page keys without requiring dashboard auth", async () => {
+  const helpers = makeHelpers(() => new Response("Forbidden", { status: 403 }));
+  const path = "/api/monetization/public/placements?page=all_interactions";
+  const response = await handleMonetizationRoute(
+    {},
+    request(path),
+    new URL("https://api.example" + path),
+    helpers
+  );
+  assert.equal(response.status, 400);
+  assert.deepEqual(helpers.permissions, []);
+});
