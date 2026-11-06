@@ -97,7 +97,7 @@ test("sendPhoto falls back to Telegram URL fetching when multipart upload is rej
 });
 
 
-import { buildTitleCaption } from "../src/lib/movies-bot.js";
+import { buildTitleCaption, sendTitleCard } from "../src/lib/movies-bot.js";
 
 test("buildTitleCaption escapes metadata and keeps the rendered caption within Telegram's 1024-character limit", () => {
   const caption = buildTitleCaption({
@@ -130,4 +130,31 @@ test("buildTitleCaption provides a clean fallback synopsis when overview is miss
     metadata_status: "draft"
   });
   assert.match(caption, /لا يتوفر ملخص لهذا العنوان حالياً/);
+});
+
+
+test("sendTitleCard sends a readable text card with its buttons when the poster is missing", async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options = {}) => {
+    request = { url: String(url), options };
+    return Response.json({ ok: true, result: { message_id: 101 } });
+  };
+  try {
+    const result = await sendTitleCard(
+      { TELEGRAM_MOVIES_BOT_TOKEN: "test-token" },
+      "movies",
+      "12345",
+      null,
+      "<b>🎬 Untitled</b>",
+      { parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "Back", callback_data: "movies:home" }]] } }
+    );
+    assert.equal(result.message_id, 101);
+    assert.ok(request.url.endsWith("/sendMessage"));
+    const payload = JSON.parse(request.options.body);
+    assert.equal(payload.text, "<b>🎬 Untitled</b>");
+    assert.equal(payload.reply_markup.inline_keyboard[0][0].callback_data, "movies:home");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
