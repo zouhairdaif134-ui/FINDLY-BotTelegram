@@ -258,3 +258,11 @@ test("rejects HTML markup in campaign creative instead of accepting executable s
     }
   }), /HTML|executable/i);
 });
+
+test("maps Telegram updates to explicit ad interaction triggers", () => {
+  const getTrigger = requireFunction("getTelegramAdTrigger");
+  assert.equal(getTrigger({ message: { text: "/start movie_123" } }), "start");
+  assert.equal(getTrigger({ message: { text: "/search" } }), "search");
+  assert.equal(getTrigger({ callback_query: { data: "menu:abc" } }), "callback");
+  assert.equal(getTrigger({ message: { text: "hello" } }), "message");
+});
