@@ -710,6 +710,13 @@ export default {
             webhookUrl
           );
 
+        await recordAdminEvent(env, auth, {
+          action: "telegram.webhook.connect",
+          entityType: "telegram_integration",
+          entityId: null,
+          details: { bot_slug: botSlug }
+        });
+
         return withCors(
           success({
             bot:
@@ -832,6 +839,13 @@ export default {
             env,
             botSlug
           );
+
+        await recordAdminEvent(env, auth, {
+          action: "telegram.webhook.disconnect",
+          entityType: "telegram_integration",
+          entityId: null,
+          details: { bot_slug: botSlug }
+        });
 
         return withCors(
           success({
