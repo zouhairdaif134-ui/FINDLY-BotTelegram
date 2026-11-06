@@ -260,7 +260,8 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       if (response) return response;
       const body = await helpers.readJson(request);
       const result = await audited(env, auth, {
-        action: ["scheduled", "active", "paused", "cancelled"].includes(body.status)\n          ? "monetization.campaign." + body.status\n          : "monetization.campaign.status_invalid",
+        action: ["scheduled", "active", "paused", "cancelled"].includes(body.status)
+          ? "monetization.campaign." + body.status\n          : "monetization.campaign.status_invalid",
         entityType: "ad_campaign",
         entityId: id,
         details: { status: body.status || null }
