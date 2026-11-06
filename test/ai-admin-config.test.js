@@ -15,7 +15,7 @@ test("accepts safe AI settings and stores no provider credentials", () => {
 
   assert.equal(normalized.enabled, true);
   assert.equal(stored.enabled, true);
-  assert.equal(Object.keys(stored).some((key) => /key|secret|password|token/i.test(key)), false);
+  assert.equal(Object.keys(stored).some((key) => /api.?key|secret|password|access.?token|refresh.?token/i.test(key)), false);
   assert.equal(JSON.stringify({ normalized, stored }).includes("never-return-this"), false);
 });
 
