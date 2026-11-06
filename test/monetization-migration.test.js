@@ -48,3 +48,11 @@ test("uses idempotency keys and indexed UTC event timestamps", () => {
   assert.match(migration, /created_at timestamptz not null default now\(\)/i);
   assert.match(migration, /create index[^;]*ad_delivery_events[^;]*created_at/is);
 });
+
+test("supports explicit test/admin exclusions and known Telegram bot identities", () => {
+  assert.match(migration, /alter table public\\.telegram_users[\\s\\S]*add column if not exists is_bot boolean not null default false/i);
+  assert.match(migration, /create table(?: if not exists)? public\\.monetization_user_exclusions/i);
+  assert.match(migration, /reason text not null check \\(reason in \\('admin','test','manual'\\)\\)/i);
+  assert.match(migration, /alter table public\\.monetization_user_exclusions enable row level security/i);
+  assert.match(migration, /grant all on table public\\.monetization_user_exclusions to service_role/i);
+});
