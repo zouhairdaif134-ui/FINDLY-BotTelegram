@@ -4056,16 +4056,24 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh }) {
       );
 
       if (platform === "facebook") {
-        const popup = window.open(
+        // Facebook's composer does not reliably display og:description in every
+        // Feed layout. Copy the same database-backed movie caption first, then
+        // open the canonical share page so the user can paste it into the post.
+        const clipboardPromise = navigator.clipboard?.writeText
+          ? navigator.clipboard.writeText(share.caption).then(() => true).catch(() => false)
+          : Promise.resolve(false);
+
+        window.open(
           share.facebookShareUrl,
           "_blank",
           "noopener,noreferrer"
         );
-        if (!popup) {
-          window.location.href = share.facebookShareUrl;
-        }
+
+        const copied = await clipboardPromise;
         setShareStatus(
-          "فتحنا مشاركة Facebook برابط خاص بالفيلم. خاص Facebook يجيب الصورة والعنوان والملخص من بيانات Open Graph."
+          copied
+            ? "نسخنا تلقائياً نص الفيلم من مكتبة FINDLY. فـ Facebook لسق النص فخانة «Quoi de neuf ?»؛ الصورة والعنوان كيجيو من بطاقة الرابط."
+            : "تحلات مشاركة Facebook. إذا ما بانش الملخص فالبطاقة، انسخ نص الفيلم من FINDLY أو فعّل صلاحية Clipboard ثم عاود المشاركة."
         );
         return;
       }
