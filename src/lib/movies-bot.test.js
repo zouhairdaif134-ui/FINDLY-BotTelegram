@@ -67,6 +67,7 @@ test("builds a single photo caption with movie metadata and a Telegram-safe over
     media_type: "movie",
     runtime_minutes: 104,
     rating: 7.8,
+    genres: ["Drama", "Thriller"],
     overview: "A suspenseful story.",
     metadata_status: "pending"
   });
@@ -75,6 +76,7 @@ test("builds a single photo caption with movie metadata and a Telegram-safe over
   assert.match(caption, /فيلم/);
   assert.match(caption, /104 دقيقة/);
   assert.match(caption, /7\.8\/10/);
+  assert.match(caption, /التصنيف: Drama، Thriller/);
   assert.match(caption, /A suspenseful story\./);
   assert.ok(caption.replace(/<[^>]*>/g, "").length <= 1024);
 });

@@ -64,8 +64,10 @@ function escapeHtml(value) {
 export function buildTitleCaption(title) {
   const heading = "<b>" + escapeHtml(title.title) + "</b>" + (title.release_year ? " · " + title.release_year : "") + " · FINDLY Movies";
   const meta = [title.media_type === "series" ? "مسلسل" : "فيلم", title.runtime_minutes ? title.runtime_minutes + " دقيقة" : null, title.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : null].filter(Boolean).join(" · ");
+  const genres = Array.isArray(title.genres) ? title.genres.filter(Boolean).join("، ") : "";
+  const genreLine = genres ? "🎭 التصنيف: " + escapeHtml(genres) + "\n" : "";
   const notice = title.metadata_status === "authorized_media_available" ? "المحتوى مسجل كمتاح بترخيص، لكن مسار التسليم داخل Telegram لم يتم تفعيله بعد." : "المشاهدة داخل FINDLY غير متاحة حالياً. لن نعرض رابطاً غير موثوق أو محتوى غير مرخّص.";
-  const prefix = heading + "\n" + meta + "\n\n";
+  const prefix = heading + "\n" + meta + "\n" + (genreLine || "\n");
   const suffix = "\n\n" + notice;
   const limit = Math.max(0, 1024 - prefix.replace(/<[^>]*>/g, "").length - suffix.length);
   const overview = String(title.overview || "لا يتوفر ملخص لهذا العنوان حالياً.");
@@ -239,6 +241,13 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     await sendMessage(env, bot.slug, chatId, "هاد العنوان ما بقاش متاح.");
     return;
   }
+
+  const { data: genreLinks, error: genreError } = await supabase
+    .from("movie_title_genres")
+    .select("movie_genres(name)")
+    .eq("title_id", title.id);
+  if (genreError) throw genreError;
+  title.genres = (genreLinks || []).map((link) => link.movie_genres?.name).filter(Boolean);
 
   const userId = await getInternalUserId(env, telegramUserId);
   let isFavorite = false;
