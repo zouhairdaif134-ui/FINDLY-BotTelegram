@@ -3,7 +3,7 @@
 Date: 2026-11-06
 Branch: feat/ai-advanced-phase1
 Base: main at production merge 58fcd0bc6b4932c6c562fa8b35425c49d8f4936e
-Status: Phases 1–4 implemented; CI passed; Pages Preview deployed. No Production release.
+Status: Phases 1–5 implemented in the feature branch; CI verification in progress for the latest prompt-guidance commit. No Production release.
 
 ## Repository facts verified
 - Worker backend: src/index.js
@@ -61,15 +61,15 @@ At commit 2522b9597980eaafa895a7a608ab4619325d9a52:
 - Authenticated API round-trip and live Telegram interaction are not yet verified; Preview is not connected to a dedicated test Supabase environment.
 - No Production deployment, live migration, AI activation, or provider secret setup has occurred.
 
-## Phase 5 — Discovery quality (next for user-facing AI)
-Do not add user-data actions. Improve only read-only discovery:
-1. Add a grounded similar-title discovery path using catalog genres, media type, year and rating.
-2. Improve natural-language intent mapping for conversational search (e.g. mood, genre, era, language only where catalog fields support it).
-3. Add a detailed-title response path that exposes only approved catalog fields and a bounded overview.
-4. Add tests for relevance, missing metadata, empty results, and explicit disclosure when the catalog cannot answer.
-5. Preserve active-only filtering, per-bot isolation, query bounds and tool-call limits.
+## Phase 5 — Discovery quality
+Implemented on the feature branch; no user-data actions were added:
+1. Added the read-only find_similar_titles tool. It resolves a reference title, gathers shared catalog genres, excludes the reference title, and ranks candidates by genre overlap before applying the candidate cap; rating and release date break ties.
+2. Improved conversational intent guidance: broad mood/vibe/preference requests route to recommend_catalog_titles; mood is mapped to a genre only when it matches a real catalog genre. Recent-title requests use newest ordering; other recommendations use top-rated ordering.
+3. Named-title detail requests route to search_catalog and use only its approved metadata and bounded overview.
+4. Added regression coverage for similarity relevance when a high-overlap result would otherwise fall beyond the candidate cap, plus runtime prompt-contract checks for conversational intent, grounded genre mapping and detailed-title lookup.
+5. Existing active-only filtering, per-bot configuration, query/result bounds and maximum three tool calls remain in place.
 
-Acceptance: all suggestions and details are grounded in active catalog records; no model-invented titles or metadata; no database writes.
+Acceptance: recommendations and details are grounded in active catalog records; no model-invented catalog facts; no database writes. The latest test run passed 114/114 before the prompt-contract assertions; final CI for the current head is tracked separately.
 
 ## Phase 6 — Privacy-safe observability and release readiness
 1. Add only necessary usage/error counters and redact prompts, personal data, credentials and provider response bodies.
