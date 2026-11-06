@@ -47,18 +47,22 @@ function cleanQuery(value, maxLength = MAX_QUERY_LENGTH) {
     .slice(0, maxLength);
 }
 
+function safeText(value, maxLength) {
+  return typeof value === "string" ? value.slice(0, maxLength) : null;
+}
+
 function normalizeTitle(row, genres = []) {
   return {
     id: row.id,
-    title: row.title,
-    original_title: row.original_title || null,
+    title: safeText(row.title, 200) || "Untitled",
+    original_title: safeText(row.original_title, 200),
     media_type: row.media_type,
     release_year: row.release_year || null,
     release_date: row.release_date || null,
     rating: row.rating == null ? null : Number(row.rating),
     runtime_minutes: row.runtime_minutes || null,
-    overview: row.overview || null,
-    genres
+    overview: safeText(row.overview, 700),
+    genres: genres.slice(0, 10).map((name) => String(name).slice(0, 60))
   };
 }
 
