@@ -134,9 +134,9 @@ test("reserves Direct Advertisers as inactive and pauses any legacy direct campa
 });
 
 test("provides campaign delivery aggregates separately from financial revenue", () => {
-  assert.match(migration, /create or replace function public\\.get_monetization_campaign_delivery_summary/i);
-  assert.match(migration, /count\\(\\*\\) filter \\(where e\\.event_type = 'attempted'\\)/i);
-  assert.match(migration, /count\\(\\*\\) filter \\(where e\\.event_type = 'sent'\\)/i);
-  assert.match(migration, /count\\(\\*\\) filter \\(where e\\.event_type = 'failed'\\)/i);
-  assert.match(migration, /grant execute on function public\\.get_monetization_campaign_delivery_summary\\(timestamptz\\) to service_role/i);
+  assert.match(migration, /create or replace function public\.get_monetization_campaign_delivery_summary/i);
+  assert.match(migration, /count\(\*\) filter \(where e\.event_type = 'attempted'\)/i);
+  assert.match(migration, /count\(\*\) filter \(where e\.event_type = 'sent'\)/i);
+  assert.match(migration, /count\(\*\) filter \(where e\.event_type = 'failed'\)/i);
+  assert.match(migration, /grant execute on function public\.get_monetization_campaign_delivery_summary\(timestamptz\) to service_role/i);
 });
