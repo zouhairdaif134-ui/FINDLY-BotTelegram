@@ -47,6 +47,18 @@ function send(helpers, request, data) {
   return helpers.withCors(helpers.success(data), request);
 }
 
+function sendPublic(helpers, request, data) {
+  const response = helpers.success(data);
+  const headers = new Headers(response.headers);
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
 function sendFailure(helpers, request, error) {
   const status = error?.code === "23505"
     ? 409
@@ -106,9 +118,11 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
 
   try {
     if (resource === "public" && id === "placements" && parts.length === 2 && request.method === "GET") {
-      return send(helpers, request, await listPublicAdPlacements(env, {
+      return sendPublic(helpers, request, await listPublicAdPlacements(env, {
         page_key: url.searchParams.get("page"),
-        slot_key: url.searchParams.get("slot")
+        slot_key: url.searchParams.get("slot"),
+        visitor_key: url.searchParams.get("visitor"),
+        view_id: url.searchParams.get("view")
       }));
     }
 
