@@ -460,7 +460,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
               </section>
 
               <section className="monetization-panel">
-                <h3>Provider Zones & verification</h3>
+                <h3>Provider Zones & verification</h3><p className="monetization-muted">Video Ads are unavailable in Phase 1 until a provider-supported video player is integrated and verified. Banner, Native and Pop-up remain configurable; Pop-up stays OFF by default.</p>
                 <p className="monetization-muted">كل Zone كتبدأ Off. خاص اختبارها فحساب المزود، تأكيد Owner، ومن بعد تفعيلها بشكل مستقل.</p>
                 <form className="monetization-form" onSubmit={saveZone}>
                   <label>Provider<select value={zoneForm.provider_id} onChange={(e) => setZoneForm({ ...zoneForm, provider_id: e.target.value })} required><option value="">Choose provider</option>{providers.filter((p) => p.provider_type === "external").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
