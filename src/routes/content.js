@@ -288,7 +288,7 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
 
 undefined
 
-export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
+export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", actor) {
   if (!/^\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
   if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
   const isSeries = mediaType === "series";
@@ -299,65 +299,8 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
   const originalTitle = isSeries ? details.original_name : details.original_title;
   const releaseDate = isSeries ? details.first_air_date : details.release_date;
   const releaseYear = Number(String(releaseDate || "").slice(0, 4)) || null;
-  const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-  if (!title) throw new Error("TMDB response does not contain a title");
-  const supabase = getSupabase(env);
-  const { data: existingId, error: lookupError } = await supabase
-    .from("movie_external_ids").select("title_id").eq("provider", "tmdb").eq("external_id", String(tmdbId)).maybeSingle();
-  if (lookupError) throw lookupError;
-  const record = {
-    media_type: mediaType, title, original_title: originalTitle || null,
-    normalized_title: normalized, overview: details.overview || null,
-    release_date: releaseDate || null, release_year: releaseYear,
-    runtime_minutes: isSeries ? null : details.runtime || null,
-    rating: Number.isFinite(Number(details.vote_average)) ? Math.round(Number(details.vote_average) * 10) / 10 : null,
-    poster_path: tmdbImage(details.poster_path), backdrop_path: tmdbImage(details.backdrop_path),
-    status: "draft", metadata_status: "metadata_only"
-  };
-  let saved;
-  if (existingId?.title_id) {
-    const { data, error } = await supabase.from("movie_titles").update(record).eq("id", existingId.title_id).select(MOVIE_FIELDS).single();
-    if (error) throw error;
-    saved = data;
-  } else {
-    const { data, error } = await supabase.from("movie_titles").insert(record).select(MOVIE_FIELDS).single();
-    if (error) throw error;
-    saved = data;
-    const { error: externalError } = await supabase.from("movie_external_ids").insert({
-      title_id: saved.id, provider: "tmdb", external_id: String(tmdbId), external_type: mediaType
-    });
-    if (externalError) throw externalError;
-  }
-  const genreRows = (details.genres || []).map((genre) => ({
-    name: genre.name, slug: "tmdb-" + genre.id, source: "provider", external_id: String(genre.id)
-  }));
-  for (const genre of genreRows) {
-    const { error } = await supabase.from("movie_genres").upsert(genre, { onConflict: "source,external_id" });
-    if (error) throw error;
-  }
-  if (genreRows.length) {
-    const ids = genreRows.map((genre) => genre.external_id);
-    const { data: genres, error: genreError } = await supabase.from("movie_genres").select("id,external_id").eq("source", "provider").in("external_id", ids);
-    if (genreError) throw genreError;
-    const links = (genres || []).map((genre) => ({ title_id: saved.id, genre_id: genre.id }));
-    const { error: linkError } = await supabase.from("movie_title_genres").upsert(links, { onConflict: "title_id,genre_id" });
-    if (linkError) throw linkError;
-  }
-  return saved;
-}
-
-export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", actor) {
-  if (!/^\\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
-  if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
-  const isSeries = mediaType === "series";
-  const details = await tmdbRequest(env, (isSeries ? "/tv/" : "/movie/") + tmdbId, {
-    append_to_response: "external_ids"
-  });
-  const title = isSeries ? details.name : details.title;
-  const originalTitle = isSeries ? details.original_name : details.original_title;
-  const releaseDate = isSeries ? details.first_air_date : details.release_date;
-  const releaseYear = Number(String(releaseDate || "").slice(0, 4)) || null;
-  const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^\\p{L}\\p{N}]+/gu, " ").trim();
+  const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   if (!title) throw new Error("TMDB response does not contain a title");
   const movie = {
     media_type: mediaType,
@@ -377,10 +320,5 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", ac
     slug: "tmdb-" + genre.id,
     external_id: String(genre.id)
   }));
-  return recordAdminMovieImport(env, actor, {
-    tmdbId,
-    mediaType,
-    movie,
-    genres
-  });
+  return recordAdminMovieImport(env, actor, { tmdbId, mediaType, movie, genres });
 }
