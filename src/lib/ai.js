@@ -121,7 +121,7 @@ export async function getAIConfig(env, botId) {
 }
 
 export async function generateAIReply(env, bot, userText, memory = {}) {
-  const config = await getAIConfig(env, bot?.id);
+  const config = memory.config || await getAIConfig(env, bot?.id);
   if (!config.enabled) return null;
 
   const apiKey = env.AI_API_KEY;
