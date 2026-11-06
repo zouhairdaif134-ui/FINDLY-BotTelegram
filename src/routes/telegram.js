@@ -1526,7 +1526,7 @@ async function processTelegramUpdate(
           env,
           bot,
           text,
-          { history: memoryHistory, preferences: memoryPreferences, config: aiConfig }
+          { history: memoryHistory, preferences: memoryPreferences, config: aiConfig, supabase: getSupabase(env) }
         )
       : null;
 
