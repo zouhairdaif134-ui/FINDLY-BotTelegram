@@ -39,7 +39,7 @@ test("enforces service-role-only memory access with RLS", () => {
   for (const table of ["ai_user_memory_preferences", "ai_user_session_messages"]) {
     assert.match(migration, new RegExp("alter table public\\." + table + " enable row level security", "i"));
   }
-  assert.match(migration, /revoke all on public\.ai_user_memory_preferences,[\s\S]*public\.ai_user_session_messages from anon, authenticated/i);
+  assert.match(migration, /revoke all on public\.ai_user_memory_preferences,[\s\S]*public\.ai_user_session_messages from public, anon, authenticated/i);
   assert.match(migration, /grant all on public\.ai_user_memory_preferences,[\s\S]*public\.ai_user_session_messages to service_role/i);
 });
 
