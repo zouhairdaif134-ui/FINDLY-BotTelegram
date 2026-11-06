@@ -81,6 +81,17 @@ async function attachGenres(supabase, rows) {
   return rows.map((row) => normalizeTitle(row, byTitle.get(row.id) || []));
 }
 
+function relevanceScore(row, query) {
+  const needle = query.toLocaleLowerCase();
+  const title = String(row.title || "").toLocaleLowerCase();
+  const original = String(row.original_title || "").toLocaleLowerCase();
+  if (title === needle || original === needle) return 0;
+  if (title.startsWith(needle) || original.startsWith(needle)) return 1;
+  if (title.includes(needle)) return 2;
+  if (original.includes(needle)) return 3;
+  return 4;
+}
+
 export async function searchCatalog(supabase, input = {}) {
   const query = cleanQuery(input.query);
   if (!query) return [];
@@ -101,7 +112,13 @@ export async function searchCatalog(supabase, input = {}) {
   }));
   const unique = new Map();
   for (const row of searches.flat()) unique.set(row.id, row);
-  const rows = [...unique.values()].slice(0, MAX_RESULTS);
+  const rows = [...unique.values()]
+    .sort((a, b) =>
+      relevanceScore(a, query) - relevanceScore(b, query) ||
+      (Number(b.rating) || 0) - (Number(a.rating) || 0) ||
+      String(b.release_date || "").localeCompare(String(a.release_date || ""))
+    )
+    .slice(0, MAX_RESULTS);
   return attachGenres(supabase, rows);
 }
 
