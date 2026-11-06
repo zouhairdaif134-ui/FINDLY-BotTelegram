@@ -1508,7 +1508,7 @@ export function validatePublicPlacementQuery(input = {}) {
     throw new Error("slot_key is invalid");
   }
   const originHost = requireText(value.origin_host, "origin_host", 253).toLowerCase();
-  if (!/^(?:[a-z0-9-]+\\.)+[a-z]{2,63}$/.test(originHost)) {
+  if (!/^(?:[a-z0-9-]+\.)+[a-z]{2,63}$/.test(originHost)) {
     throw new Error("origin_host must be a valid website hostname");
   }
   return {
