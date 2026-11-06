@@ -37,3 +37,11 @@ test("validates bot username, platform, and movie id", () => {
   assert.throws(() => buildMovieShareContent(movie, "FindlyMoviesBot", "x"), /platform/);
   assert.throws(() => buildMovieShareContent({ ...movie, id: "nope" }, "FindlyMoviesBot", "instagram"), /identifier/);
 });
+
+test("Facebook shares a public movie landing page, not the Telegram deep link", () => {
+  const share = buildMovieShareContent(movie, "FindlyMoviesBot", "facebook");
+  assert.match(share.sharePageUrl, /^https:\/\/findly-v3-api\.berrchidcity99\.workers\.dev\/share\/movie\//);
+  assert.match(share.facebookShareUrl, /sharer\/sharer\.php\?u=/);
+  assert.ok(share.facebookShareUrl.includes(encodeURIComponent(share.sharePageUrl)));
+  assert.ok(!share.facebookShareUrl.includes(encodeURIComponent(share.telegramUrl)));
+});
