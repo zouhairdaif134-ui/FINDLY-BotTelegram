@@ -381,7 +381,7 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
   const record = {
     media_type: mediaType, title, original_title: originalTitle || null,
     normalized_title: normalized, overview: details.overview || null,
-    release_date: releaseDate || null, release_year,
+    release_date: releaseDate || null, release_year: releaseYear,
     runtime_minutes: isSeries ? null : details.runtime || null,
     rating: Number.isFinite(Number(details.vote_average)) ? Math.round(Number(details.vote_average) * 10) / 10 : null,
     poster_path: tmdbImage(details.poster_path), backdrop_path: tmdbImage(details.backdrop_path),
