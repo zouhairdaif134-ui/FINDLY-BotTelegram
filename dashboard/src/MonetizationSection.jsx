@@ -280,6 +280,15 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
     if (result) await loadCampaignPlacements(selectedCampaign);
   }
 
+  async function unlinkPlacement(placementId) {
+    if (!window.confirm("إزالة هاد Placement من الحملة؟")) return;
+    const result = await runMutation(
+      "/api/monetization/campaigns/" + selectedCampaign + "/placements/" + placementId,
+      "DELETE", {}, "تم فك ربط Placement."
+    );
+    if (result) await loadCampaignPlacements(selectedCampaign);
+  }
+
   async function changeCampaignStatus(item, status) {
     if (status === "active" && !window.confirm("تأكيد تشغيل الحملة؟ لن تعمل إلا إذا كان Provider وZone وPlacement مفعّلين ومتحققاً منهم.")) return;
     if (status === "cancelled" && !window.confirm("تأكيد إلغاء الحملة؟ لا يمكن إعادة تفعيل حملة ملغاة.")) return;
@@ -551,7 +560,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                   {item.status === "paused" && <button type="button" className="monetization-secondary" onClick={() => changeCampaignStatus(item, item.starts_at && new Date(item.starts_at) > new Date() ? "scheduled" : "active")}>Resume</button>}
                   {!["cancelled", "completed"].includes(item.status) && <button type="button" className="monetization-secondary" onClick={() => changeCampaignStatus(item, "cancelled")}>Cancel</button>}
                   </td></tr>)}{!campaigns.length && <tr><td colSpan="7">No campaigns created.</td></tr>}</tbody></table></div>
-                {selectedCampaign && <div className="monetization-placement-linker"><h4>Campaign placement assignment</h4><p>Selected campaign: {campaigns.find((c) => c.id === selectedCampaign)?.name || selectedCampaign}</p><div className="monetization-inline-search"><select value={selectedPlacement} onChange={(e) => setSelectedPlacement(e.target.value)}><option value="">Choose compatible placement</option>{placements.filter((p) => p.is_enabled && p.channel === campaigns.find((c) => c.id === selectedCampaign)?.channel && p.format === campaigns.find((c) => c.id === selectedCampaign)?.format).map((p) => <option key={p.id} value={p.id}>{p.page_key} · {p.slot_key} · {p.is_enabled ? "Enabled" : "Off"}</option>)}</select><button type="button" className="monetization-primary" disabled={!selectedPlacement || saving} onClick={linkPlacement}>Assign placement</button></div><ul>{campaignLinks.map((link) => <li key={link.placement_id}>{placements.find((p) => p.id === link.placement_id)?.slot_key || link.placement_id}</li>)}</ul></div>}
+                {selectedCampaign && <div className="monetization-placement-linker"><h4>Campaign placement assignment</h4><p>Selected campaign: {campaigns.find((c) => c.id === selectedCampaign)?.name || selectedCampaign}</p><div className="monetization-inline-search"><select value={selectedPlacement} onChange={(e) => setSelectedPlacement(e.target.value)}><option value="">Choose compatible placement</option>{placements.filter((p) => p.is_enabled && p.channel === campaigns.find((c) => c.id === selectedCampaign)?.channel && p.format === campaigns.find((c) => c.id === selectedCampaign)?.format).map((p) => <option key={p.id} value={p.id}>{p.page_key} · {p.slot_key} · {p.is_enabled ? "Enabled" : "Off"}</option>)}</select><button type="button" className="monetization-primary" disabled={!selectedPlacement || saving} onClick={linkPlacement}>Assign placement</button></div><ul>{campaignLinks.map((link) => <li key={link.placement_id}>{placements.find((p) => p.id === link.placement_id)?.slot_key || link.placement_id} <button type="button" className="monetization-secondary" onClick={() => unlinkPlacement(link.placement_id)}>Unlink</button></li>)}</ul></div>}
               </section>
             </div>
           )}
