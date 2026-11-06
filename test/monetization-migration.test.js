@@ -93,13 +93,13 @@ test("stores accountable provider-zone verification rather than trusting an enab
 });
 
 test("seeds granular monetization permissions for Owner without granting Manager by default", () => {
-  assert.match(migration, /monetization\\.view/i);
-  assert.match(migration, /monetization\\.providers\\.manage/i);
-  assert.match(migration, /monetization\\.providers\\.verify/i);
-  assert.match(migration, /monetization\\.placements\\.manage/i);
-  assert.match(migration, /monetization\\.campaigns\\.manage/i);
-  assert.match(migration, /monetization\\.transactions\\.view/i);
-  assert.match(migration, /monetization\\.transactions\\.manage/i);
-  assert.match(migration, /monetization\\.users\\.manage/i);
-  assert.match(migration, /where r\\.name = 'owner'/i);
+  assert.match(migration, /monetization\.view/i);
+  assert.match(migration, /monetization\.providers\.manage/i);
+  assert.match(migration, /monetization\.providers\.verify/i);
+  assert.match(migration, /monetization\.placements\.manage/i);
+  assert.match(migration, /monetization\.campaigns\.manage/i);
+  assert.match(migration, /monetization\.transactions\.view/i);
+  assert.match(migration, /monetization\.transactions\.manage/i);
+  assert.match(migration, /monetization\.users\.manage/i);
+  assert.match(migration, /where r\.name = 'owner'/i);
 });
