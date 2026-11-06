@@ -70,10 +70,10 @@ test("preserves financial provenance and corrections as append-only ledger entri
   assert.match(migration, /add column if not exists provenance text not null default 'provider_reported'/i);
   assert.match(migration, /add column if not exists entry_type text not null default 'revenue'/i);
   assert.match(migration, /add column if not exists direction text not null default 'credit'/i);
-  assert.match(migration, /add column if not exists reverses_event_id uuid references public\\.monetization_events/i);
+  assert.match(migration, /add column if not exists reverses_event_id uuid references public\.monetization_events/i);
   assert.match(migration, /reconciliation_status/i);
   assert.match(migration, /unique index[^;]*reverses_event_id/is);
-  assert.match(migration, /revoke update, delete on table public\\.monetization_events from public, anon, authenticated, service_role/i);
-  assert.match(migration, /grant select, insert on table public\\.monetization_events to service_role/i);
-  assert.match(migration, /revoke update, delete on table public\\.ad_delivery_events from public, anon, authenticated, service_role/i);
+  assert.match(migration, /revoke update, delete on table public\.monetization_events from public, anon, authenticated, service_role/i);
+  assert.match(migration, /grant select, insert on table public\.monetization_events to service_role/i);
+  assert.match(migration, /revoke update, delete on table public\.ad_delivery_events from public, anon, authenticated, service_role/i);
 });
