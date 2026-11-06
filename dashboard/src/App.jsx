@@ -5,6 +5,7 @@ import AnalyticsSection from "./AnalyticsSection.jsx";
 import AdminsSection from "./AdminsSection.jsx";
 import ActivityLogSection from "./ActivityLogSection.jsx";
 import MonetizationSection from "./MonetizationSection.jsx";
+import AISection from "./AISection.jsx";
 import { buildMovieShareContent } from "../../src/lib/movie-sharing.js";
 
 const PRODUCTION_API_URL =
@@ -1970,7 +1971,11 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
           />
         )}
 
-        {["AI", "Settings"].includes(activeSection) && (
+        {activeSection === "AI" && (
+          <AISection fetchApi={fetchApi} bots={bots} />
+        )}
+
+        {activeSection === "Settings" && (
           <ComingSoonSection section={activeSection} />
         )}
       </main>
