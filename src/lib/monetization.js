@@ -178,6 +178,9 @@ export function validateProviderZoneInput(input) {
       throw new Error("site_domain must be a valid hostname");
     }
   }
+  if (channel === "website" && !siteDomain) {
+    throw new Error("website provider zones require an approved site_domain");
+  }
   return {
     provider_id: requireUuid(value.provider_id, "provider_id"),
     channel,
