@@ -129,6 +129,6 @@ test("seeds independent website and Telegram default frequency policies", () => 
 });
 
 test("reserves Direct Advertisers as inactive and pauses any legacy direct campaigns", () => {
-  assert.match(migration, /values \\('Direct Advertisers', 'direct', 'direct', false/i);
-  assert.match(migration, /where campaign_type = 'direct'\\s+and status in \\('active','scheduled'\\)/i);
+  assert.match(migration, /values \('Direct Advertisers', 'direct', 'direct', false/i);
+  assert.match(migration, /where campaign_type = 'direct'\s+and status in \('active','scheduled'\)/i);
 });
