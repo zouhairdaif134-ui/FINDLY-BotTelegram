@@ -4,7 +4,7 @@
 
 This implementation adds the Owner-controlled Monetization API, Dashboard workspace, database controls, Telegram interaction-triggered ad delivery, and a public read-only website placement configuration endpoint.
 
-The repository contains the Cloudflare Worker, Telegram bot, admin Dashboard, and public social-share HTML pages. It does not contain a separate consumer website frontend for Home, Search, Movie Details, or Watch pages. Those page placements can be configured and read through the API, but their actual rendering requires the consumer website frontend to integrate the endpoint and the provider's official tag/SDK. No provider script is accepted from Dashboard input or fabricated by FINDLY.
+The FINDLY-BotTelegram repository contains the Cloudflare Worker, Telegram bot, admin Dashboard, and public social-share HTML pages. The separate `zouhairdaif134-ui/findly-v3-api` repository currently contains only a README and no consumer page implementation. Therefore Home, Search, Movie Details, and Watch placements can be configured and safely read through the public API, but their actual rendering still requires the consumer website frontend to integrate the endpoint and the provider's official tag/SDK. No provider script is accepted from Dashboard input or fabricated by FINDLY.
 
 ## Safe provider activation sequence
 
