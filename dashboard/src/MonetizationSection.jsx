@@ -68,7 +68,8 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
     format: "banner", provider_zone_id: "", is_enabled: false, priority: 100
   });
   const [frequencyForm, setFrequencyForm] = useState({
-    channel: "website", max_per_user: 3, cooldown_seconds: 3600,
+    channel: "website", scope: "default", campaign_id: "", placement_id: "",
+    max_per_user: 3, cooldown_seconds: 3600,
     max_per_session: 1, rolling_window_minutes: 1440, is_enabled: true
   });
   const [campaignForm, setCampaignForm] = useState({
@@ -114,7 +115,14 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
   }, [bots]);
 
   const activeZones = useMemo(() => zones.filter((zone) => zone.is_verified && zone.is_active), [zones]);
-  const currentPolicy = policies.find((item) => item.channel === frequencyForm.channel && !item.campaign_id && !item.placement_id);
+  const currentPolicy = policies.find((item) =>
+    item.channel === frequencyForm.channel &&
+    (frequencyForm.scope === "campaign"
+      ? item.campaign_id === frequencyForm.campaign_id
+      : frequencyForm.scope === "placement"
+        ? item.placement_id === frequencyForm.placement_id
+        : !item.campaign_id && !item.placement_id)
+  );
 
   useEffect(() => {
     if (!currentPolicy) return;
@@ -126,7 +134,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
       rolling_window_minutes: currentPolicy.rolling_window_minutes,
       is_enabled: currentPolicy.is_enabled
     }));
-  }, [currentPolicy?.id, frequencyForm.channel]);
+  }, [currentPolicy?.id, frequencyForm.channel, frequencyForm.scope, frequencyForm.campaign_id, frequencyForm.placement_id]);
 
   async function runMutation(path, method, body, successMessage) {
     setSaving(true);
@@ -197,10 +205,14 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
   async function saveFrequency(event) {
     event.preventDefault();
     await runMutation("/api/monetization/frequency-policies", "POST", {
-      ...frequencyForm, max_per_user: Number(frequencyForm.max_per_user),
+      channel: frequencyForm.channel,
+      campaign_id: frequencyForm.scope === "campaign" ? frequencyForm.campaign_id : null,
+      placement_id: frequencyForm.scope === "placement" ? frequencyForm.placement_id : null,
+      max_per_user: Number(frequencyForm.max_per_user),
       cooldown_seconds: Number(frequencyForm.cooldown_seconds),
       max_per_session: Number(frequencyForm.max_per_session),
-      rolling_window_minutes: Number(frequencyForm.rolling_window_minutes)
+      rolling_window_minutes: Number(frequencyForm.rolling_window_minutes),
+      is_enabled: frequencyForm.is_enabled
     }, "تم تحديث سياسة تكرار الإعلانات.");
   }
 
@@ -467,15 +479,19 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
               <section className="monetization-panel">
                 <h3>Frequency & user exclusions</h3>
                 <form className="monetization-form" onSubmit={saveFrequency}>
-                  <label>Channel<select value={frequencyForm.channel} onChange={(e) => setFrequencyForm({ ...frequencyForm, channel: e.target.value })}><option value="website">Website</option><option value="telegram">Telegram</option></select></label>
+                  <label>Channel<select value={frequencyForm.channel} onChange={(e) => setFrequencyForm({ ...frequencyForm, channel: e.target.value, scope: "default", campaign_id: "", placement_id: "" })}><option value="website">Website</option><option value="telegram">Telegram</option></select></label>
+                  <label>Policy scope<select value={frequencyForm.scope} onChange={(e) => setFrequencyForm({ ...frequencyForm, scope: e.target.value, campaign_id: "", placement_id: "" })}><option value="default">Channel default</option><option value="campaign">Specific campaign</option><option value="placement">Specific placement</option></select></label>
+                  {frequencyForm.scope === "campaign" && <label>Campaign<select value={frequencyForm.campaign_id} onChange={(e) => setFrequencyForm({ ...frequencyForm, campaign_id: e.target.value })}><option value="">Choose campaign</option>{campaigns.filter((c) => c.channel === frequencyForm.channel).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
+                  {frequencyForm.scope === "placement" && <label>Placement<select value={frequencyForm.placement_id} onChange={(e) => setFrequencyForm({ ...frequencyForm, placement_id: e.target.value })}><option value="">Choose placement</option>{placements.filter((p) => p.channel === frequencyForm.channel).map((p) => <option key={p.id} value={p.id}>{p.page_key} · {p.slot_key}</option>)}</select></label>}
                   <label>Max per user / 30 days<input type="number" min="1" max="100" value={frequencyForm.max_per_user} onChange={(e) => setFrequencyForm({ ...frequencyForm, max_per_user: e.target.value })} /></label>
                   <label>Cooldown · seconds<input type="number" min="0" max="604800" value={frequencyForm.cooldown_seconds} onChange={(e) => setFrequencyForm({ ...frequencyForm, cooldown_seconds: e.target.value })} /></label>
                   <label>Max per conversation window<input type="number" min="1" max="20" value={frequencyForm.max_per_session} onChange={(e) => setFrequencyForm({ ...frequencyForm, max_per_session: e.target.value })} /></label>
                   <label>Window · minutes<input type="number" min="1" max="43200" value={frequencyForm.rolling_window_minutes} onChange={(e) => setFrequencyForm({ ...frequencyForm, rolling_window_minutes: e.target.value })} /></label>
                   <label className="monetization-check"><input type="checkbox" checked={frequencyForm.is_enabled} onChange={(e) => setFrequencyForm({ ...frequencyForm, is_enabled: e.target.checked })} /> Apply frequency policy</label>
-                  <button className="monetization-primary" disabled={saving}>Save frequency policy</button>
+                  <button className="monetization-primary" disabled={saving || (frequencyForm.scope === "campaign" && !frequencyForm.campaign_id) || (frequencyForm.scope === "placement" && !frequencyForm.placement_id)}>Save frequency policy</button>
                 </form>
-                <p className="monetization-muted">Current saved default: {currentPolicy ? currentPolicy.max_per_user + " / user · " + currentPolicy.cooldown_seconds + "s cooldown · " + currentPolicy.max_per_session + " / " + currentPolicy.rolling_window_minutes + "m" : "No saved default yet."}</p>
+                <p className="monetization-muted">Current saved policy: {currentPolicy ? currentPolicy.max_per_user + " / user per 30d · " + currentPolicy.cooldown_seconds + "s cooldown · " + currentPolicy.max_per_session + " / " + currentPolicy.rolling_window_minutes + "m" : "No saved policy for this scope."}</p>
+                <div className="monetization-table-wrap"><table><thead><tr><th>Channel</th><th>Scope</th><th>Max / user</th><th>Cooldown</th><th>Max / window</th><th>Status</th></tr></thead><tbody>{policies.map((policy) => <tr key={policy.id}><td>{policy.channel}</td><td>{policy.campaign_id ? "Campaign" : policy.placement_id ? "Placement" : "Default"}</td><td>{policy.max_per_user}</td><td>{policy.cooldown_seconds}s</td><td>{policy.max_per_session} / {policy.rolling_window_minutes}m</td><td>{policy.is_enabled ? "Enabled" : "Off"}</td></tr>)}</tbody></table></div>
                 <div className="monetization-table-wrap"><table><thead><tr><th>User ID</th><th>Reason</th><th>Note</th><th></th></tr></thead><tbody>{exclusions.map((item) => <tr key={item.user_id}><td>{item.user_id}</td><td>{item.reason}</td><td>{item.note || "—"}</td><td><button type="button" className="monetization-secondary" onClick={() => includeUser(item)}>Remove exclusion</button></td></tr>)}{!exclusions.length && <tr><td colSpan="4">No excluded users.</td></tr>}</tbody></table></div>
                 <form className="monetization-form" onSubmit={excludeUser}>
                   <label>User ID<input value={exclusionForm.user_id} onChange={(e) => setExclusionForm({ ...exclusionForm, user_id: e.target.value })} required /></label>
