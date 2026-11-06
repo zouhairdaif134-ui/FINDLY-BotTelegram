@@ -1869,7 +1869,7 @@ export default {
         return withCors(success(await getActivity(env, url)), request);
       }
 
-      if (url.pathname.match(/^\\/api\\/movies\\/[0-9a-f-]{36}\\/share$/i) && request.method === "POST") {
+      if (url.pathname.match(/^\/api\/movies\/[0-9a-f-]{36}\/share$/i) && request.method === "POST") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentView);
         if (auth.response) return withCors(auth.response, request);
         const movieId = getId(url);
