@@ -38,9 +38,7 @@ export async function getAIAdminConfig(env, botId) {
   };
 }
 
-export async function saveAIAdminConfig(env, payload, actor) {
-  const botId = requireBotId(payload?.bot_id);
-  const input = payload?.config;
+export function normalizeAIAdminInput(input, env = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("config must be an object");
   }
@@ -76,16 +74,23 @@ export async function saveAIAdminConfig(env, payload, actor) {
   if (input.api_url && normalized.apiUrl !== input.api_url.trim()) {
     throw new Error("Provider URL is not allowed; configure its hostname in AI_ALLOWED_HOSTS first");
   }
-  const stored = {
-    enabled: normalized.enabled,
-    model: normalized.model,
-    api_url: normalized.apiUrl,
-    system_prompt: normalized.systemPrompt,
-    temperature: normalized.temperature,
-    max_tokens: normalized.maxTokens,
-    timeout_ms: normalized.timeoutMs
+  return {
+    normalized,
+    stored: {
+      enabled: normalized.enabled,
+      model: normalized.model,
+      api_url: normalized.apiUrl,
+      system_prompt: normalized.systemPrompt,
+      temperature: normalized.temperature,
+      max_tokens: normalized.maxTokens,
+      timeout_ms: normalized.timeoutMs
+    }
   };
+}
 
+export async function saveAIAdminConfig(env, payload, actor) {
+  const botId = requireBotId(payload?.bot_id);
+  const { normalized, stored } = normalizeAIAdminInput(payload?.config, env);
   const settings = await getSettings(env, botId);
   const existing = settings.find((item) => item.setting_key === "ai");
   if (existing?.id) {
