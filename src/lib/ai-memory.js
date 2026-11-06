@@ -273,11 +273,23 @@ export async function setAIMemorySessionEnabled(supabase, userId, botId, enabled
 }
 
 export async function cleanupExpiredAISessionMessages(supabase) {
+  const now = new Date().toISOString();
   const { error } = await supabase
     .from("ai_user_session_messages")
     .delete()
-    .lte("expires_at", new Date().toISOString());
+    .lte("expires_at", now);
   if (error) throw error;
+
+  const { error: pendingError } = await supabase
+    .from("ai_user_memory_preferences")
+    .update({
+      pending_preference: null,
+      pending_action: null,
+      pending_action_token: null,
+      pending_action_expires_at: null
+    })
+    .lte("pending_action_expires_at", now);
+  if (pendingError) throw pendingError;
 }
 
 export async function getAISessionHistory(supabase, userId, botId) {
