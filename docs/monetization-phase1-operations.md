@@ -40,7 +40,9 @@ Default frequency policy per channel: 3 attempts per user in a rolling 30 days, 
 
 Unauthenticated read-only endpoint:
 
-`GET /api/monetization/public/placements?page=home&slot=home-top`
+`GET /api/monetization/public/placements?page=home&slot=home-top&visitor=<random-uuid>&view=<random-uuid>`
+
+The consumer website generates one random `visitor` UUID and persists it in first-party storage, then generates a fresh random `view` UUID for each page view. Do not place email addresses, phone numbers, Telegram IDs, or other personal information in these fields. The Worker hashes the visitor UUID with SHA-256 before storing it and atomically applies the website frequency policy before returning each placement.
 
 Allowed page keys: `home`, `search`, `movie_details`, `watch`, `future`.
 
