@@ -404,7 +404,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = pg_catalog, public
-as $
+as $audit_import$
 declare
   v_actor_name text;
   v_title_id uuid;
@@ -416,10 +416,12 @@ declare
   v_is_new boolean := false;
 begin
   select coalesce(nullif(btrim(display_name), ''), 'Administrator')
-    into v_actor_name from public.admin_profiles
-    where id=p_actor_id and is_active=true;
+    into v_actor_name
+  from public.admin_profiles
+  where id = p_actor_id and is_active = true;
   if not found then raise exception 'Active administrator actor not found'; end if;
-  if p_tmdb_id is null or p_tmdb_id !~ '^\\d+
+
+  if p_tmdb_id is null or p_tmdb_id !~ '^\d+
   p_limit integer default 50,
   p_offset integer default 0,
   p_actor_id uuid default null,
@@ -469,14 +471,16 @@ revoke all on function public.admin_audit_update_admin(uuid,uuid,text,boolean,uu
 revoke all on function public.admin_audit_create_admin(uuid,uuid,text,uuid) from public, anon, authenticated;
 revoke all on function public.admin_audit_record_event(uuid,text,text,uuid,jsonb) from public, anon, authenticated;
 revoke all on function public.admin_audit_record_failure(uuid,text,text,uuid,jsonb) from public, anon, authenticated;
-revoke all on function public.admin_audit_import_movie(uuid,text,text,jsonb,jsonb) from public, anon, authenticated;\nrevoke all on function public.admin_audit_list(integer,integer,uuid,text,text,text,timestamptz,timestamptz) from public, anon, authenticated;
+revoke all on function public.admin_audit_import_movie(uuid,text,text,jsonb,jsonb) from public, anon, authenticated;
+revoke all on function public.admin_audit_list(integer,integer,uuid,text,text,text,timestamptz,timestamptz) from public, anon, authenticated;
 
 grant execute on function public.admin_audit_mutate(uuid,text,text,uuid,text,jsonb) to service_role;
 grant execute on function public.admin_audit_update_admin(uuid,uuid,text,boolean,uuid) to service_role;
 grant execute on function public.admin_audit_create_admin(uuid,uuid,text,uuid) to service_role;
 grant execute on function public.admin_audit_record_event(uuid,text,text,uuid,jsonb) to service_role;
 grant execute on function public.admin_audit_record_failure(uuid,text,text,uuid,jsonb) to service_role;
-grant execute on function public.admin_audit_import_movie(uuid,text,text,jsonb,jsonb) to service_role;\ngrant execute on function public.admin_audit_list(integer,integer,uuid,text,text,text,timestamptz,timestamptz) to service_role;
+grant execute on function public.admin_audit_import_movie(uuid,text,text,jsonb,jsonb) to service_role;
+grant execute on function public.admin_audit_list(integer,integer,uuid,text,text,text,timestamptz,timestamptz) to service_role;
  then
     raise exception 'Invalid audit actor or action';
   end if;
@@ -1289,9 +1293,14 @@ grant execute on function public.admin_audit_create_admin(uuid,uuid,text,uuid) t
 grant execute on function public.admin_audit_record_event(uuid,text,text,uuid,jsonb) to service_role;
 grant execute on function public.admin_audit_record_failure(uuid,text,text,uuid,jsonb) to service_role;
 grant execute on function public.admin_audit_list(integer,integer,uuid,text,text,text,timestamptz,timestamptz) to service_role;
- then raise exception 'Invalid TMDB id'; end if;
-  if p_media_type is null or p_media_type not in ('movie','series') then raise exception 'Invalid media type'; end if;
-  if p_movie is null or jsonb_typeof(p_movie) <> 'object' or jsonb_typeof(coalesce(p_genres,'[]'::jsonb)) <> 'array' then
+ then
+    raise exception 'Invalid TMDB id';
+  end if;
+  if p_media_type is null or p_media_type not in ('movie','series') then
+    raise exception 'Invalid media type';
+  end if;
+  if p_movie is null or jsonb_typeof(p_movie) <> 'object'
+     or jsonb_typeof(coalesce(p_genres,'[]'::jsonb)) <> 'array' then
     raise exception 'Invalid movie import payload';
   end if;
   if nullif(p_movie->>'title','') is null or nullif(p_movie->>'normalized_title','') is null then
@@ -1299,30 +1308,34 @@ grant execute on function public.admin_audit_list(integer,integer,uuid,text,text
   end if;
 
   select title_id into v_title_id
-    from public.movie_external_ids
-    where provider='tmdb' and external_id=p_tmdb_id
-    limit 1;
+  from public.movie_external_ids
+  where provider = 'tmdb' and external_id = p_tmdb_id
+  limit 1;
 
   if v_title_id is not null then
-    select to_jsonb(t) into v_old from public.movie_titles t where t.id=v_title_id for update;
+    select to_jsonb(t) into v_old
+    from public.movie_titles t
+    where t.id = v_title_id
+    for update;
     if v_old is null then raise exception 'Existing TMDB movie link is invalid'; end if;
+
     update public.movie_titles
-      set media_type=p_media_type,
-          title=p_movie->>'title',
-          original_title=p_movie->>'original_title',
-          normalized_title=p_movie->>'normalized_title',
-          overview=p_movie->>'overview',
-          release_date=nullif(p_movie->>'release_date','')::date,
-          release_year=nullif(p_movie->>'release_year','')::integer,
-          runtime_minutes=nullif(p_movie->>'runtime_minutes','')::integer,
-          rating=nullif(p_movie->>'rating','')::numeric,
-          poster_path=p_movie->>'poster_path',
-          backdrop_path=p_movie->>'backdrop_path',
-          status='draft',
-          metadata_status='metadata_only',
-          updated_at=now()
-      where id=v_title_id
-      returning to_jsonb(movie_titles.*) into v_new;
+    set media_type = p_media_type,
+        title = p_movie->>'title',
+        original_title = p_movie->>'original_title',
+        normalized_title = p_movie->>'normalized_title',
+        overview = p_movie->>'overview',
+        release_date = nullif(p_movie->>'release_date','')::date,
+        release_year = nullif(p_movie->>'release_year','')::integer,
+        runtime_minutes = nullif(p_movie->>'runtime_minutes','')::integer,
+        rating = nullif(p_movie->>'rating','')::numeric,
+        poster_path = p_movie->>'poster_path',
+        backdrop_path = p_movie->>'backdrop_path',
+        status = 'draft',
+        metadata_status = 'metadata_only',
+        updated_at = now()
+    where id = v_title_id
+    returning to_jsonb(movie_titles.*) into v_new;
   else
     insert into public.movie_titles(
       media_type,title,original_title,normalized_title,overview,release_date,
@@ -1334,40 +1347,55 @@ grant execute on function public.admin_audit_list(integer,integer,uuid,text,text
       nullif(p_movie->>'runtime_minutes','')::integer,
       nullif(p_movie->>'rating','')::numeric,
       p_movie->>'poster_path',p_movie->>'backdrop_path','draft','metadata_only'
-    ) returning id,to_jsonb(movie_titles.*) into v_title_id,v_new;
+    )
+    returning id,to_jsonb(movie_titles.*) into v_title_id,v_new;
+
     insert into public.movie_external_ids(title_id,provider,external_id,external_type)
-      values(v_title_id,'tmdb',p_tmdb_id,p_media_type);
+    values(v_title_id,'tmdb',p_tmdb_id,p_media_type);
     v_is_new := true;
   end if;
 
-  for v_genre in select value from jsonb_array_elements(coalesce(p_genres,'[]'::jsonb))
+  for v_genre in
+    select value from jsonb_array_elements(coalesce(p_genres,'[]'::jsonb))
   loop
     if nullif(v_genre->>'name','') is null or nullif(v_genre->>'external_id','') is null then
       raise exception 'Invalid TMDB genre payload';
     end if;
+
     insert into public.movie_genres(name,slug,source,external_id)
-      values(v_genre->>'name',v_genre->>'slug','provider',v_genre->>'external_id')
-      on conflict (source,external_id) do update
-        set name=excluded.name, slug=excluded.slug
-      returning id into v_genre_id;
+    values(v_genre->>'name',v_genre->>'slug','provider',v_genre->>'external_id')
+    on conflict (source,external_id) do update
+      set name = excluded.name, slug = excluded.slug
+    returning id into v_genre_id;
+
     insert into public.movie_title_genres(title_id,genre_id)
-      values(v_title_id,v_genre_id)
-      on conflict (title_id,genre_id) do nothing;
+    values(v_title_id,v_genre_id)
+    on conflict (title_id,genre_id) do nothing;
   end loop;
 
-  insert into public.admin_audit_logs(actor_id,actor_name,action,entity_type,entity_id,details,old_values,new_values,result)
-  values(
-    p_actor_id,v_actor_name,case when v_is_new then 'movie.import_tmdb' else 'movie.refresh_tmdb' end,
+  insert into public.admin_audit_logs(
+    actor_id,actor_name,action,entity_type,entity_id,details,old_values,new_values,result
+  ) values (
+    p_actor_id,v_actor_name,
+    case when v_is_new then 'movie.import_tmdb' else 'movie.refresh_tmdb' end,
     'movie',v_title_id,
-    public.admin_audit_sanitize_jsonb(jsonb_build_object('provider','tmdb','external_id',p_tmdb_id,'genre_count',jsonb_array_length(coalesce(p_genres,'[]'::jsonb)))),
+    public.admin_audit_sanitize_jsonb(jsonb_build_object(
+      'provider','tmdb','external_id',p_tmdb_id,
+      'genre_count',jsonb_array_length(coalesce(p_genres,'[]'::jsonb))
+    )),
     public.admin_audit_sanitize_jsonb(v_old),
     public.admin_audit_sanitize_jsonb(v_new),
     'success'
-  ) returning id into v_log_id;
+  )
+  returning id into v_log_id;
 
-  return jsonb_build_object('entity_id',v_title_id,'record',public.admin_audit_sanitize_jsonb(v_new),'audit_id',v_log_id);
+  return jsonb_build_object(
+    'entity_id',v_title_id,
+    'record',public.admin_audit_sanitize_jsonb(v_new),
+    'audit_id',v_log_id
+  );
 end;
-$;
+$audit_import$;
 
 create or replace function public.admin_audit_list(
   p_limit integer default 50,
