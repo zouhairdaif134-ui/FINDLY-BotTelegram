@@ -79,8 +79,8 @@ test("preserves financial provenance and corrections as append-only ledger entri
 });
 
 test("summarizes net revenue by currency, source and provenance without treating delivery as revenue", () => {
-  assert.match(migration, /create or replace function public\\.get_monetization_revenue_summary/i);
-  assert.match(migration, /sum\\(case direction when 'credit' then amount else -amount end\\)/i);
+  assert.match(migration, /create or replace function public\.get_monetization_revenue_summary/i);
+  assert.match(migration, /sum\(case direction when 'credit' then amount else -amount end\)/i);
   assert.match(migration, /group by currency, revenue_source, provenance/i);
-  assert.match(migration, /grant execute on function public\\.get_monetization_revenue_summary\\(timestamptz\\) to service_role/i);
+  assert.match(migration, /grant execute on function public\.get_monetization_revenue_summary\(timestamptz\) to service_role/i);
 });
