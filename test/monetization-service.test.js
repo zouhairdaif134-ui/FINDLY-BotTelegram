@@ -266,3 +266,15 @@ test("maps Telegram updates to explicit ad interaction triggers", () => {
   assert.equal(getTrigger({ callback_query: { data: "menu:abc" } }), "callback");
   assert.equal(getTrigger({ message: { text: "hello" } }), "message");
 });
+
+test("evaluates campaign and placement schedules at the supplied clock", () => {
+  const isActiveSchedule = requireFunction("isActiveSchedule");
+  const now = Date.parse("2026-11-06T12:00:00.000Z");
+  assert.equal(isActiveSchedule({}, now), true);
+  assert.equal(isActiveSchedule({ starts_at: "2026-11-06T13:00:00.000Z" }, now), false);
+  assert.equal(isActiveSchedule({ ends_at: "2026-11-06T11:59:59.000Z" }, now), false);
+  assert.equal(isActiveSchedule({
+    starts_at: "2026-11-06T12:00:00.000Z",
+    ends_at: "2026-11-06T12:05:00.000Z"
+  }, now), true);
+});
