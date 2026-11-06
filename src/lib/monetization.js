@@ -300,7 +300,7 @@ export function validateCampaignInput(input) {
   }
   return {
     bot_id: requireUuid(value.bot_id, "bot_id"),
-    provider_id: value.provider_id ? requireUuid(value.provider_id, "provider_id") : null,
+    provider_id: requireUuid(value.provider_id, "provider_id"),
     name: requireText(value.name, "campaign name", 120),
     campaign_type: "external",
     status: "draft",
@@ -464,7 +464,7 @@ export async function listAdProviders(env) {
 export async function listAdProviderZones(env, filters = {}) {
   let query = getSupabase(env)
     .from("ad_provider_zones")
-    .select("id,provider_id,channel,format,external_zone_id,site_domain,is_verified,is_active,verified_at,metadata,created_at,updated_at")
+    .select("id,provider_id,channel,format,external_zone_id,site_domain,is_verified,is_active,verified_at,verified_by,verification_method,metadata,created_at,updated_at")
     .order("created_at", { ascending: false });
   if (filters.provider_id) query = query.eq("provider_id", requireUuid(filters.provider_id, "provider_id"));
   if (filters.channel) query = query.eq("channel", filters.channel);
@@ -552,8 +552,8 @@ export async function saveAdProviderZone(env, input) {
 export async function saveAdPlacement(env, input) {
   const payload = validatePlacementInput(input);
   const supabase = getSupabase(env);
-  if (payload.is_enabled && payload.channel === "website") {
-    if (!payload.provider_zone_id) throw new Error("an enabled website placement requires a verified provider zone");
+  if (payload.is_enabled) {
+    if (!payload.provider_zone_id) throw new Error("an enabled placement requires a verified provider zone");
     const { data: zone, error } = await supabase
       .from("ad_provider_zones")
       .select("id,channel,format,is_verified,is_active")
@@ -580,16 +580,18 @@ export async function saveAdPlacement(env, input) {
 
 export async function saveFrequencyPolicy(env, input) {
   const payload = validateFrequencyPolicyInput(input);
-  const conflict = payload.campaign_id
-    ? "channel,campaign_id"
-    : payload.placement_id
-      ? "channel,placement_id"
-      : "channel";
-  const { data, error } = await getSupabase(env)
-    .from("ad_frequency_policies")
-    .upsert(payload, { onConflict: conflict })
-    .select("*")
-    .single();
+  const supabase = getSupabase(env);
+  let lookup = supabase.from("ad_frequency_policies").select("id").eq("channel", payload.channel);
+  if (payload.campaign_id) lookup = lookup.eq("campaign_id", payload.campaign_id);
+  else lookup = lookup.is("campaign_id", null);
+  if (payload.placement_id) lookup = lookup.eq("placement_id", payload.placement_id);
+  else lookup = lookup.is("placement_id", null);
+  const { data: existing, error: lookupError } = await lookup.maybeSingle();
+  throwIfError(lookupError);
+  const write = existing
+    ? supabase.from("ad_frequency_policies").update(payload).eq("id", existing.id)
+    : supabase.from("ad_frequency_policies").insert(payload);
+  const { data, error } = await write.select("*").single();
   throwIfError(error);
   return data;
 }
@@ -620,9 +622,145 @@ export async function saveAdCampaign(env, input) {
   return data;
 }
 
+export async function addCampaignPlacement(env, campaignId, placementId) {
+  const campaignKey = requireUuid(campaignId, "campaign id");
+  const placementKey = requireUuid(placementId, "placement id");
+  const supabase = getSupabase(env);
+  const { data: campaign, error: campaignError } = await supabase
+    .from("ad_campaigns")
+    .select("id,channel,format,status,campaign_type")
+    .eq("id", campaignKey)
+    .maybeSingle();
+  throwIfError(campaignError);
+  if (!campaign) throw new Error("campaign was not found");
+  if (campaign.campaign_type !== "external") throw new Error("direct advertiser campaigns are locked until Phase 2");
+  if (campaign.status === "active") throw new Error("pause the campaign before changing its placements");
+  const { data: placement, error: placementError } = await supabase
+    .from("ad_placements")
+    .select("id,channel,format")
+    .eq("id", placementKey)
+    .maybeSingle();
+  throwIfError(placementError);
+  if (!placement || placement.channel !== campaign.channel || placement.format !== campaign.format) {
+    throw new Error("placement channel and format must match the campaign");
+  }
+  const { error } = await supabase
+    .from("ad_campaign_placements")
+    .insert({ campaign_id: campaignKey, placement_id: placementKey });
+  if (error && error.code !== "23505") throw error;
+  return { campaign_id: campaignKey, placement_id: placementKey };
+}
+
+export async function removeCampaignPlacement(env, campaignId, placementId) {
+  const campaignKey = requireUuid(campaignId, "campaign id");
+  const placementKey = requireUuid(placementId, "placement id");
+  const supabase = getSupabase(env);
+  const { data: campaign, error: campaignError } = await supabase
+    .from("ad_campaigns")
+    .select("id,status")
+    .eq("id", campaignKey)
+    .maybeSingle();
+  throwIfError(campaignError);
+  if (!campaign) throw new Error("campaign was not found");
+  if (campaign.status === "active") throw new Error("pause the campaign before changing its placements");
+  const { error } = await supabase
+    .from("ad_campaign_placements")
+    .delete()
+    .eq("campaign_id", campaignKey)
+    .eq("placement_id", placementKey);
+  throwIfError(error);
+  return { campaign_id: campaignKey, placement_id: placementKey, removed: true };
+}
+
+export async function verifyAdProviderZone(env, zoneId, actor, confirmation) {
+  const id = requireUuid(zoneId, "provider zone id");
+  if (confirmation !== true) throw new Error("explicit Owner confirmation is required after testing the provider zone");
+  if (!actor?.userId) throw new Error("verified administrator identity is required");
+  const supabase = getSupabase(env);
+  const { data: zone, error: zoneError } = await supabase
+    .from("ad_provider_zones")
+    .select("id,is_verified")
+    .eq("id", id)
+    .maybeSingle();
+  throwIfError(zoneError);
+  if (!zone) throw new Error("provider zone was not found");
+  const { data, error } = await supabase
+    .from("ad_provider_zones")
+    .update({
+      is_verified: true,
+      is_active: false,
+      verified_at: new Date().toISOString(),
+      verified_by: actor.userId,
+      verification_method: "owner_test_confirmation",
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id)
+    .select("id,is_verified,is_active,verified_at,verified_by,verification_method")
+    .single();
+  throwIfError(error);
+  return data;
+}
+
+export async function setAdProviderZoneStatus(env, zoneId, enabled) {
+  const id = requireUuid(zoneId, "provider zone id");
+  const supabase = getSupabase(env);
+  const { data: zone, error: zoneError } = await supabase
+    .from("ad_provider_zones")
+    .select("id,is_verified")
+    .eq("id", id)
+    .maybeSingle();
+  throwIfError(zoneError);
+  if (!zone) throw new Error("provider zone was not found");
+  if (enabled === true && !zone.is_verified) {
+    throw new Error("provider zone must be verified before it can be enabled");
+  }
+  const { data, error } = await supabase
+    .from("ad_provider_zones")
+    .update({ is_active: enabled === true, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id,is_verified,is_active,updated_at")
+    .single();
+  throwIfError(error);
+  return data;
+}
+
+export async function setAdProviderStatus(env, providerId, enabled) {
+  const id = requireUuid(providerId, "provider id");
+  const supabase = getSupabase(env);
+  const { data: provider, error: providerError } = await supabase
+    .from("ad_providers")
+    .select("id,provider_type")
+    .eq("id", id)
+    .maybeSingle();
+  throwIfError(providerError);
+  if (!provider) throw new Error("provider was not found");
+  if (provider.provider_type === "direct") throw new Error("direct advertisers are locked until Phase 2");
+  if (enabled === true) {
+    const { data: zones, error: zonesError } = await supabase
+      .from("ad_provider_zones")
+      .select("id")
+      .eq("provider_id", id)
+      .eq("is_verified", true)
+      .eq("is_active", true)
+      .limit(1);
+    throwIfError(zonesError);
+    if (!zones?.length) throw new Error("provider requires at least one verified active zone");
+  }
+  const { data, error } = await supabase
+    .from("ad_providers")
+    .update({ is_active: enabled === true, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id,name,slug,provider_type,is_active,settings,created_at,updated_at")
+    .single();
+  throwIfError(error);
+  return safeProviderView(data);
+}
+
 export async function setCampaignStatus(env, campaignId, status) {
   const id = requireUuid(campaignId, "campaign id");
-  if (!["active", "paused", "cancelled"].includes(status)) throw new Error("campaign status transition is invalid");
+  if (!["scheduled", "active", "paused", "cancelled"].includes(status)) {
+    throw new Error("campaign status transition is invalid");
+  }
   const supabase = getSupabase(env);
   const { data: campaign, error: campaignError } = await supabase
     .from("ad_campaigns")
@@ -632,15 +770,59 @@ export async function setCampaignStatus(env, campaignId, status) {
   throwIfError(campaignError);
   if (!campaign) throw new Error("campaign was not found");
   if (campaign.campaign_type !== "external") throw new Error("direct advertiser campaigns are locked until Phase 2");
+  if (campaign.status === "cancelled" || campaign.status === "completed") {
+    throw new Error("a completed or cancelled campaign cannot be reactivated");
+  }
+  const now = Date.now();
+  if (status === "scheduled") {
+    if (!campaign.starts_at || new Date(campaign.starts_at).getTime() <= now) {
+      throw new Error("scheduled campaigns require a future starts_at value");
+    }
+    if (campaign.ends_at && new Date(campaign.ends_at).getTime() <= new Date(campaign.starts_at).getTime()) {
+      throw new Error("campaign ends_at must be later than starts_at");
+    }
+  }
   if (status === "active") {
-    const now = Date.now();
     if (campaign.starts_at && new Date(campaign.starts_at).getTime() > now) {
       throw new Error("campaign is scheduled for a future start time");
     }
     if (campaign.ends_at && new Date(campaign.ends_at).getTime() <= now) {
       throw new Error("campaign schedule has already ended");
     }
+    if (campaign.status === "draft" && campaign.starts_at && new Date(campaign.starts_at).getTime() > now) {
+      throw new Error("schedule this campaign instead of activating it early");
+    }
     if (!campaign.provider_id) throw new Error("campaign requires an external provider");
+    const { data: provider, error: providerError } = await supabase
+      .from("ad_providers")
+      .select("id,provider_type,is_active")
+      .eq("id", campaign.provider_id)
+      .maybeSingle();
+    throwIfError(providerError);
+    if (!provider || provider.provider_type !== "external" || !provider.is_active) {
+      throw new Error("campaign provider must be active and verified");
+    }
+    const { data: links, error: linksError } = await supabase
+      .from("ad_campaign_placements")
+      .select("placement_id")
+      .eq("campaign_id", id);
+    throwIfError(linksError);
+    const placementIds = (links || []).map((item) => item.placement_id);
+    if (!placementIds.length) throw new Error("campaign must be assigned to an enabled placement");
+    const { data: placements, error: placementsError } = await supabase
+      .from("ad_placements")
+      .select("id,channel,format,provider_zone_id,is_enabled,starts_at,ends_at")
+      .in("id", placementIds)
+      .eq("is_enabled", true);
+    throwIfError(placementsError);
+    const compatiblePlacements = (placements || []).filter((item) =>
+      item.channel === campaign.channel &&
+      item.format === campaign.format &&
+      item.provider_zone_id
+    );
+    if (!compatiblePlacements.length) {
+      throw new Error("campaign must be linked to an enabled compatible placement");
+    }
     const { data: zones, error: zoneError } = await supabase
       .from("ad_provider_zones")
       .select("id")
@@ -648,10 +830,15 @@ export async function setCampaignStatus(env, campaignId, status) {
       .eq("channel", campaign.channel)
       .eq("format", campaign.format)
       .eq("is_verified", true)
-      .eq("is_active", true)
-      .limit(1);
+      .eq("is_active", true);
     throwIfError(zoneError);
-    if (!zones?.length) throw new Error("campaign has no verified active provider zone for its channel and format");
+    const activeZoneIds = new Set((zones || []).map((zone) => zone.id));
+    if (!compatiblePlacements.some((placement) => activeZoneIds.has(placement.provider_zone_id))) {
+      throw new Error("campaign has no verified active provider zone attached to an enabled placement");
+    }
+  }
+  if (status === "paused" && !["active", "scheduled"].includes(campaign.status)) {
+    throw new Error("only active or scheduled campaigns can be paused");
   }
   const { data, error } = await supabase
     .from("ad_campaigns")
