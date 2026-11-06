@@ -198,3 +198,31 @@ create table if not exists public.monetization_user_exclusions (
 alter table public.monetization_user_exclusions enable row level security;
 revoke all on table public.monetization_user_exclusions from public, anon, authenticated;
 grant all on table public.monetization_user_exclusions to service_role;
+
+
+-- Rolling 30-day active users. last_seen_at is updated for every incoming
+-- Telegram message/callback before the bot dispatches the user's request.
+-- This function returns only an aggregate count and runs with invoker rights.
+create or replace function public.get_monetization_mau(
+  p_since timestamptz default (now() - interval '30 days')
+)
+returns bigint
+language sql
+stable
+set search_path = pg_catalog, public
+as $$
+  select count(*)::bigint
+  from public.telegram_users u
+  where u.is_active = true
+    and u.is_bot = false
+    and u.last_seen_at >= p_since
+    and u.last_seen_at <= now()
+    and not exists (
+      select 1
+      from public.monetization_user_exclusions e
+      where e.user_id = u.id
+    );
+$$;
+
+revoke all on function public.get_monetization_mau(timestamptz) from public, anon, authenticated;
+grant execute on function public.get_monetization_mau(timestamptz) to service_role;
