@@ -6,7 +6,7 @@ Target: FINDLY Telegram bots and Admin Dashboard
 
 ## Product decisions
 - One shared AI orchestration runtime; user data and conversational context are isolated per Telegram user and per bot.
-- Hybrid memory: short-lived session context plus persistent movie preferences only after explicit Telegram opt-in.
+- Hybrid memory: short-lived session context plus persistent user preferences only after explicit Telegram opt-in.
 - User-facing mutations require a clear preview and explicit confirmation. AI never receives unrestricted database write access.
 - AI remains disabled by default. Existing bot commands and catalog browsing continue to work when AI is disabled, unavailable, or over quota.
 - Prefer free tiers and existing infrastructure. No paid provider, subscription, or production deployment is activated automatically.
