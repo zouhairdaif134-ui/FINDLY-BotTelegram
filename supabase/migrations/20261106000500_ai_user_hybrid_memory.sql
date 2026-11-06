@@ -11,6 +11,8 @@ create table if not exists public.ai_user_memory_preferences (
   preferences jsonb not null default '[]'::jsonb
     check (jsonb_typeof(preferences) = 'array'),
   pending_preference text check (pending_preference is null or char_length(pending_preference) <= 300),
+  pending_action text check (pending_action is null or pending_action in ('save', 'clear')),
+  pending_action_token uuid,
   consented_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -19,6 +21,15 @@ create table if not exists public.ai_user_memory_preferences (
     check (
       (consent_status = 'granted' and consented_at is not null)
       or consent_status <> 'granted'
+    ),
+  constraint ai_memory_pending_action_check
+    check (
+      (pending_action is null and pending_action_token is null and pending_preference is null)
+      or (
+        pending_action is not null
+        and pending_action_token is not null
+        and (pending_action = 'clear' or pending_preference is not null)
+      )
     )
 );
 
