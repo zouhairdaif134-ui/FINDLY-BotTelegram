@@ -1223,7 +1223,7 @@ async function handleAIMemoryCommand(env, bot, chatId, userId, command) {
     const state = await setAIMemorySessionEnabled(supabase, userId, bot.id, true);
     if (state.consent_status !== "granted") {
       await sendMessage(env, bot.slug, chatId,
-        "<b>اختار مستوى الذاكرة</b>\n\nالسياق المؤقت كيحتافظ بآخر 12 رسالة لمدة 30 دقيقة. الذاكرة الدائمة كتحتافظ غير بالتفضيلات اللي كتأكد حفظها. تقدر تبدل اختيارك أو تحذف البيانات باستعمال /memory.",
+        "<b>اختار مستوى الذاكرة</b>\n\nرسائلك كتتعالج عبر مزود الذكاء الاصطناعي المفعّل. السياق المؤقت كيحتافظ بآخر 12 رسالة لمدة 30 دقيقة. الذاكرة الدائمة كتحتافظ غير بالتفضيلات اللي كتأكد حفظها. تقدر تبدل اختيارك أو تحذف البيانات باستعمال /memory.",
         { reply_markup: buildAIMemoryConsentKeyboard() }
       );
     } else {
@@ -1541,7 +1541,7 @@ async function processTelegramUpdate(
       if (memoryUserId && !memoryState) {
         await ensureAIMemoryState(getSupabase(env), memoryUserId, bot.id);
         await sendMessage(env, bot.slug, chatId,
-          "<b>إعدادات الخصوصية ديال المساعد</b>\n\nكنستعمل سياقاً مؤقتاً لآخر 12 رسالة لمدة 30 دقيقة. ما ترسلش كلمات السر أو معلومات حساسة. واش بغيتي حتى نحفظ تفضيلاتك بشكل دائم؟",
+          "<b>إعدادات الخصوصية ديال المساعد</b>\n\nرسائلك كتتعالج عبر مزود الذكاء الاصطناعي المفعّل. كنحتافظ بسياق مؤقت لآخر 12 رسالة لمدة 30 دقيقة. ما ترسلش كلمات السر أو معلومات حساسة. واش بغيتي حتى نحفظ تفضيلاتك بشكل دائم؟",
           { reply_markup: buildAIMemoryConsentKeyboard() }
         );
       }
