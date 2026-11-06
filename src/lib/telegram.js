@@ -83,6 +83,35 @@ export async function telegramRequest(
   return data.result;
 }
 
+export async function sendPhoto(env, botSlug, chatId, photoUrl, options = {}) {
+  let parsedUrl;
+  try { parsedUrl = new URL(photoUrl); } catch { throw new Error("Unsupported poster URL"); }
+  if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "image.tmdb.org" || !parsedUrl.pathname.startsWith("/t/p/")) throw new Error("Unsupported poster URL");
+  const token = getTelegramToken(env, botSlug);
+  let imageResponse;
+  let downloadError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      imageResponse = await fetch(parsedUrl.toString(), { headers: { Accept: "image/*" } });
+      if (!imageResponse.ok) throw new Error("TMDB poster download failed (" + imageResponse.status + ")");
+      if (!String(imageResponse.headers.get("content-type") || "").toLowerCase().startsWith("image/")) throw new Error("TMDB poster response is not an image");
+      break;
+    } catch (error) { downloadError = error; imageResponse = null; }
+  }
+  if (!imageResponse) throw new Error("Unable to retrieve the required movie poster: " + (downloadError?.message || "unknown error"));
+  const imageBlob = await imageResponse.blob();
+  if (!imageBlob.size) throw new Error("TMDB returned an empty movie poster");
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  form.append("photo", imageBlob, "findly-poster");
+  if (options.caption) form.append("caption", options.caption);
+  if (options.parse_mode) form.append("parse_mode", options.parse_mode);
+  if (options.reply_markup) form.append("reply_markup", JSON.stringify(options.reply_markup));
+  const response = await fetch("https://api.telegram.org/bot" + token + "/sendPhoto", { method: "POST", body: form });
+  const data = await response.json();
+  if (!data.ok) { const error = new Error(data.description || "Telegram photo upload failed"); error.code = "TELEGRAM_API_ERROR"; error.status = response.status; throw error; }
+  return data.result;
+}
 export async function sendMessage(
   env,
   botSlug,

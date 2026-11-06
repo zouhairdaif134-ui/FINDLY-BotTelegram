@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase.js";
-import { sendMessage, answerCallback, telegramRequest } from "./telegram.js";
+import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PAGE_SIZE = 8;
@@ -216,7 +216,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   const supabase = getSupabase(env);
   const { data: title, error } = await supabase
     .from("movie_titles")
-    .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,full_plot_summary,metadata_status")
+    .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,full_plot_summary,poster_path,metadata_status")
     .eq("id", titleId)
     .eq("status", "active")
     .maybeSingle();
@@ -277,9 +277,10 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   }
   keyboard.push([{ text: "⬅️ رجوع للقائمة", callback_data: "movies:home" }]);
 
-  await sendMessage(env, bot.slug, chatId, lines.join("\n"), {
-    reply_markup: { inline_keyboard: keyboard }
-  });
+  if (!title.poster_path) throw new Error("Movie poster is missing for title: " + title.id);
+  const posterCaption = "<b>" + escapeHtml(title.title) + "</b>" + (title.release_year ? " · " + title.release_year : "") + " · FINDLY Movies";
+  await sendPhoto(env, bot.slug, chatId, title.poster_path, { caption: posterCaption, parse_mode: "HTML" });
+  await sendMessage(env, bot.slug, chatId, lines.join("\n"), { reply_markup: { inline_keyboard: keyboard } });
 }
 
 async function sendFullPlotSummary(env, bot, chatId, titleId) {
