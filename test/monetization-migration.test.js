@@ -140,3 +140,9 @@ test("provides campaign delivery aggregates separately from financial revenue", 
   assert.match(migration, /count\(\*\) filter \(where e\.event_type = 'failed'\)/i);
   assert.match(migration, /grant execute on function public\.get_monetization_campaign_delivery_summary\(timestamptz\) to service_role/i);
 });
+
+test("prevents duplicate website provider zones from rendering twice on one page", () => {
+  assert.match(migration, /create unique index if not exists ad_placements_unique_website_zone_per_page_idx/i);
+  assert.match(migration, /on public\\.ad_placements \\(provider_zone_id, page_key\\)/i);
+  assert.match(migration, /where channel = 'website' and provider_zone_id is not null/i);
+});
