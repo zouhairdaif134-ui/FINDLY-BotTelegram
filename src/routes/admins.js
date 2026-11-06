@@ -1,4 +1,5 @@
 import { getSupabase } from "../lib/supabase.js";
+import { createAuditedAdmin, updateAuditedAdmin, recordAdminFailure } from "../lib/admin-audit.js";
 
 const ASSIGNABLE_ROLES = new Set(["manager", "content_manager"]);
 
@@ -66,49 +67,45 @@ export async function getAdmins(env) {
   });
 }
 
-export async function inviteAdmin(env, body) {
+export async function inviteAdmin(env, body, actor) {
   const supabase = getSupabase(env);
   const email = normalizeAdminEmail(body?.email);
   const displayName = String(body?.display_name || "").trim();
   const roleId = String(body?.role_id || "").trim();
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error("A valid email address is required");
-  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("A valid email address is required");
   if (!roleId) throw new Error("An administrator role is required");
   if (displayName.length > 100) throw new Error("Display name must be 100 characters or fewer");
 
   const role = await getRoleById(supabase, roleId);
-  if (!isAssignableAdminRole(role)) {
-    throw new Error("Only Manager and Content Manager roles can be assigned");
-  }
+  if (!isAssignableAdminRole(role)) throw new Error("Only Manager and Content Manager roles can be assigned");
 
-  const { data: invitation, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
-    data: { display_name: displayName || email.split("@")[0] }
-  });
-  if (inviteError) throw inviteError;
+  let invitation;
+  try {
+    const result = await supabase.auth.admin.inviteUserByEmail(email, {
+      data: { display_name: displayName || email.split("@")[0] }
+    });
+    if (result.error) throw result.error;
+    invitation = result.data;
+  } catch (error) {
+    await recordAdminFailure(env, actor, {
+      action: "admin.invite", entityType: "admin",
+      failureCode: error?.code || "AUTH_INVITATION_FAILED",
+      failureType: error?.name || "Error"
+    });
+    throw error;
+  }
 
   const invitedUserId = invitation?.user?.id;
-  if (!invitedUserId) {
-    throw new Error("Supabase did not return the invited user identity");
-  }
+  if (!invitedUserId) throw new Error("Supabase did not return the invited user identity");
 
   try {
-    const { error: profileError } = await supabase
-      .from("admin_profiles")
-      .insert({
-        id: invitedUserId,
-        display_name: displayName || email.split("@")[0],
-        is_active: true
-      });
-    if (profileError) throw profileError;
-
-    const { error: roleError } = await supabase
-      .from("admin_roles")
-      .insert({ admin_id: invitedUserId, role_id: role.id });
-    if (roleError) throw roleError;
+    await createAuditedAdmin(env, actor, {
+      id: invitedUserId,
+      displayName: displayName || email.split("@")[0],
+      roleId: role.id
+    });
   } catch (error) {
-    await supabase.from("admin_profiles").delete().eq("id", invitedUserId);
     await supabase.auth.admin.deleteUser(invitedUserId);
     throw error;
   }
@@ -122,30 +119,8 @@ export async function inviteAdmin(env, body) {
   };
 }
 
-export async function updateAdmin(env, id, body, actorId) {
+export async function updateAdmin(env, id, body, actor) {
   if (!id) throw new Error("Administrator id is required");
-  if (id === actorId && body?.is_active === false) {
-    throw new Error("You cannot deactivate your own administrator account");
-  }
-
-  const supabase = getSupabase(env);
-  const { data: profile, error: profileError } = await supabase
-    .from("admin_profiles")
-    .select("id, is_active")
-    .eq("id", id)
-    .maybeSingle();
-  if (profileError) throw profileError;
-  if (!profile) throw new Error("Administrator not found");
-
-  const { data: currentRoles, error: currentRolesError } = await supabase
-    .from("admin_roles")
-    .select("roles(name)")
-    .eq("admin_id", id);
-  if (currentRolesError) throw currentRolesError;
-  if ((currentRoles || []).some((item) => item.roles?.name === "owner")) {
-    throw new Error("The FINDLY Owner account is protected and cannot be modified here");
-  }
-
   const updates = {};
   if (typeof body?.is_active === "boolean") updates.is_active = body.is_active;
   if (typeof body?.display_name === "string") {
@@ -155,30 +130,14 @@ export async function updateAdmin(env, id, body, actorId) {
     }
     updates.display_name = displayName;
   }
+  if (body?.role_id) updates.role_id = String(body.role_id);
+  if (!Object.keys(updates).length) throw new Error("No supported administrator fields to update");
 
-  if (Object.keys(updates).length) {
-    const { error } = await supabase.from("admin_profiles").update(updates).eq("id", id);
-    if (error) throw error;
-  }
-
-  if (body?.role_id) {
-    const role = await getRoleById(supabase, String(body.role_id));
-    if (!isAssignableAdminRole(role)) {
-      throw new Error("Only Manager and Content Manager roles can be assigned");
-    }
-
-    const { error: upsertError } = await supabase
-      .from("admin_roles")
-      .upsert({ admin_id: id, role_id: role.id }, { onConflict: "admin_id,role_id" });
-    if (upsertError) throw upsertError;
-
-    const { error: removeError } = await supabase
-      .from("admin_roles")
-      .delete()
-      .eq("admin_id", id)
-      .neq("role_id", role.id);
-    if (removeError) throw removeError;
-  }
-
-  return { id, ...updates, role_id: body?.role_id || null };
+  await updateAuditedAdmin(env, actor, {
+    id,
+    displayName: updates.display_name ?? null,
+    isActive: updates.is_active ?? null,
+    roleId: updates.role_id ?? null
+  });
+  return { id, ...updates };
 }
