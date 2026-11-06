@@ -1201,8 +1201,11 @@ async function handleAIMemoryCommand(env, bot, chatId, userId, command) {
       ? "السياق المؤقت متوقف."
       : "السياق المؤقت: آخر 12 رسالة، لمدة أقصاها 30 دقيقة.";
     const preferences = state?.consent_status === "granted" && Array.isArray(state.preferences) ? state.preferences : [];
-    const list = preferences.length
-      ? "\n\n<b>التفضيلات المحفوظة:</b>\n" + preferences.map((item, index) => String(index + 1) + ". " + escapeMemoryHtml(item)).join("\n")
+    const visiblePreferences = preferences.slice(-8);
+    const list = visiblePreferences.length
+      ? "\n\n<b>التفضيلات المحفوظة:</b>\n" +
+        visiblePreferences.map((item, index) => String(index + 1) + ". " + escapeMemoryHtml(String(item).slice(0, 200))).join("\n") +
+        (preferences.length > visiblePreferences.length ? "\n... كاينين " + preferences.length + " تفضيلات فالمجموع." : "")
       : "";
     const keyboard = (!state || state.consent_status === "pending")
       ? buildAIMemoryConsentKeyboard()
