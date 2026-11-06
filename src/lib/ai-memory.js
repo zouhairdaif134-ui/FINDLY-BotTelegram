@@ -149,6 +149,13 @@ export async function setAIMemorySessionEnabled(supabase, userId, botId, enabled
 
 export async function getAISessionHistory(supabase, userId, botId) {
   const now = new Date().toISOString();
+  const { error: expiryError } = await supabase
+    .from("ai_user_session_messages")
+    .delete()
+    .eq("user_id", userId)
+    .eq("bot_id", botId)
+    .lte("expires_at", now);
+  if (expiryError) throw expiryError;
   const { data, error } = await supabase
     .from("ai_user_session_messages")
     .select("role,content,created_at")
@@ -225,6 +232,22 @@ export async function clearAIMemory(supabase, userId, botId, revokeConsent = fal
   if (sessionError) throw sessionError;
 
   const state = await getAIMemoryState(supabase, userId, botId);
+  if (!state && revokeConsent) {
+    const { data, error } = await supabase
+      .from("ai_user_memory_preferences")
+      .upsert({
+        user_id: userId,
+        bot_id: botId,
+        consent_status: "denied",
+        session_enabled: false,
+        preferences: [],
+        pending_preference: null
+      }, { onConflict: "user_id,bot_id" })
+      .select("consent_status,session_enabled,preferences")
+      .single();
+    if (error) throw error;
+    return data;
+  }
   if (!state) return { preferences: [], consent_status: "pending" };
   const update = {
     preferences: [],
