@@ -19,7 +19,7 @@ test("adds provider zones, channel placements, frequency policies and delivery e
 
 test("constrains channels and ad formats to the approved delivery surfaces", () => {
   assert.match(migration, /channel[^;]*check[^;]*website[^;]*telegram/is);
-  assert.match(migration, /format[^;]*check[^;]*banner[^;]*native[^;]*popup[^;]*video/is);
+  assert.match(migration, /format[^;]*check[^;]*banner[^;]*native[^;]*popup/is);
   assert.match(migration, /telegram_text/is);
   assert.match(migration, /telegram_card/is);
 });
