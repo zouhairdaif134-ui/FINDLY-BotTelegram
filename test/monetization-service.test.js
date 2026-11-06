@@ -228,3 +228,17 @@ test("validates the public website placement page allow-list", () => {
   assert.throws(() => validate({ page_key: "all_interactions" }), /page_key/i);
   assert.throws(() => validate({ page_key: "home", slot_key: "bad slot" }), /slot_key/i);
 });
+
+test("requires a source reference for provider-reported revenue and rejects estimates", () => {
+  const validate = requireFunction("validateRevenueLedgerInput");
+  const base = {
+    amount: "12.50", currency: "MAD", revenue_source: "external_ad",
+    event_type: "publisher_revenue"
+  };
+  assert.equal(validate({ ...base, provenance: "manual" }).provenance, "manual");
+  assert.throws(() => validate({ ...base, provenance: "provider_reported" }), /reference/i);
+  assert.equal(validate({
+    ...base, provenance: "provider_reported", external_reference: "monthly-report-2026-11"
+  }).provenance, "provider_reported");
+  assert.throws(() => validate({ ...base, provenance: "estimated" }), /estimates/i);
+});
