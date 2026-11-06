@@ -1207,6 +1207,14 @@ export function buildTelegramAdPayload(campaign) {
   };
 }
 
+export function getTelegramAdTrigger(update) {
+  if (update?.callback_query) return "callback";
+  const text = String(update?.message?.text || "").trim();
+  if (/^\\/start(?:\\s|$)/i.test(text)) return "start";
+  if (/^\\/search(?:\\s|$)/i.test(text)) return "search";
+  return "message";
+}
+
 export async function claimTelegramAdDelivery(env, bot, update) {
   const telegramUser = update?.message?.from || update?.callback_query?.from;
   const updateId = update?.update_id;
@@ -1226,6 +1234,7 @@ export async function claimTelegramAdDelivery(env, bot, update) {
   if (!user?.id || !user.is_active || user.is_bot) return null;
 
   const now = Date.now();
+  const trigger = getTelegramAdTrigger(update);
   const { data: campaigns, error: campaignError } = await supabase
     .from("ad_campaigns")
     .select("id,bot_id,provider_id,name,status,target_url,starts_at,ends_at,channel,format,creative,max_deliveries,priority")
@@ -1254,6 +1263,7 @@ export async function claimTelegramAdDelivery(env, bot, update) {
       .eq("channel", "telegram")
       .eq("format", campaign.format)
       .eq("position", "interaction_trigger")
+      .in("page_key", [trigger, "all_interactions"])
       .eq("is_enabled", true)
       .order("priority", { ascending: true });
     throwIfError(placementError);
