@@ -95,3 +95,39 @@ test("sendPhoto falls back to Telegram URL fetching when multipart upload is rej
     assert.equal(calls.length, 3);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+
+import { buildTitleCaption } from "../src/lib/movies-bot.js";
+
+test("buildTitleCaption escapes metadata and keeps the rendered caption within Telegram's 1024-character limit", () => {
+  const caption = buildTitleCaption({
+    title: "A&B <The Film>",
+    release_year: 2026,
+    media_type: "movie",
+    rating: 7.7,
+    genres: ["Drama & Mystery"],
+    overview: "😀 & <tag> ".repeat(300),
+    metadata_status: "draft"
+  });
+  assert.match(caption, /A&amp;B &lt;The Film&gt;/);
+  assert.match(caption, /Drama &amp; Mystery/);
+  const rendered = caption
+    .replace(/<b>/g, "")
+    .replace(/<\/b>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+  assert.ok(rendered.length <= 1024, "rendered Telegram caption must not exceed 1024 UTF-16 code units");
+  assert.ok(rendered.includes("…"), "long overview should be truncated with an ellipsis");
+});
+
+test("buildTitleCaption provides a clean fallback synopsis when overview is missing", () => {
+  const caption = buildTitleCaption({
+    title: "Untitled",
+    media_type: "movie",
+    genres: [],
+    overview: "",
+    metadata_status: "draft"
+  });
+  assert.match(caption, /لا يتوفر ملخص لهذا العنوان حالياً/);
+});
