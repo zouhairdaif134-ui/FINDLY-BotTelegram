@@ -16,7 +16,7 @@ export function classifyAIError(error) {
   if (message === "AI provider is not configured") {
     return { category: "provider_missing" };
   }
-  const statusMatch = message.match(/^AI provider request failed with status (\\d{3})$/);
+  const statusMatch = message.match(/^AI provider request failed with status ([0-9]{3})$/);
   if (statusMatch) {
     const status = Number(statusMatch[1]);
     if (status === 429) return { category: "rate_limited" };
