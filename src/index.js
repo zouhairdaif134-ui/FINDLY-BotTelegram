@@ -83,6 +83,7 @@ import {
 
 import { authorizeRequest } from "./lib/auth.js";
 import { getSupabase } from "./lib/supabase.js";
+import { cleanupExpiredAISessionMessages } from "./lib/ai-memory.js";
 import { activateDueMonetizationCampaigns } from "./lib/monetization.js";
 import { renderMovieSharePage } from "./lib/movie-sharing.js";
 
@@ -268,6 +269,15 @@ export default {
       cron: controller?.cron || null,
       started_at: startedAt
     });
+
+    try {
+      await cleanupExpiredAISessionMessages(getSupabase(env));
+    } catch (error) {
+      console.error("FINDLY AI session-memory expiry cleanup failed:", {
+        code: error?.code || null,
+        message: error?.message || "Unknown error"
+      });
+    }
 
     let monetization = null;
     try {
