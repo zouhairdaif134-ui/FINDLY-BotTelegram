@@ -4046,86 +4046,249 @@ function MoviesSection({ movies, fetchApi, onRefresh }) {
   const [tmdbLoading, setTmdbLoading] = useState(false);
   const [importingId, setImportingId] = useState(null);
   const visible = movies.filter((item) => filter === "all" || item.status === filter);
+
   async function searchTmdb(event) {
     event.preventDefault();
     if (!tmdbQuery.trim()) return;
-    setTmdbLoading(true); setError("");
+    setTmdbLoading(true);
+    setError("");
     try {
       const params = new URLSearchParams({ query: tmdbQuery.trim(), media_type: tmdbType });
       setTmdbResults(await fetchApi("/api/movies/tmdb/search?" + params.toString()));
-    } catch (e) { setError(e.message || "TMDB search failed"); }
-    finally { setTmdbLoading(false); }
+    } catch (e) {
+      setError(e.message || "TMDB search failed");
+    } finally {
+      setTmdbLoading(false);
+    }
   }
+
   async function importTmdb(item) {
-    setImportingId(item.tmdb_id); setError("");
+    setImportingId(item.tmdb_id);
+    setError("");
     try {
-      const imported = await fetchApi("/api/movies/tmdb/import", { method: "POST", body: JSON.stringify({ tmdb_id: item.tmdb_id, media_type: item.media_type }) });
+      const imported = await fetchApi("/api/movies/tmdb/import", {
+        method: "POST",
+        body: JSON.stringify({ tmdb_id: item.tmdb_id, media_type: item.media_type })
+      });
       setTmdbResults(results => results.filter(result => result.tmdb_id !== item.tmdb_id));
       await onRefresh();
       edit(imported);
-    } catch (e) { setError(e.message || "TMDB import failed"); }
-    finally { setImportingId(null); }
+    } catch (e) {
+      setError(e.message || "TMDB import failed");
+    } finally {
+      setImportingId(null);
+    }
   }
+
   function edit(item) {
     setEditing(item.id);
-    setForm({ ...empty, ...item, release_date: item.release_date || "", release_year: item.release_year || "", runtime_minutes: item.runtime_minutes || "", rating: item.rating ?? "" });
+    setForm({
+      ...empty,
+      ...item,
+      release_date: item.release_date || "",
+      release_year: item.release_year || "",
+      runtime_minutes: item.runtime_minutes || "",
+      rating: item.rating ?? ""
+    });
     setError("");
   }
+
   async function save(event) {
     event.preventDefault();
-    setSaving(true); setError("");
+    setSaving(true);
+    setError("");
     try {
-      const payload = { ...form, release_year: form.release_year === "" ? null : Number(form.release_year), runtime_minutes: form.runtime_minutes === "" ? null : Number(form.runtime_minutes), rating: form.rating === "" ? null : Number(form.rating) };
-      await fetchApi(editing ? "/api/movies/" + editing : "/api/movies", { method: editing ? "PUT" : "POST", body: JSON.stringify(payload) });
-      setForm(empty); setEditing(null); await onRefresh();
-    } catch (e) { setError(e.message || "Unable to save movie"); }
-    finally { setSaving(false); }
+      const payload = {
+        ...form,
+        release_year: form.release_year === "" ? null : Number(form.release_year),
+        runtime_minutes: form.runtime_minutes === "" ? null : Number(form.runtime_minutes),
+        rating: form.rating === "" ? null : Number(form.rating)
+      };
+      await fetchApi(editing ? "/api/movies/" + editing : "/api/movies", {
+        method: editing ? "PUT" : "POST",
+        body: JSON.stringify(payload)
+      });
+      setForm(empty);
+      setEditing(null);
+      await onRefresh();
+    } catch (e) {
+      setError(e.message || "Unable to save movie");
+    } finally {
+      setSaving(false);
+    }
   }
+
   async function changeStatus(item, status) {
-    try { await fetchApi("/api/movies/" + item.id, { method: "PUT", body: JSON.stringify({ status }) }); await onRefresh(); }
-    catch (e) { setError(e.message || "Unable to update movie"); }
+    try {
+      await fetchApi("/api/movies/" + item.id, {
+        method: "PUT",
+        body: JSON.stringify({ status })
+      });
+      await onRefresh();
+    } catch (e) {
+      setError(e.message || "Unable to update movie");
+    }
   }
+
   async function remove(item) {
     if (!window.confirm("Delete this catalog entry permanently?")) return;
-    try { await fetchApi("/api/movies/" + item.id, { method: "DELETE" }); await onRefresh(); }
-    catch (e) { setError(e.message || "Unable to delete movie"); }
+    try {
+      await fetchApi("/api/movies/" + item.id, { method: "DELETE" });
+      await onRefresh();
+    } catch (e) {
+      setError(e.message || "Unable to delete movie");
+    }
   }
+
   return (
-    <section className="panel">
-      <div className="panel-header"><div><h2>Movies catalog</h2><p>Add and manage movie / series metadata. Publishing makes an item visible in Telegram.</p></div><strong>{movies.length} titles</strong></div>
-      {error && <div className="auth-error">{error}</div>}
-      <form className="management-form" onSubmit={searchTmdb}>
-        <div className="panel-header"><div><h3>Import metadata from TMDB</h3><p>Search official movie and TV metadata. Imported titles are saved as drafts.</p></div></div>
-        <div className="management-toolbar">
-          <select className="toolbar-select" value={tmdbType} onChange={e => setTmdbType(e.target.value)}><option value="movie">Movies</option><option value="series">TV series</option></select>
-          <input aria-label="TMDB search" placeholder="Search title..." value={tmdbQuery} onChange={e => setTmdbQuery(e.target.value)} />
-          <button className="primary-button" disabled={tmdbLoading || !tmdbQuery.trim()}>{tmdbLoading ? "Searching..." : "Search TMDB"}</button>
+    <section className="panel movies-workspace" aria-labelledby="movies-workspace-title">
+      <header className="movies-workspace-heading">
+        <div>
+          <span className="movies-workspace-eyebrow">CONTENT MANAGEMENT</span>
+          <h2 id="movies-workspace-title">Movies catalog</h2>
+          <p>Manage movie and series metadata, synopsis, and publishing status.</p>
+        </div>
+        <div className="movies-title-count">
+          <strong>{movies.length}</strong>
+          <span>catalog titles</span>
+        </div>
+      </header>
+
+      {error && <div className="auth-error movies-workspace-error" role="alert">{error}</div>}
+
+      <form className="movies-card tmdb-import-card" onSubmit={searchTmdb}>
+        <div className="movies-card-heading">
+          <div>
+            <h3>Import from TMDB</h3>
+            <p>Search official movie and TV metadata. Imported titles are saved as drafts.</p>
+          </div>
+          <span className="movies-card-step">01</span>
+        </div>
+        <div className="tmdb-search-row">
+          <label className="movies-field tmdb-type-field">
+            <span>Content type</span>
+            <select className="toolbar-select" value={tmdbType} onChange={e => setTmdbType(e.target.value)}>
+              <option value="movie">Movies</option>
+              <option value="series">TV series</option>
+            </select>
+          </label>
+          <label className="movies-field tmdb-query-field">
+            <span>Search title</span>
+            <input aria-label="TMDB search" placeholder="Enter a movie or series title" value={tmdbQuery} onChange={e => setTmdbQuery(e.target.value)} />
+          </label>
+          <button className="primary-button tmdb-search-button" disabled={tmdbLoading || !tmdbQuery.trim()}>
+            {tmdbLoading ? "Searching..." : "Search TMDB"}
+          </button>
         </div>
       </form>
-      {tmdbResults.length > 0 && <div className="table-wrap"><table><thead><tr><th>Poster</th><th>Title</th><th>Year</th><th>Rating</th><th>Import</th></tr></thead><tbody>
-        {tmdbResults.map(item => <tr key={item.tmdb_id}><td>{item.poster_path ? <img src={item.poster_path} alt="" loading="lazy" style={{ width: 48, borderRadius: 6 }} /> : "—"}</td><td><strong>{item.title}</strong><small>{item.overview}</small></td><td>{item.release_year || "—"}</td><td>{item.rating ?? "—"}</td><td><button className="secondary-button" type="button" disabled={importingId === item.tmdb_id} onClick={() => importTmdb(item)}>{importingId === item.tmdb_id ? "Importing..." : "Import draft"}</button></td></tr>)}
-      </tbody></table></div>}
-      <form className="management-form" onSubmit={save}>
-        <div className="form-grid">
-          <label>Type<select value={form.media_type} onChange={e => setForm({ ...form, media_type: e.target.value })}><option value="movie">Movie</option><option value="series">Series</option></select></label>
-          <label>Title<input required maxLength="200" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label>
-          <label>Original title<input value={form.original_title || ""} onChange={e => setForm({ ...form, original_title: e.target.value })} /></label>
-          <label>Release date<input type="date" value={form.release_date || ""} onChange={e => setForm({ ...form, release_date: e.target.value })} /></label>
-          <label>Year<input type="number" min="1888" max="2200" value={form.release_year} onChange={e => setForm({ ...form, release_year: e.target.value })} /></label>
-          <label>Runtime (minutes)<input type="number" min="1" value={form.runtime_minutes} onChange={e => setForm({ ...form, runtime_minutes: e.target.value })} /></label>
-          <label>Rating / 10<input type="number" min="0" max="10" step="0.1" value={form.rating} onChange={e => setForm({ ...form, rating: e.target.value })} /></label>
-          <label>Poster path / URL<input value={form.poster_path || ""} onChange={e => setForm({ ...form, poster_path: e.target.value })} /></label>
-          <label>Backdrop path / URL<input value={form.backdrop_path || ""} onChange={e => setForm({ ...form, backdrop_path: e.target.value })} /></label>
-          <label>Status<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}><option value="draft">Draft</option><option value="active">Published</option><option value="inactive">Paused</option></select></label>
-          <label className="full-width">Synopsis<textarea rows="4" value={form.overview || ""} onChange={e => setForm({ ...form, overview: e.target.value })} /></label>
+
+      {tmdbResults.length > 0 && (
+        <div className="movies-card tmdb-results-card">
+          <div className="movies-card-heading">
+            <div><h3>Search results</h3><p>Choose a title to import it as a draft.</p></div>
+          </div>
+          <div className="table-wrap movies-table-wrap">
+            <table className="movies-table">
+              <thead><tr><th>Poster</th><th>Title</th><th>Year</th><th>Rating</th><th>Import</th></tr></thead>
+              <tbody>
+                {tmdbResults.map(item => (
+                  <tr key={item.tmdb_id}>
+                    <td>{item.poster_path ? <img src={item.poster_path} alt="" loading="lazy" /> : "—"}</td>
+                    <td><strong>{item.title}</strong><small>{item.overview}</small></td>
+                    <td>{item.release_year || "—"}</td>
+                    <td>{item.rating ?? "—"}</td>
+                    <td><button className="secondary-button" type="button" disabled={importingId === item.tmdb_id} onClick={() => importTmdb(item)}>{importingId === item.tmdb_id ? "Importing..." : "Import draft"}</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="management-actions"><button className="primary-button" disabled={saving}>{saving ? "Saving..." : editing ? "Save changes" : "Add title"}</button>{editing && <button type="button" className="secondary-button" onClick={() => { setEditing(null); setForm(empty); }}>Cancel</button>}</div>
+      )}
+
+      <form className="movies-card movie-editor-card" onSubmit={save}>
+        <div className="movies-card-heading">
+          <div>
+            <h3>{editing ? "Edit title details" : "Add a movie or series"}</h3>
+            <p>Complete the metadata below. Add a synopsis to show useful details in Telegram.</p>
+          </div>
+          <span className="movies-card-step">02</span>
+        </div>
+        <div className="movies-form-grid">
+          <label className="movies-field">Type
+            <select value={form.media_type} onChange={e => setForm({ ...form, media_type: e.target.value })}><option value="movie">Movie</option><option value="series">Series</option></select>
+          </label>
+          <label className="movies-field">Title
+            <input required maxLength="200" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+          </label>
+          <label className="movies-field">Original title
+            <input value={form.original_title || ""} onChange={e => setForm({ ...form, original_title: e.target.value })} />
+          </label>
+          <label className="movies-field">Release date
+            <input type="date" value={form.release_date || ""} onChange={e => setForm({ ...form, release_date: e.target.value })} />
+          </label>
+          <label className="movies-field">Year
+            <input type="number" min="1888" max="2200" value={form.release_year} onChange={e => setForm({ ...form, release_year: e.target.value })} />
+          </label>
+          <label className="movies-field">Runtime (minutes)
+            <input type="number" min="1" value={form.runtime_minutes} onChange={e => setForm({ ...form, runtime_minutes: e.target.value })} />
+          </label>
+          <label className="movies-field">Rating / 10
+            <input type="number" min="0" max="10" step="0.1" value={form.rating} onChange={e => setForm({ ...form, rating: e.target.value })} />
+          </label>
+          <label className="movies-field">Poster path / URL
+            <input value={form.poster_path || ""} onChange={e => setForm({ ...form, poster_path: e.target.value })} />
+          </label>
+          <label className="movies-field">Backdrop path / URL
+            <input value={form.backdrop_path || ""} onChange={e => setForm({ ...form, backdrop_path: e.target.value })} />
+          </label>
+          <label className="movies-field">Status
+            <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}><option value="draft">Draft</option><option value="active">Published</option><option value="inactive">Paused</option></select>
+          </label>
+          <label className="movies-field movies-field-wide">Synopsis
+            <textarea rows="5" value={form.overview || ""} onChange={e => setForm({ ...form, overview: e.target.value })} placeholder="Write a short synopsis for the Telegram details view..." />
+          </label>
+        </div>
+        <div className="movies-form-actions">
+          <button className="primary-button" disabled={saving}>{saving ? "Saving..." : editing ? "Save changes" : "Add title"}</button>
+          {editing && <button type="button" className="secondary-button" onClick={() => { setEditing(null); setForm(empty); }}>Cancel editing</button>}
+        </div>
       </form>
-      <div className="management-toolbar"><strong>Catalog entries</strong><select className="toolbar-select" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option><option value="draft">Draft</option><option value="active">Published</option><option value="inactive">Paused</option></select><button className="secondary-button" type="button" onClick={onRefresh}>Refresh</button></div>
-      <div className="table-wrap"><table><thead><tr><th>Title</th><th>Type</th><th>Year</th><th>Rating</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-        {visible.map(item => <tr key={item.id}><td><strong>{item.title}</strong><small>{item.original_title || ""}</small></td><td>{item.media_type}</td><td>{item.release_year || "—"}</td><td>{item.rating ?? "—"}</td><td>{item.status}</td><td><div className="management-actions"><button className="secondary-button" type="button" onClick={() => edit(item)}>Edit</button>{item.status !== "active" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "active")}>Publish</button>}{item.status !== "inactive" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "inactive")}>Pause</button>}<button className="secondary-button" type="button" onClick={() => remove(item)}>Delete</button></div></td></tr>)}
-        {!visible.length && <tr><td colSpan="6">No catalog entries yet.</td></tr>}
-      </tbody></table></div>
+
+      <section className="movies-card movies-catalog-card" aria-labelledby="movies-catalog-title">
+        <div className="movies-catalog-toolbar">
+          <div><h3 id="movies-catalog-title">Catalog entries</h3><p>Review, edit, and control visibility of saved titles.</p></div>
+          <div className="movies-catalog-controls">
+            <label className="movies-field movies-filter-field"><span>Status</span>
+              <select className="toolbar-select" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option><option value="draft">Draft</option><option value="active">Published</option><option value="inactive">Paused</option></select>
+            </label>
+            <button className="secondary-button" type="button" onClick={onRefresh}>Refresh</button>
+          </div>
+        </div>
+        <div className="table-wrap movies-table-wrap">
+          <table className="movies-table">
+            <thead><tr><th>Title</th><th>Type</th><th>Year</th><th>Rating</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              {visible.map(item => (
+                <tr key={item.id}>
+                  <td><strong>{item.title}</strong><small>{item.original_title || ""}</small></td>
+                  <td>{item.media_type}</td>
+                  <td>{item.release_year || "—"}</td>
+                  <td>{item.rating ?? "—"}</td>
+                  <td><span className={"movies-status status-" + item.status}>{item.status}</span></td>
+                  <td><div className="movies-row-actions">
+                    <button className="secondary-button" type="button" onClick={() => edit(item)}>Edit</button>
+                    {item.status !== "active" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "active")}>Publish</button>}
+                    {item.status !== "inactive" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "inactive")}>Pause</button>}
+                    <button className="secondary-button" type="button" onClick={() => remove(item)}>Delete</button>
+                  </div></td>
+                </tr>
+              ))}
+              {!visible.length && <tr><td className="movies-empty-state" colSpan="6">No catalog entries yet. Add a title above or import one from TMDB.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </section>
   );
 }
