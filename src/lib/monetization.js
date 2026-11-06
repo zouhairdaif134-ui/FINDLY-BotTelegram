@@ -1077,7 +1077,7 @@ export function buildTelegramAdPayload(campaign) {
   })[character]);
   const title = creative.title ? escape(creative.title) : "";
   const body = escape(creative.body || "");
-  const text = [title, body].filter(Boolean).join("\\n\\n");
+  const text = [title, body].filter(Boolean).join("\n\n");
   const ctaLabel = escape(creative.cta_label || "اعرف المزيد");
   const targetUrl = validateHttpsUrl(campaign.target_url, "target_url", true);
   const replyMarkup = {
@@ -1101,7 +1101,7 @@ export function buildTelegramAdPayload(campaign) {
   }
   return {
     method: "message",
-    text: (text + (text ? "\\n\\n" : "") + ctaLabel).slice(0, 4000),
+    text: (text + (text ? "\n\n" : "") + ctaLabel).slice(0, 4000),
     reply_markup: replyMarkup
   };
 }
