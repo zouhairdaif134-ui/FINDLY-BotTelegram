@@ -7,6 +7,25 @@ const DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_SYSTEM_PROMPT =
   "You are a helpful assistant for FINDLY. Answer clearly and briefly.";
 
+export function classifyAIError(error) {
+  const name = typeof error?.name === "string" ? error.name : "";
+  const message = typeof error?.message === "string" ? error.message : "";
+  if (name === "AbortError" || name === "TimeoutError") {
+    return { category: "timeout" };
+  }
+  if (message === "AI provider is not configured") {
+    return { category: "provider_missing" };
+  }
+  const statusMatch = message.match(/^AI provider request failed with status (\\d{3})$/);
+  if (statusMatch) {
+    const status = Number(statusMatch[1]);
+    if (status === 429) return { category: "rate_limited" };
+    if (status >= 500) return { category: "provider_unavailable" };
+    if (status >= 400) return { category: "provider_rejected" };
+  }
+  return { category: "internal_error" };
+}
+
 function boundedString(value, fallback, maxLength) {
   if (typeof value !== "string") return fallback;
   const normalized = value.trim().slice(0, maxLength);
