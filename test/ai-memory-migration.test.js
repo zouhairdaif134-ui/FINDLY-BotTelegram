@@ -23,6 +23,7 @@ test("requires explicit persistent-memory consent and stores preferences as JSON
   assert.match(migration, /preferences jsonb not null default '\[\]'::jsonb/i);
   assert.match(migration, /pending_preference text/i);
   assert.match(migration, /pending_action_token uuid/i);
+  assert.match(migration, /pending_action_expires_at timestamptz/i);
   assert.match(migration, /pending_action in \('save', 'clear'\)/i);
   assert.match(migration, /consented_at timestamptz/i);
 });
