@@ -45,8 +45,8 @@ function rejectUnknownKeys(value, allowed, label) {
 function assertSafeJson(value, label = "metadata", depth = 0) {
   if (depth > 6) throw new Error(label + " is too deeply nested");
   if (typeof value === "string") {
-    if (/<\s*script|<\s*iframe|javascript\s*:/i.test(value)) {
-      throw new Error(label + " contains executable content");
+    if (/<\s*\/?\s*[a-z][^>]*>|javascript\s*:/i.test(value)) {
+      throw new Error(label + " contains HTML or executable content");
     }
     return;
   }
