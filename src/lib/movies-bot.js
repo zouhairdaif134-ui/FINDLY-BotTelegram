@@ -253,18 +253,6 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     isFavorite = Boolean(favorite);
   }
 
-  const lines = [
-    "<b>" + escapeHtml(title.title) + "</b>",
-    [title.release_year, title.media_type === "series" ? "مسلسل" : "فيلم", title.runtime_minutes ? title.runtime_minutes + " دقيقة" : null].filter(Boolean).join(" · "),
-    title.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : null,
-    "",
-    escapeHtml(title.overview || "لا يتوفر ملخص لهذا العنوان حالياً."),
-    "",
-    title.metadata_status === "authorized_media_available"
-      ? "المحتوى مسجل كمتاح بترخيص، لكن مسار التسليم داخل Telegram لم يتم تفعيله بعد."
-      : "المشاهدة داخل FINDLY غير متاحة حالياً. لن نعرض رابطاً غير موثوق أو محتوى غير مرخّص."
-  ].filter((line) => line !== null);
-
   const keyboard = [];
   if (userId) {
     keyboard.push([{
@@ -291,9 +279,12 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   keyboard.push([{ text: "⬅️ رجوع للقائمة", callback_data: "movies:home" }]);
 
   if (!title.poster_path) throw new Error("Movie poster is missing for title: " + title.id);
-  const posterCaption = "<b>" + escapeHtml(title.title) + "</b>" + (title.release_year ? " · " + title.release_year : "") + " · FINDLY Movies";
-  await sendPhoto(env, bot.slug, chatId, title.poster_path, { caption: posterCaption, parse_mode: "HTML" });
-  await sendMessage(env, bot.slug, chatId, lines.join("\n"), { reply_markup: { inline_keyboard: keyboard } });
+  const caption = buildTitleCaption(title);
+  await sendPhoto(env, bot.slug, chatId, title.poster_path, {
+    caption,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: keyboard }
+  });
 }
 
 async function sendFullPlotSummary(env, bot, chatId, titleId) {
