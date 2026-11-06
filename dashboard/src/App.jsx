@@ -11,7 +11,7 @@ import { buildMovieShareContent } from "../../src/lib/movie-sharing.js";
 const PRODUCTION_API_URL =
   "https://findly-v3-api.berrchidcity99.workers.dev";
 const PREVIEW_API_URL =
-  "https://feat-findly-movies-runtime-hardening-findly-v3-api.berrchidcity99.workers.dev";
+  "https://feat-ai-advanced-phase1-findly-v3-api.berrchidcity99.workers.dev";
 const isPagesPreview =
   typeof window !== "undefined" &&
   (window.location.hostname ===
