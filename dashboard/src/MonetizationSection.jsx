@@ -115,6 +115,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
   }, [bots]);
 
   const activeZones = useMemo(() => zones.filter((zone) => zone.is_verified && zone.is_active), [zones]);
+  const externalCampaigns = useMemo(() => campaigns.filter((item) => item.campaign_type === "external"), [campaigns]);
   const currentPolicy = policies.find((item) =>
     item.channel === frequencyForm.channel &&
     (frequencyForm.scope === "campaign"
@@ -482,7 +483,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                 <form className="monetization-form" onSubmit={saveFrequency}>
                   <label>Channel<select value={frequencyForm.channel} onChange={(e) => setFrequencyForm({ ...frequencyForm, channel: e.target.value, scope: "default", campaign_id: "", placement_id: "" })}><option value="website">Website</option><option value="telegram">Telegram</option></select></label>
                   <label>Policy scope<select value={frequencyForm.scope} onChange={(e) => setFrequencyForm({ ...frequencyForm, scope: e.target.value, campaign_id: "", placement_id: "" })}><option value="default">Channel default</option><option value="campaign">Specific campaign</option><option value="placement">Specific placement</option></select></label>
-                  {frequencyForm.scope === "campaign" && <label>Campaign<select value={frequencyForm.campaign_id} onChange={(e) => setFrequencyForm({ ...frequencyForm, campaign_id: e.target.value })}><option value="">Choose campaign</option>{campaigns.filter((c) => c.channel === frequencyForm.channel).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
+                  {frequencyForm.scope === "campaign" && <label>Campaign<select value={frequencyForm.campaign_id} onChange={(e) => setFrequencyForm({ ...frequencyForm, campaign_id: e.target.value })}><option value="">Choose campaign</option>{externalCampaigns.filter((c) => c.channel === frequencyForm.channel).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
                   {frequencyForm.scope === "placement" && <label>Placement<select value={frequencyForm.placement_id} onChange={(e) => setFrequencyForm({ ...frequencyForm, placement_id: e.target.value })}><option value="">Choose placement</option>{placements.filter((p) => p.channel === frequencyForm.channel).map((p) => <option key={p.id} value={p.id}>{p.page_key} · {p.slot_key}</option>)}</select></label>}
                   <label>Max per user / 30 days<input type="number" min="1" max="100" value={frequencyForm.max_per_user} onChange={(e) => setFrequencyForm({ ...frequencyForm, max_per_user: e.target.value })} /></label>
                   <label>Cooldown · seconds<input type="number" min="0" max="604800" value={frequencyForm.cooldown_seconds} onChange={(e) => setFrequencyForm({ ...frequencyForm, cooldown_seconds: e.target.value })} /></label>
@@ -535,7 +536,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                   <button className="monetization-primary" disabled={saving || !providers.length || !bots.length}>{campaignEditId ? "Update draft campaign" : "Create draft campaign"}</button>
                   {campaignEditId && <button type="button" className="monetization-secondary" onClick={() => setCampaignEditId("")}>Cancel edit</button>}
                 </form>
-                <div className="monetization-table-wrap"><table><thead><tr><th>Campaign</th><th>Channel / format</th><th>Provider</th><th>Schedule</th><th>Delivery · 30d</th><th>Status</th><th>Actions</th></tr></thead><tbody>{campaigns.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.channel} / {item.format}</td><td>{providers.find((p) => p.id === item.provider_id)?.name || "—"}</td><td>{dateLabel(item.starts_at)} → {dateLabel(item.ends_at)}</td><td>{item.delivery_30d?.sent || 0} sent / {item.delivery_30d?.failed || 0} failed</td><td>{item.status}</td><td className="monetization-actions">
+                <div className="monetization-table-wrap"><table><thead><tr><th>Campaign</th><th>Channel / format</th><th>Provider</th><th>Schedule</th><th>Delivery · 30d</th><th>Status</th><th>Actions</th></tr></thead><tbody>{externalCampaigns.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.channel} / {item.format}</td><td>{providers.find((p) => p.id === item.provider_id)?.name || "—"}</td><td>{dateLabel(item.starts_at)} → {dateLabel(item.ends_at)}</td><td>{item.delivery_30d?.sent || 0} sent / {item.delivery_30d?.failed || 0} failed</td><td>{item.status}</td><td className="monetization-actions">
                   {["draft", "paused"].includes(item.status) && <button type="button" className="monetization-secondary" onClick={() => editCampaign(item)}>Edit</button>}
                   <button type="button" className="monetization-secondary" onClick={() => loadCampaignPlacements(item.id)}>Placements</button>
                   {item.status === "draft" && <button type="button" className="monetization-secondary" onClick={() => changeCampaignStatus(item, item.starts_at && new Date(item.starts_at) > new Date() ? "scheduled" : "active")}>Activate / Schedule</button>}
@@ -560,7 +561,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                   <label>Provenance<select value={revenueForm.provenance} onChange={(e) => setRevenueForm({ ...revenueForm, provenance: e.target.value })}><option value="manual">Manual entry</option><option value="provider_reported">Provider report</option></select></label>
                   <label>Event type<input value={revenueForm.event_type} onChange={(e) => setRevenueForm({ ...revenueForm, event_type: e.target.value })} required /></label>
                   <label>Report / external reference<input value={revenueForm.external_reference} onChange={(e) => setRevenueForm({ ...revenueForm, external_reference: e.target.value })} required={revenueForm.provenance === "provider_reported"} /></label>
-                  <label>Campaign<select value={revenueForm.campaign_id} onChange={(e) => setRevenueForm({ ...revenueForm, campaign_id: e.target.value })}><option value="">No campaign reference</option>{campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+                  <label>Campaign<select value={revenueForm.campaign_id} onChange={(e) => setRevenueForm({ ...revenueForm, campaign_id: e.target.value })}><option value="">No campaign reference</option>{externalCampaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
                   <button className="monetization-primary" disabled={saving}>Add ledger entry</button>
                 </form>
               </section>
