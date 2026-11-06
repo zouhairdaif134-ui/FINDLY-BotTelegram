@@ -78,6 +78,7 @@ import {
 
 import { authorizeRequest } from "./lib/auth.js";
 import { getSupabase } from "./lib/supabase.js";
+import { renderMovieSharePage } from "./lib/movie-sharing.js";
 
 import {
   success,
@@ -314,6 +315,87 @@ export default {
             }
           )
         , request);
+      }
+
+      /*
+       * PUBLIC MOVIE SHARE PAGES
+       * These routes are intentionally public so Facebook's crawler can read
+       * Open Graph metadata without an authenticated dashboard session.
+       */
+      const movieShareMatch = url.pathname.match(/^\/share\/movie\/([0-9a-f-]{36})(?:\/(poster))?$/i);
+      if (movieShareMatch && request.method === "GET") {
+        const movieId = movieShareMatch[1];
+        const isPoster = movieShareMatch[2] === "poster";
+        const { data: movie, error: movieError } = await getSupabase(env)
+          .from("movie_titles")
+          .select("id,media_type,title,overview,release_year,rating,poster_path,status")
+          .eq("id", movieId)
+          .eq("status", "active")
+          .maybeSingle();
+
+        if (movieError) throw movieError;
+        if (!movie) {
+          return new Response("Movie not found", {
+            status: 404,
+            headers: { "Cache-Control": "no-store" }
+          });
+        }
+
+        if (isPoster) {
+          let posterUrl;
+          try {
+            posterUrl = new URL(String(movie.poster_path || ""));
+          } catch {
+            return new Response("Poster not found", { status: 404 });
+          }
+          if (
+            posterUrl.protocol !== "https:" ||
+            posterUrl.hostname !== "image.tmdb.org" ||
+            !posterUrl.pathname.startsWith("/t/p/")
+          ) {
+            return new Response("Poster not found", { status: 404 });
+          }
+          const posterResponse = await fetch(posterUrl.toString(), {
+            headers: { Accept: "image/jpeg,image/png,image/webp" }
+          });
+          const contentType = posterResponse.headers.get("content-type") || "";
+          if (!posterResponse.ok || !contentType.startsWith("image/")) {
+            return new Response("Poster unavailable", { status: 502 });
+          }
+          return withCors(new Response(posterResponse.body, {
+            status: 200,
+            headers: {
+              "Content-Type": contentType,
+              "Cache-Control": "public, max-age=86400",
+              "X-Content-Type-Options": "nosniff"
+            }
+          }), request);
+        }
+
+        const requestedSource = url.searchParams.get("source");
+        const source = ["facebook", "instagram"].includes(requestedSource)
+          ? requestedSource
+          : "facebook";
+        const { data: bot, error: botError } = await getSupabase(env)
+          .from("bots")
+          .select("telegram_username")
+          .eq("slug", "movies")
+          .eq("is_active", true)
+          .maybeSingle();
+        if (botError) throw botError;
+        if (!bot?.telegram_username) {
+          return new Response("FINDLY Movies bot is unavailable", { status: 503 });
+        }
+        const html = renderMovieSharePage(movie, bot.telegram_username, source, url.origin);
+        return new Response(html, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "public, max-age=300, s-maxage=3600",
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "strict-origin-when-cross-origin"
+          }
+        });
       }
 
       /*
