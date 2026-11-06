@@ -82,9 +82,13 @@ test("searchCatalog returns an empty list for an empty or unsafe-only query with
 test("recommendCatalogTitles filters by genre and active status with a bounded limit", async () => {
   const db = createSupabaseMock((table, ops) => {
     if (table === "movie_genres") return { data: [{ id: "genre-1", name: "Drama" }], error: null };
-    if (table === "movie_title_genres") return { data: [{ title_id: title.id }], error: null };
+    if (table === "movie_title_genres") {
+      const select = ops.find(([method]) => method === "select")?.[1];
+      return { data: select === "title_id"
+        ? [{ title_id: title.id }]
+        : [{ title_id: title.id, movie_genres: { name: "Drama" } }], error: null };
+    }
     if (table === "movie_titles") return { data: [title], error: null };
-    if (table === "movie_title_genres") return { data: [], error: null };
     throw new Error("unexpected table " + table);
   });
   const results = await recommendCatalogTitles(db, { genre: "Drama", sort: "top_rated", limit: 99 });
