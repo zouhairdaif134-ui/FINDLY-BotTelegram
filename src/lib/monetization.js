@@ -1002,3 +1002,25 @@ export async function deleteUserExclusion(env, userId) {
   throwIfError(error);
   return { user_id: id, deleted: true };
 }
+
+
+export async function listExclusionCandidates(env, filters = {}) {
+  const limit = Number(filters.limit ?? 100);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    throw new Error("candidate limit must be between 1 and 200");
+  }
+  let query = getSupabase(env)
+    .from("telegram_users")
+    .select("id,username,first_name,last_name,is_active,is_bot,last_seen_at")
+    .order("last_seen_at", { ascending: false })
+    .limit(limit);
+  if (filters.search) {
+    const term = String(filters.search).trim().replace(/[,%()]/g, "");
+    if (term.length >= 2) {
+      query = query.or("username.ilike.%"+term+"%,first_name.ilike.%"+term+"%,last_name.ilike.%"+term+"%");
+    }
+  }
+  const { data, error } = await query;
+  throwIfError(error);
+  return data || [];
+}
