@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase.js";
+import { buildAIMemoryMessages } from "./ai-memory.js";
 
 const DEFAULT_MODEL = "gpt-4o-mini";
 const DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
@@ -119,7 +120,7 @@ export async function getAIConfig(env, botId) {
   return normalizeAIConfig(data?.setting_value, env);
 }
 
-export async function generateAIReply(env, bot, userText) {
+export async function generateAIReply(env, bot, userText, memory = {}) {
   const config = await getAIConfig(env, bot?.id);
   if (!config.enabled) return null;
 
@@ -141,10 +142,12 @@ export async function generateAIReply(env, bot, userText) {
       },
       body: JSON.stringify({
         model: config.model,
-        messages: [
-          { role: "system", content: config.systemPrompt },
-          { role: "user", content: input }
-        ],
+        messages: buildAIMemoryMessages(
+          config.systemPrompt,
+          memory.history,
+          input,
+          memory.preferences
+        ),
         temperature: config.temperature,
         max_tokens: config.maxTokens
       }),
