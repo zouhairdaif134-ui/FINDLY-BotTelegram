@@ -17,3 +17,37 @@ jobs:
       - run: npm install --no-package-lock
       - run: npm test
       - run: npx --yes wrangler@4.156.1 deploy --dry-run
+
+  monetization-migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply minimal existing-schema fixture
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          test -n "$PG_CONTAINER"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/monetization_phase1_base_fixture.sql
+      - name: Apply Phase 1 migration to disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261106213400_monetization_controls.sql
+      - name: Verify migration structure, grants and safe defaults
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/monetization_phase1_verification.sql

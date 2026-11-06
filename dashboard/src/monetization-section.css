@@ -1,0 +1,78 @@
+.monetization-page{display:flex;flex-direction:column;gap:18px;color:#17243a;min-width:0}
+.monetization-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.monetization-eyebrow{display:block;color:#9a7b45;font-size:11px;font-weight:800;letter-spacing:.14em;margin-bottom:7px}
+.monetization-heading h2{margin:0;color:#10233f;font-size:25px;font-weight:850}
+.monetization-heading p{margin:7px 0 0;color:#748197;font-size:13px}
+.monetization-refresh,.monetization-secondary,.monetization-primary{border-radius:9px;padding:9px 13px;font-size:12px;font-weight:750;cursor:pointer;transition:.15s ease}
+.monetization-refresh,.monetization-secondary{border:1px solid #d8e0ea;background:#fff;color:#183354}
+.monetization-primary{border:1px solid #15395f;background:#15395f;color:#fff}
+.monetization-refresh:disabled,.monetization-secondary:disabled,.monetization-primary:disabled{opacity:.55;cursor:not-allowed}
+.monetization-tabs{display:flex;gap:7px;overflow-x:auto;padding:4px 0 8px;border-bottom:1px solid #e1e7ef}
+.monetization-tabs button{white-space:nowrap;border:1px solid transparent;background:transparent;color:#64748b;border-radius:9px;padding:10px 13px;font-size:12px;font-weight:750;cursor:pointer}
+.monetization-tabs button.active{background:#eaf0f7;border-color:#d7e1ed;color:#102d50}
+.monetization-notice,.monetization-error{padding:11px 14px;border-radius:9px;font-size:12px;line-height:1.6}
+.monetization-notice{background:#edf7f1;color:#256345;border:1px solid #cfe8d8}
+.monetization-error{background:#fff1f0;color:#9f3430;border:1px solid #f1cfcd;overflow-wrap:anywhere}
+.monetization-stack{display:flex;flex-direction:column;gap:16px}
+.monetization-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.monetization-kpis article,.monetization-panel,.monetization-provider-grid article{background:#fff;border:1px solid #e5eaf0;border-radius:13px;box-shadow:0 5px 18px rgba(20,40,70,.035);min-width:0}
+.monetization-kpis article{padding:16px}
+.monetization-kpis span{display:block;color:#65758b;font-size:12px;font-weight:700}
+.monetization-kpis strong{display:block;color:#10233f;font-size:29px;line-height:1.2;margin:9px 0 5px;font-variant-numeric:tabular-nums}
+.monetization-kpis small{color:#8a96a8;font-size:10px}
+.monetization-panel{padding:17px;display:flex;flex-direction:column;gap:14px}
+.monetization-panel h3{margin:0;color:#10233f;font-size:16px;font-weight:800}
+.monetization-panel h4{margin:0;color:#203a59;font-size:13px;font-weight:800}
+.monetization-panel p{margin:0}
+.monetization-panel-title{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.monetization-panel-title p{margin:5px 0 0;color:#78869a;font-size:11px;line-height:1.6}
+.monetization-muted{color:#7b8798;font-size:11px;line-height:1.7}
+.state-eligible,.state-locked,.monetization-lock{display:inline-flex;align-items:center;border-radius:99px;padding:5px 9px;font-size:10px;font-weight:800;white-space:nowrap}
+.state-eligible{background:#e9f6ee;color:#28764c}
+.state-locked,.monetization-lock{background:#f1f3f6;color:#69778a}
+.monetization-lock{letter-spacing:.06em}
+.monetization-progress{height:9px;background:#edf1f5;border-radius:99px;overflow:hidden}
+.monetization-progress span{display:block;height:100%;background:#b28a4e;border-radius:99px;transition:width .2s ease}
+.monetization-channel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.monetization-channel-grid article{border:1px solid #e7ecf2;border-radius:10px;padding:13px}
+.monetization-channel-grid h4{margin:0 0 10px;text-transform:capitalize}
+.monetization-channel-grid article div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;color:#738096;font-size:11px;border-top:1px solid #f0f2f5}
+.monetization-channel-grid strong{color:#173452;font-variant-numeric:tabular-nums}
+.monetization-revenue-row{display:flex;gap:10px;flex-wrap:wrap}
+.monetization-revenue-row strong{background:#f6f8fa;border:1px solid #e7ecf2;border-radius:9px;padding:10px 12px;color:#173452}
+.monetization-locked-panel{min-height:230px;justify-content:center;align-items:flex-start;background:linear-gradient(135deg,#fff,#f7f9fb)}
+.monetization-locked-panel h3{font-size:20px}
+.monetization-locked-panel p{max-width:650px;color:#6d7b8e;font-size:13px;line-height:1.8}
+.monetization-provider-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.monetization-provider-grid article{padding:14px;display:flex;flex-direction:column;gap:9px}
+.monetization-provider-grid article .monetization-panel-title h4{font-size:14px}
+.monetization-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;padding:14px;background:#f8fafc;border:1px solid #e8edf3;border-radius:11px}
+.monetization-form h4{grid-column:1/-1}
+.monetization-form label{display:flex;flex-direction:column;gap:6px;color:#52647b;font-size:11px;font-weight:700;min-width:0}
+.monetization-form input,.monetization-form select,.monetization-form textarea,.monetization-inline-search input,.monetization-inline-search select{width:100%;min-width:0;border:1px solid #d9e1ea;background:#fff;border-radius:8px;padding:9px 10px;color:#20334b;font-size:12px;outline:none}
+.monetization-form textarea{min-height:86px;resize:vertical}
+.monetization-form input:focus,.monetization-form select:focus,.monetization-form textarea:focus{border-color:#8da6c2;box-shadow:0 0 0 3px rgba(53,96,143,.09)}
+.monetization-form .monetization-primary,.monetization-form .monetization-secondary{align-self:end;min-height:36px}
+.monetization-form .monetization-check{display:flex;flex-direction:row;align-items:center;gap:8px}
+.monetization-form .monetization-check input{width:auto}
+.monetization-channel-switch{display:flex;gap:6px;padding:4px;background:#f1f4f7;border-radius:9px;width:max-content}
+.monetization-channel-switch button{border:0;background:transparent;border-radius:7px;padding:8px 13px;color:#65758b;font-size:11px;font-weight:800;cursor:pointer}
+.monetization-channel-switch button.active{background:#fff;color:#163653;box-shadow:0 1px 4px rgba(20,40,70,.1)}
+.monetization-table-wrap{width:100%;overflow-x:auto;border:1px solid #e8edf3;border-radius:10px}
+.monetization-table-wrap table{width:100%;border-collapse:collapse;min-width:680px;font-size:11px;text-align:left}
+.monetization-table-wrap th{background:#f6f8fa;color:#607188;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.monetization-table-wrap th,.monetization-table-wrap td{padding:10px 11px;border-bottom:1px solid #edf0f4;vertical-align:middle}
+.monetization-table-wrap td{color:#3d5069}
+.monetization-table-wrap tbody tr:last-child td{border-bottom:0}
+.monetization-actions{display:flex;gap:5px;flex-wrap:wrap}
+.monetization-actions button{padding:6px 8px;font-size:10px}
+.monetization-placement-linker{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px dashed #cad5e1;border-radius:10px}
+.monetization-placement-linker h4{margin:0;color:#183653}
+.monetization-placement-linker p,.monetization-placement-linker li{font-size:11px;color:#718096}
+.monetization-placement-linker ul{margin:0;padding-left:18px}
+.monetization-inline-search{display:flex;gap:8px;align-items:center;max-width:650px}
+.monetization-inline-search select{flex:1}
+.monetization-empty{padding:32px;text-align:center;color:#78869a;font-size:13px;background:#fff;border:1px dashed #dbe3ec;border-radius:12px}
+@media(max-width:1100px){.monetization-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.monetization-provider-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.monetization-page{gap:13px}.monetization-heading h2{font-size:21px}.monetization-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.monetization-kpis article{padding:12px}.monetization-kpis strong{font-size:24px}.monetization-provider-grid{grid-template-columns:1fr}.monetization-form{grid-template-columns:repeat(2,minmax(0,1fr));padding:11px}.monetization-panel{padding:13px}.monetization-channel-grid{grid-template-columns:1fr}}
+@media(max-width:430px){.monetization-form{grid-template-columns:1fr}.monetization-inline-search{align-items:stretch;flex-direction:column}.monetization-inline-search button{width:100%}.monetization-tabs button{padding:9px 10px}}

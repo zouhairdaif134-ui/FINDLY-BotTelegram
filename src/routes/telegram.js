@@ -1,7 +1,10 @@
 import { getSupabase } from "../lib/supabase.js";
+import { buildTelegramUserProfile } from "../lib/telegram-user.js";
+import { claimTelegramAdDelivery, buildTelegramAdPayload, recordTelegramAdDelivery } from "../lib/monetization.js";
 import {
   sendMessage,
-  answerCallback
+  answerCallback,
+  telegramRequest
 } from "../lib/telegram.js";
 import {
   showJobsCategory,
@@ -235,8 +238,8 @@ async function saveTelegramUser(
 
   const supabase = getSupabase(env);
 
-  const telegramUserId =
-    String(telegramUser.id);
+  const profile = buildTelegramUserProfile(telegramUser);
+  const telegramUserId = profile.telegram_user_id;
 
   console.log("Telegram user save started:", {
     botSlug: bot?.slug || null,
@@ -280,21 +283,9 @@ async function saveTelegramUser(
       await supabase
         .from("telegram_users")
         .update({
-          username:
-            telegramUser.username ||
-            null,
-          first_name:
-            telegramUser.first_name ||
-            null,
-          last_name:
-            telegramUser.last_name ||
-            null,
-          language_code:
-            telegramUser.language_code ||
-            null,
+          ...profile,
           is_active: true,
-          last_seen_at:
-            new Date().toISOString()
+          last_seen_at: new Date().toISOString()
         })
         .eq(
           "id",
@@ -315,25 +306,10 @@ async function saveTelegramUser(
       await supabase
         .from("telegram_users")
         .insert({
-          telegram_user_id:
-            telegramUserId,
-          username:
-            telegramUser.username ||
-            null,
-          first_name:
-            telegramUser.first_name ||
-            null,
-          last_name:
-            telegramUser.last_name ||
-            null,
-          language_code:
-            telegramUser.language_code ||
-            null,
+          ...profile,
           is_active: true,
-          first_seen_at:
-            new Date().toISOString(),
-          last_seen_at:
-            new Date().toISOString()
+          first_seen_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString()
         })
         .select(
           "id, telegram_user_id"
@@ -1103,6 +1079,81 @@ export async function handleTelegramUpdate(
         update,
         claim.recordId
       );
+
+    // Advertising is appended only after the requested bot interaction succeeds.
+    // A campaign/provider failure must never cause the core Telegram update to retry.
+    let adReservation = null;
+    try {
+      adReservation = await claimTelegramAdDelivery(env, bot, update);
+      if (adReservation) {
+        const ad = buildTelegramAdPayload(adReservation.campaign);
+        const chatId = update?.message?.chat?.id || update?.callback_query?.message?.chat?.id;
+        try {
+          if (ad.method === "photo") {
+            await telegramRequest(env, bot.slug, "sendPhoto", {
+              chat_id: chatId,
+              photo: ad.photo,
+              caption: ad.caption,
+              parse_mode: ad.parse_mode,
+              reply_markup: ad.reply_markup
+            });
+          } else {
+            await sendMessage(env, bot.slug, chatId, ad.text, {
+              reply_markup: ad.reply_markup
+            });
+          }
+        } catch (sendError) {
+          try {
+            await recordTelegramAdDelivery(
+              env,
+              adReservation,
+              "failed",
+              sendError?.code || "TELEGRAM_AD_SEND_FAILED"
+            );
+          } catch (ledgerError) {
+            console.error("FINDLY_MONETIZATION_DELIVERY_LOG_FAILED", {
+              code: ledgerError?.code || null
+            });
+          }
+          console.error("FINDLY_TELEGRAM_AD_SEND_FAILED", {
+            botSlug: bot?.slug || null,
+            update_id: update?.update_id ?? null,
+            code: sendError?.code || "TELEGRAM_AD_SEND_FAILED"
+          });
+          adReservation = null;
+        }
+        if (adReservation) {
+          try {
+            await recordTelegramAdDelivery(env, adReservation, "sent");
+          } catch (ledgerError) {
+            // Do not mark a delivered ad as failed because only its metric write failed.
+            console.error("FINDLY_MONETIZATION_SENT_EVENT_LOG_FAILED", {
+              code: ledgerError?.code || null
+            });
+          }
+        }
+      }
+    } catch (adError) {
+      if (adReservation) {
+        try {
+          await recordTelegramAdDelivery(
+            env,
+            adReservation,
+            "failed",
+            adError?.code || "TELEGRAM_AD_DELIVERY_FAILED"
+          );
+        } catch (ledgerError) {
+          console.error("FINDLY_MONETIZATION_DELIVERY_LOG_FAILED", {
+            code: ledgerError?.code || null
+          });
+        }
+      }
+      console.error("FINDLY_TELEGRAM_AD_SKIPPED", {
+        botSlug: bot?.slug || null,
+        update_id: update?.update_id ?? null,
+        code: adError?.code || "TELEGRAM_AD_DELIVERY_FAILED"
+      });
+    }
 
     await markTelegramUpdateProcessed(
       env,
