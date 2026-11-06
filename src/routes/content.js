@@ -279,11 +279,32 @@ function normalizeMovie(body = {}, partial = false) {
 }
 
 export async function getMoviesCatalog(env, status = null) {
-  let query = getSupabase(env).from("movie_titles").select(MOVIE_FIELDS).order("updated_at", { ascending: false }).limit(500);
+  const supabase = getSupabase(env);
+  let query = supabase.from("movie_titles").select(MOVIE_FIELDS).order("updated_at", { ascending: false }).limit(500);
   if (status && ["draft", "active", "inactive"].includes(status)) query = query.eq("status", status);
   const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+  const titles = data || [];
+  if (!titles.length) return titles;
+
+  const { data: genreLinks, error: genreError } = await supabase
+    .from("movie_title_genres")
+    .select("title_id,movie_genres(name)")
+    .in("title_id", titles.map((title) => title.id));
+  if (genreError) throw genreError;
+
+  const genresByTitle = new Map();
+  for (const link of genreLinks || []) {
+    const name = link.movie_genres?.name;
+    if (!name) continue;
+    const genres = genresByTitle.get(link.title_id) || [];
+    genres.push(name);
+    genresByTitle.set(link.title_id, genres);
+  }
+  return titles.map((title) => ({
+    ...title,
+    genres: genresByTitle.get(title.id) || []
+  }));
 }
 
 export async function createMovieCatalogItem(env, body) {
