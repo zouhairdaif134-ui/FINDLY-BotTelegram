@@ -1524,6 +1524,13 @@ export function validatePublicPlacementQuery(input = {}) {
   };
 }
 
+export function isAllowedAdOrigin(originHost, siteDomain) {
+  if (!originHost || !siteDomain) return false;
+  const origin = String(originHost).toLowerCase();
+  const domain = String(siteDomain).toLowerCase();
+  return origin === domain || origin.endsWith("." + domain);
+}
+
 async function hashPublicVisitorKey(visitorKey) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -1561,10 +1568,7 @@ export async function listPublicAdPlacements(env, filters = {}) {
       .maybeSingle();
     throwIfError(zoneError);
     if (!zone || !zone.site_domain) continue;
-    if (
-      queryInput.origin_host !== zone.site_domain &&
-      !queryInput.origin_host.endsWith("." + zone.site_domain)
-    ) continue;
+    if (!isAllowedAdOrigin(queryInput.origin_host, zone.site_domain)) continue;
 
     const { data: provider, error: providerError } = await supabase
       .from("ad_providers")
