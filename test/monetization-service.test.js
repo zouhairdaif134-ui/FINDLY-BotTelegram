@@ -222,11 +222,22 @@ test("builds Telegram image cards without accepting unsafe media URLs", () => {
 
 test("validates the public website placement page allow-list", () => {
   const validate = requireFunction("validatePublicPlacementQuery");
-  assert.deepEqual(validate({ page_key: "movie_details", slot_key: "details-top" }), {
-    page_key: "movie_details", slot_key: "details-top"
+  assert.deepEqual(validate({
+    page_key: "movie_details", slot_key: "details-top",
+    visitor_key: UUID, view_id: "223e4567-e89b-42d3-a456-426614174000"
+  }), {
+    page_key: "movie_details", slot_key: "details-top",
+    visitor_key: UUID, view_id: "223e4567-e89b-42d3-a456-426614174000"
   });
-  assert.throws(() => validate({ page_key: "all_interactions" }), /page_key/i);
-  assert.throws(() => validate({ page_key: "home", slot_key: "bad slot" }), /slot_key/i);
+  assert.throws(() => validate({
+    page_key: "all_interactions", visitor_key: UUID, view_id: UUID
+  }), /page_key/i);
+  assert.throws(() => validate({
+    page_key: "home", slot_key: "bad slot", visitor_key: UUID, view_id: UUID
+  }), /slot_key/i);
+  assert.throws(() => validate({
+    page_key: "home", visitor_key: "not-a-uuid", view_id: UUID
+  }), /visitor_key/i);
 });
 
 test("requires a source reference for provider-reported revenue and rejects estimates", () => {
