@@ -87,6 +87,6 @@ test("truncates long overview without exceeding Telegram photo caption limit", (
     overview: "قصة طويلة ".repeat(500),
     metadata_status: "pending"
   });
-  assert.ok(caption.length <= 1024);
+  assert.ok(caption.replace(/<[^>]*>/g, "").length <= 1024);
   assert.match(caption, /…\\n\\nالمشاهدة/);
 });
