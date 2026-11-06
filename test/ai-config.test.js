@@ -25,7 +25,7 @@ test("normalizes valid per-bot settings and clamps unsafe numeric limits", () =>
     temperature: 9,
     max_tokens: 9000,
     timeout_ms: 60000
-  }, {});
+  }, { AI_ALLOWED_HOSTS: "api.example.com" });
   assert.equal(config.enabled, true);
   assert.equal(config.model, "custom-model");
   assert.equal(config.apiUrl, "https://api.example.com/v1/chat/completions");
@@ -51,8 +51,23 @@ test("rejects insecure or local provider endpoints by falling back safely", () =
 test("uses environment defaults only when a bot setting is absent", () => {
   const config = ai.normalizeAIConfig({}, {
     AI_MODEL: "env-model",
-    AI_API_URL: "https://env-provider.example/chat"
+    AI_API_URL: "https://env-provider.example/chat",
+    AI_ALLOWED_HOSTS: "env-provider.example"
   });
   assert.equal(config.model, "env-model");
   assert.equal(config.apiUrl, "https://env-provider.example/chat");
+});
+
+test("rejects arbitrary public provider hosts unless explicitly allowlisted", () => {
+  const blocked = ai.normalizeAIConfig({
+    enabled: true,
+    api_url: "https://untrusted.example/v1/chat/completions"
+  }, {});
+  assert.equal(blocked.apiUrl, "https://api.openai.com/v1/chat/completions");
+
+  const allowed = ai.normalizeAIConfig({
+    enabled: true,
+    api_url: "https://trusted.example/v1/chat/completions"
+  }, { AI_ALLOWED_HOSTS: "trusted.example" });
+  assert.equal(allowed.apiUrl, "https://trusted.example/v1/chat/completions");
 });
