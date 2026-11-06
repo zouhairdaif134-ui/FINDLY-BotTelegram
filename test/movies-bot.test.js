@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   normalizeMovieSearch,
   parseMoviesCallback,
-  isMoviesSearchReply
+  isMoviesSearchReply,
+  parseMovieStartPayload
 } from "../src/lib/movies-bot.js";
 import { getTelegramToken } from "../src/lib/telegram.js";
 
@@ -159,4 +160,17 @@ test("sendTitleCard sends a readable text card with its buttons when the poster 
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+
+test("parses movie deep links with Facebook and Instagram attribution", () => {
+  const id = "550e8400-e29b-41d4-a716-446655440000";
+  assert.deepEqual(parseMovieStartPayload("movie_" + id + "_facebook"), { titleId: id, source: "facebook" });
+  assert.deepEqual(parseMovieStartPayload("movie_" + id + "_instagram"), { titleId: id, source: "instagram" });
+  assert.deepEqual(parseMovieStartPayload("movie_" + id), { titleId: id, source: null });
+});
+
+test("rejects invalid movie deep links and unknown attribution sources", () => {
+  assert.equal(parseMovieStartPayload("movie_not-a-uuid_facebook"), null);
+  assert.equal(parseMovieStartPayload("movie_550e8400-e29b-41d4-a716-446655440000_tiktok"), null);
 });
