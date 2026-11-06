@@ -85,10 +85,12 @@ function relevanceScore(row, query) {
   const needle = query.toLocaleLowerCase();
   const title = String(row.title || "").toLocaleLowerCase();
   const original = String(row.original_title || "").toLocaleLowerCase();
-  if (title === needle || original === needle) return 0;
-  if (title.startsWith(needle) || original.startsWith(needle)) return 1;
+  if (title === needle) return 0;
+  if (title.startsWith(needle)) return 1;
   if (title.includes(needle)) return 2;
-  if (original.includes(needle)) return 3;
+  if (original === needle) return 3;
+  if (original.startsWith(needle)) return 4;
+  if (original.includes(needle)) return 5;
   return 4;
 }
 
