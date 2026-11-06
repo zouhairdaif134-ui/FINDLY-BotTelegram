@@ -11,7 +11,7 @@ import {
   showSharedJob,
   handleJobsCallback
 } from "../lib/jobs-ui.js";
-import { generateAIReply, getAIConfig } from "../lib/ai.js";
+import { generateAIReply, getAIConfig, classifyAIError } from "../lib/ai.js";
 import {
   parseAIMemoryCommand, buildAIMemoryConsentKeyboard, buildAIMemoryConfirmationKeyboard,
   getAIMemoryState, ensureAIMemoryState, setAIMemoryConsent, setAIMemorySessionEnabled,
@@ -1508,6 +1508,7 @@ async function processTelegramUpdate(
     };
   }
 
+  const aiStartedAt = Date.now();
   try {
     const memoryUserId = message.chat?.type === "private" ? internalUser?.id : null;
     const aiConfig = await getAIConfig(env, bot.id);
@@ -1552,11 +1553,10 @@ async function processTelegramUpdate(
       await recordAnalytics(
         env,
         bot,
-        telegramUser,
+        null,
         "ai_message",
         {
-          update_id:
-            update?.update_id ?? null
+          duration_ms: Math.max(0, Date.now() - aiStartedAt)
         }
       );
 
@@ -1566,7 +1566,12 @@ async function processTelegramUpdate(
       };
     }
   } catch (error) {
-    console.error("AI reply failed:", error);
+    const safeAIError = classifyAIError(error);
+    console.error("AI reply failed:", {
+      botSlug: bot?.slug || null,
+      category: safeAIError.category
+    });
+    await recordAnalytics(env, bot, null, "ai_error", safeAIError);
     await sendMessage(
       env,
       bot.slug,
