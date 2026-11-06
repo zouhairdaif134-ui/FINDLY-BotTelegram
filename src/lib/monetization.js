@@ -703,6 +703,28 @@ export async function saveAdPlacement(env, input) {
 export async function saveFrequencyPolicy(env, input) {
   const payload = validateFrequencyPolicyInput(input);
   const supabase = getSupabase(env);
+  if (payload.campaign_id) {
+    const { data: campaign, error: campaignError } = await supabase
+      .from("ad_campaigns")
+      .select("id,channel,campaign_type")
+      .eq("id", payload.campaign_id)
+      .maybeSingle();
+    throwIfError(campaignError);
+    if (!campaign || campaign.campaign_type !== "external" || campaign.channel !== payload.channel) {
+      throw new Error("frequency campaign scope must match an existing Phase 1 campaign channel");
+    }
+  }
+  if (payload.placement_id) {
+    const { data: placement, error: placementError } = await supabase
+      .from("ad_placements")
+      .select("id,channel")
+      .eq("id", payload.placement_id)
+      .maybeSingle();
+    throwIfError(placementError);
+    if (!placement || placement.channel !== payload.channel) {
+      throw new Error("frequency placement scope must match the selected channel");
+    }
+  }
   let lookup = supabase.from("ad_frequency_policies").select("id").eq("channel", payload.channel);
   if (payload.campaign_id) lookup = lookup.eq("campaign_id", payload.campaign_id);
   else lookup = lookup.is("campaign_id", null);
