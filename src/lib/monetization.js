@@ -1504,11 +1504,25 @@ export function validatePublicPlacementQuery(input = {}) {
   if (slotKey && !/^[a-z0-9][a-z0-9_-]*$/.test(slotKey)) {
     throw new Error("slot_key is invalid");
   }
-  return { page_key: pageKey, slot_key: slotKey };
+  return {
+    page_key: pageKey,
+    slot_key: slotKey,
+    visitor_key: requireUuid(value.visitor_key, "visitor_key"),
+    view_id: requireUuid(value.view_id, "view_id")
+  };
+}
+
+async function hashPublicVisitorKey(visitorKey) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(visitorKey)
+  );
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export async function listPublicAdPlacements(env, filters = {}) {
   const queryInput = validatePublicPlacementQuery(filters);
+  const visitorKeyHash = await hashPublicVisitorKey(queryInput.visitor_key);
   const supabase = getSupabase(env);
   let query = supabase
     .from("ad_placements")
@@ -1567,6 +1581,20 @@ export async function listPublicAdPlacements(env, filters = {}) {
     throwIfError(campaignError);
     const campaign = (campaigns || []).find((item) => isActiveSchedule(item));
     if (!campaign) continue;
+
+    const idempotencyKey = ["web", visitorKeyHash, queryInput.view_id, placement.id].join(":");
+    const { data: claimed, error: claimError } = await supabase.rpc(
+      "claim_monetization_website_ad_delivery",
+      {
+        p_idempotency_key: idempotencyKey,
+        p_campaign_id: campaign.id,
+        p_placement_id: placement.id,
+        p_provider_zone_id: zone.id,
+        p_visitor_key_hash: visitorKeyHash
+      }
+    );
+    throwIfError(claimError);
+    if (claimed !== true) continue;
 
     result.push({
       placement_id: placement.id,
