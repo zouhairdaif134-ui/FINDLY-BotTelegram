@@ -1,5 +1,6 @@
 import { getSupabase } from "./supabase.js";
 import { buildAIMemoryMessages } from "./ai-memory.js";
+import { AI_CATALOG_TOOLS, executeCatalogTool } from "./ai-catalog.js";
 
 const DEFAULT_MODEL = "gpt-4o-mini";
 const DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
@@ -120,37 +121,26 @@ export async function getAIConfig(env, botId) {
   return normalizeAIConfig(data?.setting_value, env);
 }
 
-export async function generateAIReply(env, bot, userText, memory = {}) {
-  const config = memory.config || await getAIConfig(env, bot?.id);
-  if (!config.enabled) return null;
-
-  const apiKey = env.AI_API_KEY;
-  if (!apiKey) {
-    throw new Error("AI provider is not configured");
-  }
-
-  const input = String(userText || "").trim().slice(0, 4000);
-  if (!input) return null;
-
+async function requestAIProvider(config, apiKey, messages, includeCatalogTools) {
   let response;
   try {
+    const body = {
+      model: config.model,
+      messages,
+      temperature: config.temperature,
+      max_tokens: config.maxTokens
+    };
+    if (includeCatalogTools) {
+      body.tools = AI_CATALOG_TOOLS;
+      body.tool_choice = "auto";
+    }
     response = await fetch(config.apiUrl, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        model: config.model,
-        messages: buildAIMemoryMessages(
-          config.systemPrompt,
-          memory.history,
-          input,
-          memory.preferences
-        ),
-        temperature: config.temperature,
-        max_tokens: config.maxTokens
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(config.timeoutMs)
     });
   } catch {
@@ -167,11 +157,81 @@ export async function generateAIReply(env, bot, userText, memory = {}) {
   } catch {
     throw new Error("AI provider returned an invalid response");
   }
+  const message = payload?.choices?.[0]?.message;
+  if (!message || typeof message !== "object") {
+    throw new Error("AI provider returned an invalid response");
+  }
+  return message;
+}
 
-  const reply = payload?.choices?.[0]?.message?.content;
-  if (typeof reply !== "string" || !reply.trim()) {
-    throw new Error("AI provider returned an empty response");
+function extractAIText(message) {
+  const content = message?.content;
+  if (typeof content === "string" && content.trim()) return content.trim().slice(0, 3900);
+  return null;
+}
+
+export async function generateAIReply(env, bot, userText, memory = {}) {
+  const config = memory.config || await getAIConfig(env, bot?.id);
+  if (!config.enabled) return null;
+
+  const apiKey = env.AI_API_KEY;
+  if (!apiKey) {
+    throw new Error("AI provider is not configured");
   }
 
-  return reply.trim().slice(0, 3900);
+  const input = String(userText || "").trim().slice(0, 4000);
+  if (!input) return null;
+
+  const messages = buildAIMemoryMessages(
+    config.systemPrompt,
+    memory.history,
+    input,
+    memory.preferences
+  );
+  const supabase = memory.supabase || null;
+  const firstMessage = await requestAIProvider(config, apiKey, messages, Boolean(supabase));
+  const toolCalls = Array.isArray(firstMessage.tool_calls)
+    ? firstMessage.tool_calls.slice(0, 3)
+    : [];
+  if (!toolCalls.length || !supabase) return extractAIText(firstMessage);
+
+  const assistantToolCalls = [];
+  const toolMessages = [];
+  for (let index = 0; index < toolCalls.length; index += 1) {
+    const call = toolCalls[index];
+    const name = call?.function?.name;
+    const callId = typeof call?.id === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(call.id)
+      ? call.id
+      : "catalog_call_" + index;
+    const rawArguments = typeof call?.function?.arguments === "string"
+      ? call.function.arguments.slice(0, 2000)
+      : "";
+    assistantToolCalls.push({
+      id: callId,
+      type: "function",
+      function: {
+        name: typeof name === "string" ? name.slice(0, 80) : "",
+        arguments: rawArguments
+      }
+    });
+    const result = await executeCatalogTool(supabase, name, rawArguments);
+    toolMessages.push({
+      role: "tool",
+      tool_call_id: callId,
+      content: JSON.stringify(result).slice(0, 7000)
+    });
+  }
+
+  const followUpMessages = [
+    ...messages,
+    { role: "assistant", content: firstMessage.content || null, tool_calls: assistantToolCalls },
+    ...toolMessages,
+    {
+      role: "system",
+      content: "Use only the returned FINDLY catalog records for movie and series facts. If the tool returned no matching records, say so. Do not invent titles, ratings, years, runtimes, genres, or plot details. Clearly distinguish missing catalog data from verified data."
+    }
+  ];
+  const finalMessage = await requestAIProvider(config, apiKey, followUpMessages, false);
+  return extractAIText(finalMessage) ||
+    "ما لقيتش جواباً مؤكداً من بيانات مكتبة FINDLY. جرّب تعطيني اسم الفيلم أو النوع اللي كتقلب عليه.";
 }
