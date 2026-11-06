@@ -566,3 +566,10 @@ $$;
 
 revoke all on function public.get_monetization_campaign_delivery_summary(timestamptz) from public, anon, authenticated;
 grant execute on function public.get_monetization_campaign_delivery_summary(timestamptz) to service_role;
+
+
+-- A provider zone/tag is rendered at most once on a given website page.
+-- Different slots may coexist on the same page when they use distinct zones.
+create unique index if not exists ad_placements_unique_website_zone_per_page_idx
+  on public.ad_placements (provider_zone_id, page_key)
+  where channel = 'website' and provider_zone_id is not null;
