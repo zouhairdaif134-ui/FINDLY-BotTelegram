@@ -1062,3 +1062,175 @@ export async function listExclusionCandidates(env, filters = {}) {
   throwIfError(error);
   return data || [];
 }
+
+
+function isActiveSchedule(item, now = Date.now()) {
+  const startsAt = item?.starts_at ? new Date(item.starts_at).getTime() : null;
+  const endsAt = item?.ends_at ? new Date(item.ends_at).getTime() : null;
+  return (!startsAt || startsAt <= now) && (!endsAt || endsAt > now);
+}
+
+export function buildTelegramAdPayload(campaign) {
+  const creative = requireObject(campaign?.creative || {}, "campaign creative");
+  const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[character]);
+  const title = creative.title ? escape(creative.title) : "";
+  const body = escape(creative.body || "");
+  const text = [title, body].filter(Boolean).join("\\n\\n");
+  const ctaLabel = escape(creative.cta_label || "اعرف المزيد");
+  const replyMarkup = {
+    inline_keyboard: [[{ text: creative.cta_label || "اعرف المزيد", url: campaign.target_url }]]
+  };
+
+  if (campaign.format === "telegram_card") {
+    const photo = creative.telegram_file_id || creative.image_url;
+    if (!photo) throw new Error("Telegram card image is missing");
+    return {
+      method: "photo",
+      photo,
+      caption: text.slice(0, 1024),
+      parse_mode: "HTML",
+      reply_markup: replyMarkup
+    };
+  }
+  if (campaign.format !== "telegram_text") {
+    throw new Error("Telegram campaign format is unsupported");
+  }
+  return {
+    method: "message",
+    text: (text + (text ? "\\n\\n" : "") + ctaLabel).slice(0, 4000),
+    reply_markup: replyMarkup
+  };
+}
+
+export async function claimTelegramAdDelivery(env, bot, update) {
+  const telegramUser = update?.message?.from || update?.callback_query?.from;
+  const updateId = update?.update_id;
+  const chat = update?.message?.chat || update?.callback_query?.message?.chat;
+  if (!bot?.id || !Number.isSafeInteger(updateId) || !telegramUser?.id ||
+      chat?.type !== "private" || telegramUser.is_bot === true) {
+    return null;
+  }
+
+  const supabase = getSupabase(env);
+  const { data: user, error: userError } = await supabase
+    .from("telegram_users")
+    .select("id,is_active,is_bot")
+    .eq("telegram_user_id", String(telegramUser.id))
+    .maybeSingle();
+  throwIfError(userError);
+  if (!user?.id || !user.is_active || user.is_bot) return null;
+
+  const now = Date.now();
+  const { data: campaigns, error: campaignError } = await supabase
+    .from("ad_campaigns")
+    .select("id,bot_id,provider_id,name,status,target_url,starts_at,ends_at,channel,format,creative,max_deliveries,priority")
+    .eq("bot_id", bot.id)
+    .eq("channel", "telegram")
+    .eq("campaign_type", "external")
+    .eq("status", "active")
+    .order("priority", { ascending: true })
+    .limit(50);
+  throwIfError(campaignError);
+
+  for (const campaign of campaigns || []) {
+    if (!isActiveSchedule(campaign, now)) continue;
+    const { data: links, error: linkError } = await supabase
+      .from("ad_campaign_placements")
+      .select("placement_id")
+      .eq("campaign_id", campaign.id);
+    throwIfError(linkError);
+    const placementIds = (links || []).map((link) => link.placement_id);
+    if (!placementIds.length) continue;
+
+    const { data: placements, error: placementError } = await supabase
+      .from("ad_placements")
+      .select("id,channel,format,position,provider_zone_id,is_enabled,starts_at,ends_at,priority")
+      .in("id", placementIds)
+      .eq("channel", "telegram")
+      .eq("format", campaign.format)
+      .eq("position", "interaction_trigger")
+      .eq("is_enabled", true)
+      .order("priority", { ascending: true });
+    throwIfError(placementError);
+
+    for (const placement of placements || []) {
+      if (!placement.provider_zone_id || !isActiveSchedule(placement, now)) continue;
+      const { data: zone, error: zoneError } = await supabase
+        .from("ad_provider_zones")
+        .select("id,provider_id,channel,format,is_verified,is_active")
+        .eq("id", placement.provider_zone_id)
+        .eq("provider_id", campaign.provider_id)
+        .eq("channel", "telegram")
+        .eq("format", campaign.format)
+        .eq("is_verified", true)
+        .eq("is_active", true)
+        .maybeSingle();
+      throwIfError(zoneError);
+      if (!zone) continue;
+
+      const { data: provider, error: providerError } = await supabase
+        .from("ad_providers")
+        .select("id,provider_type,is_active")
+        .eq("id", campaign.provider_id)
+        .eq("provider_type", "external")
+        .eq("is_active", true)
+        .maybeSingle();
+      throwIfError(providerError);
+      if (!provider) continue;
+
+      const idempotencyKey = [
+        "telegram", bot.id, updateId, campaign.id, placement.id
+      ].join(":");
+      const { data: claimed, error: claimError } = await supabase.rpc(
+        "claim_monetization_ad_delivery",
+        {
+          p_idempotency_key: idempotencyKey,
+          p_campaign_id: campaign.id,
+          p_placement_id: placement.id,
+          p_provider_zone_id: zone.id,
+          p_user_id: user.id,
+          p_bot_id: bot.id
+        }
+      );
+      throwIfError(claimError);
+      if (claimed === true) {
+        return {
+          idempotency_key: idempotencyKey,
+          campaign_id: campaign.id,
+          placement_id: placement.id,
+          provider_zone_id: zone.id,
+          user_id: user.id,
+          bot_id: bot.id,
+          campaign
+        };
+      }
+    }
+  }
+  return null;
+}
+
+export async function recordTelegramAdDelivery(env, reservation, eventType, errorCode = null) {
+  if (!reservation || !["sent", "failed"].includes(eventType)) return null;
+  const payload = {
+    idempotency_key: reservation.idempotency_key + ":" + eventType,
+    campaign_id: reservation.campaign_id,
+    placement_id: reservation.placement_id,
+    provider_zone_id: reservation.provider_zone_id,
+    user_id: reservation.user_id,
+    bot_id: reservation.bot_id,
+    channel: "telegram",
+    event_type: eventType,
+    error_code: errorCode ? String(errorCode).slice(0, 80) : null,
+    metadata: { trigger: "telegram_interaction" }
+  };
+  const { data, error } = await getSupabase(env)
+    .from("ad_delivery_events")
+    .insert(payload)
+    .select("id,event_type,occurred_at")
+    .single();
+  if (error?.code === "23505") return null;
+  throwIfError(error);
+  return data;
+}
