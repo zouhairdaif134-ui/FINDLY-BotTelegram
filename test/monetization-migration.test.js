@@ -62,6 +62,6 @@ test("calculates rolling MAU from real Telegram activity while excluding ineligi
   assert.match(migration, /last_seen_at >= p_since/i);
   assert.match(migration, /is_active = true/i);
   assert.match(migration, /is_bot = false/i);
-  assert.match(migration, /not exists \(\s*select 1 from public\.monetization_user_exclusions/is);
+  assert.match(migration, /not exists \(\s*select 1\s+from public\.monetization_user_exclusions/is);
   assert.match(migration, /grant execute on function public\.get_monetization_mau\(timestamptz\) to service_role/i);
 });
