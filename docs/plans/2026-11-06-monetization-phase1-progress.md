@@ -1,7 +1,7 @@
 Plan: docs/plans/2026-11-06-monetization-phase1.md
-Task 1: complete — additive schema, RLS/RBAC, MAU, revenue ledger, campaign metrics and atomic frequency reservation.
-Task 2: complete — permission-checked API, Owner-only provider verification, Telegram trigger delivery, idempotency and frequency caps.
-Task 3: complete — six-module Monetization Dashboard, placement manager, campaign/frequency controls and transaction ledger.
-Task 4: partial — public read-only website placement API and operations documentation are implemented. Actual Home/Search/Details/Watch rendering is blocked because no consumer website frontend repository exists in this codebase and provider-specific official tags/zone values are account-owned.
-Verification at commit 02153592e6492803095e77a776d3114abf8e168b: GitHub Actions npm test passed; Dashboard Vite build passed; Worker Wrangler dry-run passed.
-Production migration, Worker deployment, Pages deployment, provider activation, and merge remain pending release review and the external website integration target.
+Task 1: complete — additive schema, RLS/RBAC, distinct rolling MAU, append-only revenue ledger, campaign metrics, atomic Telegram and website frequency reservations, and one-zone-per-website-page uniqueness.
+Task 2: complete — permission-checked Monetization API, Owner-only provider verification, Telegram delivery after successful bot responses, interaction triggers, atomic idempotency/frequency/campaign caps, scheduled activation every five minutes, public website placement reads, visitor-key hashing, and request-origin domain allowlisting.
+Task 3: complete — six-module Monetization Dashboard, provider/zone controls, website and Telegram placement manager, campaign scheduling and assignment, campaign/placement frequency overrides, MAU exclusions, and revenue ledger with provenance/reversals.
+Task 4: partial — public website placement API, domain verification, visitor frequency enforcement, duplicate-zone protection, and operations documentation are implemented. Actual rendering on Home/Search/Movie Details/Watch is not in this repository. The separate findly-v3-api repository currently contains only a README; Cloudflare Pages project findly-v3-apii is configured to build the admin Dashboard from the same FINDLY-BotTelegram repository, not a consumer website.
+Verification at commit f97b39697f2b1cc710ae308e41b03835e47c54ba: GitHub Actions npm test passed; Dashboard Vite build passed; Worker Wrangler deploy --dry-run passed.
+Production migration, Worker deployment, Pages production deployment, provider activation, and merge remain blocked pending the consumer website frontend integration target and release review. No production changes have been made by this work.
