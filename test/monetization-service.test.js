@@ -303,3 +303,13 @@ test("requires an approved site domain for website provider zones", () => {
     external_zone_id: "smartlink-123"
   }).site_domain, null);
 });
+
+test("rejects HTML and URL values where a plain provider zone identifier is required", () => {
+  const validate = requireFunction("validateProviderZoneInput");
+  const base = {
+    provider_id: UUID, channel: "website", format: "banner",
+    site_domain: "www.findly.example"
+  };
+  assert.throws(() => validate({ ...base, external_zone_id: "<script>alert(1)</script>" }), /plain provider identifier/i);
+  assert.throws(() => validate({ ...base, external_zone_id: "https://ads.example/zone" }), /plain provider identifier/i);
+});
