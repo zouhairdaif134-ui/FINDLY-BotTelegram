@@ -59,6 +59,7 @@ import {
   updateSetting,
   deleteSetting
 } from "./routes/settings.js";
+import { getAIAdminConfig, saveAIAdminConfig } from "./routes/ai.js";
 
 import {
   handleTelegramUpdate
@@ -1777,6 +1778,31 @@ export default {
             await getMovieReferralAnalytics(env)
           )
         , request);
+      }
+
+      if (
+        url.pathname === "/api/ai/config" &&
+        request.method === "GET"
+      ) {
+        const auth = await requirePermission(env, request, PERMISSIONS.settings);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await getAIAdminConfig(
+          env,
+          url.searchParams.get("bot_id")
+        )), request);
+      }
+
+      if (
+        url.pathname === "/api/ai/config" &&
+        request.method === "PUT"
+      ) {
+        const auth = await requirePermission(env, request, PERMISSIONS.settings);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await saveAIAdminConfig(
+          env,
+          await readJson(request),
+          auth
+        )), request);
       }
 
       if (
