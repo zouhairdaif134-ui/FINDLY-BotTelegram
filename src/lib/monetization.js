@@ -440,7 +440,7 @@ export async function getMonetizationOverview(env) {
   return {
     mau_30d: Number(mauResult.data || 0),
     mau_target: 1000,
-    phase2_eligible: Number(mauResult.data || 0) >= 1000,
+    phase2_eligible: Number(mauResult.data || 0) >= 1000,\n    phase2_activation_requires_owner_approval: true,
     campaigns_active: campaignResult.count || 0,
     placements_enabled: placementResult.count || 0,
     delivery_30d: {
@@ -467,6 +467,17 @@ export async function listAdProviderZones(env, filters = {}) {
     .select("id,provider_id,channel,format,external_zone_id,site_domain,is_verified,is_active,verified_at,verified_by,verification_method,metadata,created_at,updated_at")
     .order("created_at", { ascending: false });
   if (filters.provider_id) query = query.eq("provider_id", requireUuid(filters.provider_id, "provider_id"));
+  if (filters.channel) query = query.eq("channel", filters.channel);
+  const { data, error } = await query;
+  throwIfError(error);
+  return data || [];
+}
+
+export async function listFrequencyPolicies(env, filters = {}) {
+  let query = getSupabase(env)
+    .from("ad_frequency_policies")
+    .select("id,channel,campaign_id,placement_id,max_per_user,cooldown_seconds,max_per_session,rolling_window_minutes,is_enabled,created_at,updated_at")
+    .order("channel", { ascending: true });
   if (filters.channel) query = query.eq("channel", filters.channel);
   const { data, error } = await query;
   throwIfError(error);
