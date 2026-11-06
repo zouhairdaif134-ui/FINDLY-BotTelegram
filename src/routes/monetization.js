@@ -411,7 +411,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       ]);
       return send(helpers, request, {
         channels: {
-          website: ["banner", "native", "popup", "video"],
+          website: ["banner", "native", "popup"],
           telegram: ["telegram_text", "telegram_card"]
         },
         providers,
