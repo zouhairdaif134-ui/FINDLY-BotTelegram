@@ -98,19 +98,28 @@ export async function sendPhoto(env, botSlug, chatId, photoUrl, options = {}) {
       break;
     } catch (error) { downloadError = error; imageResponse = null; }
   }
-  if (!imageResponse) throw new Error("Unable to retrieve the required movie poster: " + (downloadError?.message || "unknown error"));
-  const imageBlob = await imageResponse.blob();
-  if (!imageBlob.size) throw new Error("TMDB returned an empty movie poster");
-  const form = new FormData();
-  form.append("chat_id", String(chatId));
-  form.append("photo", imageBlob, "findly-poster");
-  if (options.caption) form.append("caption", options.caption);
-  if (options.parse_mode) form.append("parse_mode", options.parse_mode);
-  if (options.reply_markup) form.append("reply_markup", JSON.stringify(options.reply_markup));
-  const response = await fetch("https://api.telegram.org/bot" + token + "/sendPhoto", { method: "POST", body: form });
-  const data = await response.json();
-  if (!data.ok) { const error = new Error(data.description || "Telegram photo upload failed"); error.code = "TELEGRAM_API_ERROR"; error.status = response.status; throw error; }
-  return data.result;
+  let uploadError = downloadError;
+  if (imageResponse) {
+    try {
+      const imageBlob = await imageResponse.blob();
+      if (!imageBlob.size) throw new Error("TMDB returned an empty movie poster");
+      const form = new FormData();
+      form.append("chat_id", String(chatId));
+      form.append("photo", imageBlob, "findly-poster");
+      if (options.caption) form.append("caption", options.caption);
+      if (options.parse_mode) form.append("parse_mode", options.parse_mode);
+      if (options.reply_markup) form.append("reply_markup", JSON.stringify(options.reply_markup));
+      const response = await fetch("https://api.telegram.org/bot" + token + "/sendPhoto", { method: "POST", body: form });
+      const data = await response.json();
+      if (!data.ok) { const error = new Error(data.description || "Telegram photo upload failed"); error.code = "TELEGRAM_API_ERROR"; error.status = response.status; throw error; }
+      return data.result;
+    } catch (error) { uploadError = error; }
+  }
+  try {
+    return await telegramRequest(env, botSlug, "sendPhoto", { chat_id: chatId, photo: parsedUrl.toString(), ...options });
+  } catch (fallbackError) {
+    throw new Error("Movie poster delivery failed. File upload: " + (uploadError?.message || "unavailable") + ". URL fallback: " + (fallbackError?.message || "unavailable"));
+  }
 }
 export async function sendMessage(
   env,

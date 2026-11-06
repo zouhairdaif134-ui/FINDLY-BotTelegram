@@ -78,3 +78,20 @@ test("sendPhoto rejects non-TMDB poster URLs before making a network request", a
     assert.equal(called, false);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("sendPhoto falls back to Telegram URL fetching when multipart upload is rejected", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (calls.length === 1) return new Response(new Uint8Array([137, 80, 78, 71]), { status: 200, headers: { "content-type": "image/png" } });
+    if (calls.length === 2) return Response.json({ ok: false, description: "upload rejected" });
+    assert.equal(JSON.parse(options.body).photo, "https://image.tmdb.org/t/p/w500/poster.jpg");
+    return Response.json({ ok: true, result: { message_id: 100 } });
+  };
+  try {
+    const result = await sendPhoto({ TELEGRAM_MOVIES_BOT_TOKEN: "test-token" }, "movies", "12345", "https://image.tmdb.org/t/p/w500/poster.jpg");
+    assert.equal(result.message_id, 100);
+    assert.equal(calls.length, 3);
+  } finally { globalThis.fetch = originalFetch; }
+});
