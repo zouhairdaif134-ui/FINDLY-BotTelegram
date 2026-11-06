@@ -269,6 +269,11 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       }, () => setCampaignStatus(env, id, body.status));
       return send(helpers, request, result);
     }
+    if (resource === "campaigns" && parts.length === 3 && action === "placements" && request.method === "GET") {
+      const { response } = await authorize(env, request, PERMISSIONS.view, helpers);
+      if (response) return response;
+      return send(helpers, request, await listCampaignPlacements(env, id));
+    }
     if (resource === "campaigns" && parts.length === 3 && action === "placements" && request.method === "POST") {
       const { auth, response } = await authorize(env, request, PERMISSIONS.campaigns, helpers);
       if (response) return response;
