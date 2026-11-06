@@ -174,3 +174,48 @@ test("bounds frequency controls and rejects zero or excessive limits", () => {
     /max_per_user|frequency/i
   );
 });
+
+test("builds a safe Telegram text ad with a validated HTTPS CTA", () => {
+  const build = requireFunction("buildTelegramAdPayload");
+  const payload = build({
+    format: "telegram_text",
+    target_url: "https://ads.example/offer",
+    creative: { title: "<Offer>", body: "Save & enjoy", cta_label: "Open offer" }
+  });
+  assert.equal(payload.method, "message");
+  assert.match(payload.text, /&lt;Offer&gt;/);
+  assert.match(payload.text, /Save &amp; enjoy/);
+  assert.equal(payload.reply_markup.inline_keyboard[0][0].url, "https://ads.example/offer");
+  assert.throws(() => build({
+    format: "telegram_text",
+    target_url: "javascript:alert(1)",
+    creative: { body: "Offer", cta_label: "Open" }
+  }), /HTTPS|safe/i);
+});
+
+test("builds Telegram image cards without accepting unsafe media URLs", () => {
+  const build = requireFunction("buildTelegramAdPayload");
+  const payload = build({
+    format: "telegram_card",
+    target_url: "https://ads.example/offer",
+    creative: {
+      title: "Partner offer",
+      body: "Details",
+      cta_label: "View",
+      image_url: "https://cdn.example/ad.jpg"
+    }
+  });
+  assert.equal(payload.method, "photo");
+  assert.equal(payload.photo, "https://cdn.example/ad.jpg");
+  assert.equal(payload.caption, "Partner offer\\n\\nDetails");
+  assert.throws(() => build({
+    format: "telegram_card",
+    target_url: "https://ads.example/offer",
+    creative: {
+      title: "Unsafe",
+      body: "Details",
+      cta_label: "View",
+      image_url: "http://cdn.example/ad.jpg"
+    }
+  }), /HTTPS|safe/i);
+});
