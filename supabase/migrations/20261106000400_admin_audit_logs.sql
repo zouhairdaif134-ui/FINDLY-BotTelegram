@@ -183,10 +183,17 @@ begin
       execute format('select to_jsonb(t) from public.%I t where t.id = $1 for update', v_table)
         into v_old using p_entity_id;
       if v_old is null then raise exception 'Audit target entity not found'; end if;
-      execute format(
-        'update public.%I as t set (%s) = (select %s from jsonb_populate_record(t, $2)) where t.id = $1 returning to_jsonb(t)',
-        v_table, v_columns_sql, v_columns_sql
-      ) into v_new using p_entity_id, v_payload;
+      if v_table = 'bot_settings' then
+        execute format(
+          'update public.%I as t set (%s) = (select %s from jsonb_populate_record(t, $2)), updated_at = now() where t.id = $1 returning to_jsonb(t)',
+          v_table, v_columns_sql, v_columns_sql
+        ) into v_new using p_entity_id, v_payload;
+      else
+        execute format(
+          'update public.%I as t set (%s) = (select %s from jsonb_populate_record(t, $2)) where t.id = $1 returning to_jsonb(t)',
+          v_table, v_columns_sql, v_columns_sql
+        ) into v_new using p_entity_id, v_payload;
+      end if;
       v_entity_id := p_entity_id;
     end if;
   end if;
