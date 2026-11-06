@@ -433,7 +433,9 @@ export async function getMonetizationOverview(env) {
     telegramAttempted,
     telegramSent,
     telegramFailed,
-    revenueResult
+    revenueResult,
+    allTimeRevenueResult,
+    campaignDeliveryResult
   ] = await Promise.all([
     supabase.rpc("get_monetization_mau", { p_since: since }),
     count("ad_campaigns", [["eq", "status", "active"]]),
@@ -445,12 +447,15 @@ export async function getMonetizationOverview(env) {
     count("ad_delivery_events", [["eq", "channel", "telegram"], ["eq", "event_type", "attempted"], ["gte", "occurred_at", since]]),
     count("ad_delivery_events", [["eq", "channel", "telegram"], ["eq", "event_type", "sent"], ["gte", "occurred_at", since]]),
     count("ad_delivery_events", [["eq", "channel", "telegram"], ["eq", "event_type", "failed"], ["gte", "occurred_at", since]]),
-    supabase.rpc("get_monetization_revenue_summary", { p_since: since })
+    supabase.rpc("get_monetization_revenue_summary", { p_since: since }),
+    supabase.rpc("get_monetization_revenue_summary", { p_since: "1970-01-01T00:00:00.000Z" }),
+    supabase.rpc("get_monetization_campaign_delivery_summary", { p_since: since })
   ]);
   for (const result of [
     mauResult, campaignResult, placementResult, subscriptionResult,
     websiteAttempted, websiteSent, websiteFailed,
-    telegramAttempted, telegramSent, telegramFailed, revenueResult
+    telegramAttempted, telegramSent, telegramFailed, revenueResult,
+    allTimeRevenueResult, campaignDeliveryResult
   ]) {
     throwIfError(result.error);
   }
@@ -475,7 +480,9 @@ export async function getMonetizationOverview(env) {
         failed: telegramFailed.count || 0
       }
     },
-    revenue_30d: revenueResult.data || []
+    revenue_30d: revenueResult.data || [],
+    revenue_all_time: allTimeRevenueResult.data || [],
+    campaign_delivery_30d: campaignDeliveryResult.data || []
   };
 }
 
@@ -524,7 +531,8 @@ export async function listAdPlacements(env, filters = {}) {
 }
 
 export async function listAdCampaigns(env, filters = {}) {
-  let query = getSupabase(env)
+  const supabase = getSupabase(env);
+  let query = supabase
     .from("ad_campaigns")
     .select("id,bot_id,provider_id,name,campaign_type,status,target_url,starts_at,ends_at,budget,currency,channel,format,creative,targeting,max_deliveries,priority,created_at,updated_at")
     .order("created_at", { ascending: false });
@@ -532,7 +540,19 @@ export async function listAdCampaigns(env, filters = {}) {
   if (filters.status) query = query.eq("status", filters.status);
   const { data, error } = await query;
   throwIfError(error);
-  return data || [];
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: delivery, error: deliveryError } = await supabase.rpc(
+    "get_monetization_campaign_delivery_summary",
+    { p_since: since }
+  );
+  throwIfError(deliveryError);
+  const metrics = new Map((delivery || []).map((item) => [item.campaign_id, item]));
+  return (data || []).map((campaign) => ({
+    ...campaign,
+    delivery_30d: metrics.get(campaign.id) || {
+      attempted: 0, sent: 0, failed: 0, channel: campaign.channel
+    }
+  }));
 }
 
 export async function listCampaignPlacements(env, campaignId) {
