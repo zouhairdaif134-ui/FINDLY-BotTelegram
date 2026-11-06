@@ -289,7 +289,7 @@ async function sendFullPlotSummary(env, bot, chatId, titleId) {
   const chunks=[];let remaining=String(title.full_plot_summary).trim();
   while(remaining.length>3500){let splitAt=remaining.lastIndexOf(" ",3500);if(splitAt<1800)splitAt=3500;chunks.push(remaining.slice(0,splitAt));remaining=remaining.slice(splitAt).trimStart();}
   if(remaining)chunks.push(remaining);
-  for(let i=0;i<chunks.length;i++){const heading=i===0?"<b>📖 الملخص الكامل: "+escapeHtml(title.title)+"</b>\\n\\n":"<b>📖 تكملة الملخص ("+(i+1)+"/"+chunks.length+")</b>\\n\\n";await sendMessage(env,bot.slug,chatId,heading+escapeHtml(chunks[i]));}
+  for(let i=0;i<chunks.length;i++){const heading=i===0?"<b>📖 الملخص الكامل: "+escapeHtml(title.title)+"</b>\n\n":"<b>📖 تكملة الملخص ("+(i+1)+"/"+chunks.length+")</b>\n\n";await sendMessage(env,bot.slug,chatId,heading+escapeHtml(chunks[i]));}
 }
 
 async function toggleFavorite(env, bot, chatId, titleId, telegramUserId) {
