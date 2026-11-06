@@ -27,7 +27,7 @@ alter table public.ad_campaigns
 alter table public.ad_campaigns
   add constraint ad_campaigns_format_check
   check (
-    (channel = 'website' and format in ('banner','native','popup','video'))
+    (channel = 'website' and format in ('banner','native','popup'))
     or
     (channel = 'telegram' and format in ('telegram_text','telegram_card'))
   );
@@ -53,7 +53,7 @@ create table if not exists public.ad_provider_zones (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint ad_provider_zones_channel_format_check check (
-    (channel = 'website' and format in ('banner','native','popup','video'))
+    (channel = 'website' and format in ('banner','native','popup'))
     or
     (channel = 'telegram' and format in ('telegram_text','telegram_card'))
   ),
@@ -81,7 +81,7 @@ create table if not exists public.ad_placements (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint ad_placements_channel_format_check check (
-    (channel = 'website' and format in ('banner','native','popup','video'))
+    (channel = 'website' and format in ('banner','native','popup'))
     or
     (channel = 'telegram' and format in ('telegram_text','telegram_card'))
   ),
