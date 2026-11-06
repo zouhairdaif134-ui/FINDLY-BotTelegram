@@ -1369,7 +1369,8 @@ async function processTelegramUpdate(
     }
 
     if (String(callbackQuery.data || "").startsWith("aimemory:")) {
-      await handleAIMemoryCallback(env, bot, chatId, callbackQuery, internalUser?.id);
+      const privateChat = callbackQuery.message?.chat?.type === "private";
+      await handleAIMemoryCallback(env, bot, chatId, callbackQuery, privateChat ? internalUser?.id : null);
       return { ok: true };
     }
 
@@ -1476,6 +1477,10 @@ async function processTelegramUpdate(
 
   const memoryCommand = parseAIMemoryCommand(text);
   if (memoryCommand) {
+    if (message.chat?.type !== "private") {
+      await sendMessage(env, bot.slug, chatId, "إعدادات الذاكرة متاحة غير فالمحادثة الخاصة مع البوت، حفاظاً على الخصوصية.");
+      return { ok: true };
+    }
     await handleAIMemoryCommand(env, bot, chatId, internalUser?.id, memoryCommand);
     return { ok: true, ai_memory: memoryCommand.action };
   }
@@ -1500,12 +1505,13 @@ async function processTelegramUpdate(
   }
 
   try {
-    const memoryState = internalUser?.id
-      ? await getAIMemoryState(getSupabase(env), internalUser.id, bot.id)
+    const memoryUserId = message.chat?.type === "private" ? internalUser?.id : null;
+    const memoryState = memoryUserId
+      ? await getAIMemoryState(getSupabase(env), memoryUserId, bot.id)
       : null;
     const memoryEnabled = memoryState?.session_enabled !== false;
-    const memoryHistory = memoryEnabled && internalUser?.id
-      ? await getAISessionHistory(getSupabase(env), internalUser.id, bot.id)
+    const memoryHistory = memoryEnabled && memoryUserId
+      ? await getAISessionHistory(getSupabase(env), memoryUserId, bot.id)
       : [];
     const memoryPreferences = memoryState?.consent_status === "granted" && Array.isArray(memoryState.preferences)
       ? memoryState.preferences
@@ -1518,9 +1524,9 @@ async function processTelegramUpdate(
     );
 
     if (aiReply) {
-      if (memoryEnabled && internalUser?.id) {
-        await appendAISessionMessage(getSupabase(env), internalUser.id, bot.id, "user", text);
-        await appendAISessionMessage(getSupabase(env), internalUser.id, bot.id, "assistant", aiReply);
+      if (memoryEnabled && memoryUserId) {
+        await appendAISessionMessage(getSupabase(env), memoryUserId, bot.id, "user", text);
+        await appendAISessionMessage(getSupabase(env), memoryUserId, bot.id, "assistant", aiReply);
       }
       await sendMessage(
         env,
@@ -1528,10 +1534,10 @@ async function processTelegramUpdate(
         chatId,
         escapeHtml(aiReply)
       );
-      if (internalUser?.id && !memoryState) {
-        await ensureAIMemoryState(getSupabase(env), internalUser.id, bot.id);
+      if (memoryUserId && !memoryState) {
+        await ensureAIMemoryState(getSupabase(env), memoryUserId, bot.id);
         await sendMessage(env, bot.slug, chatId,
-          "<b>إعدادات الخصوصية ديال المساعد</b>\n\nكنستعمل سياقاً مؤقتاً لآخر 12 رسالة لمدة 30 دقيقة. واش بغيتي حتى نحفظ تفضيلاتك بشكل دائم؟",
+          "<b>إعدادات الخصوصية ديال المساعد</b>\n\nكنستعمل سياقاً مؤقتاً لآخر 12 رسالة لمدة 30 دقيقة. ما ترسلش كلمات السر أو معلومات حساسة. واش بغيتي حتى نحفظ تفضيلاتك بشكل دائم؟",
           { reply_markup: buildAIMemoryConsentKeyboard() }
         );
       }
