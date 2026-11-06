@@ -242,3 +242,19 @@ test("requires a source reference for provider-reported revenue and rejects esti
   }).provenance, "provider_reported");
   assert.throws(() => validate({ ...base, provenance: "estimated" }), /estimates/i);
 });
+
+test("rejects HTML markup in campaign creative instead of accepting executable snippets", () => {
+  const validate = requireFunction("validateCampaignInput");
+  assert.throws(() => validate({
+    bot_id: UUID,
+    provider_id: UUID,
+    name: "Markup injection",
+    channel: "telegram",
+    format: "telegram_text",
+    target_url: "https://ads.example/offer",
+    creative: {
+      body: '<img src=x onerror="alert(1)">',
+      cta_label: "Open"
+    }
+  }), /HTML|executable/i);
+});
