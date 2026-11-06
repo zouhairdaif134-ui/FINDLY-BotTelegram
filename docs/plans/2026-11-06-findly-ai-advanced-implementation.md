@@ -3,95 +3,98 @@
 Date: 2026-11-06
 Branch: feat/ai-advanced-phase1
 Base: main at production merge 58fcd0bc6b4932c6c562fa8b35425c49d8f4936e
-Status: Approved plan; implementation staged
+Status: Phases 1–4 implemented; CI passed; Pages Preview deployed. No Production release.
 
 ## Repository facts verified
 - Worker backend: src/index.js
 - Existing provider runtime: src/lib/ai.js
 - Existing bot settings CRUD: src/routes/settings.js (RBAC-protected in router)
 - Telegram fallback integration: src/routes/telegram.js
-- Dashboard: dashboard/src/App.jsx; AI section currently uses ComingSoonSection.
+- Dashboard: dashboard/src/App.jsx
 - Tests: node:test via npm test; dashboard build via dashboard/package.json.
 - Movie catalog: movie_titles, movie_genres, movie_title_genres.
-- Identity risk: Telegram runtime resolves telegram_users.id; movie_favorites references auth.users(id). Do not connect AI mutations until a secure mapping is verified.
+- Identity risk: Telegram runtime resolves telegram_users.id; movie_favorites references auth.users(id). This mismatch is not in scope because AI will not mutate user data.
 
 ## Phase 0 — Branch and baseline
-1. Work only on feat/ai-advanced-phase1.
-2. Read the full route dispatch, Telegram update/callback flow, settings RBAC, bot_settings schema and migration history.
-3. Run baseline npm test and dashboard npm run build in an executable checkout/CI.
-4. Record existing failures before changing code.
+Completed on the feature branch. Work remains isolated; no Production changes.
 
-Acceptance: branch isolated; baseline results recorded; no production changes.
-
-## Phase 1 — AI Core (first implementation slice)
-1. Add focused tests for config normalization, disabled-by-default behavior, per-bot overrides, safe defaults, invalid settings, output limits, provider errors and missing credentials.
-2. Observe failing tests before implementation.
-3. Extend src/lib/ai.js with a pure validated configuration resolver and injectable provider boundary where practical.
-4. Resolve bot-specific config first, then global defaults, then safe built-in defaults.
-5. Keep provider credentials in Cloudflare secrets; never persist or return keys.
-6. Add request timeout/abort, input/output bounds, safe provider error logging, and provider response validation.
-7. Avoid unbounded arbitrary endpoint fetching; validate HTTPS and reject localhost/private/link-local destinations or use an explicit provider endpoint allowlist.
-8. Keep AI disabled unless explicitly enabled for that bot.
-9. Add usage counters only if an existing safe analytics/storage contract is identified; otherwise defer persistence rather than invent schema.
-
-Acceptance: tests prove config precedence, no key leakage, bounded requests, disabled behavior and safe failure; existing Telegram commands remain unaffected.
+## Phase 1 — AI Core
+Implemented and covered by tests:
+- AI disabled by default; per-bot settings with safe global defaults.
+- Bounded inputs/outputs, timeout, provider response validation and safe errors.
+- API keys are Cloudflare secrets only; never persisted or returned.
+- HTTPS provider URL validation and explicit host allowlisting.
 
 ## Phase 2 — AI API and Dashboard
-1. Define dedicated read/update AI endpoints using existing auth and settings.manage or a narrowly scoped permission.
-2. Never return secret values; expose configured/not-configured status only.
-3. Replace AI Coming Soon UI with Overview and Configuration first.
-4. Verify CORS, RBAC, validation, and dashboard production build.
-
-Acceptance: unauthorized access denied; dashboard cannot read provider secrets; per-bot config round-trips safely.
+Implemented:
+- RBAC-protected GET/PUT /api/ai/config using settings.manage.
+- Secret values are never returned; only configured/not-configured status is exposed.
+- Dashboard AI configuration UI is implemented.
+- Dashboard build passed in CI.
 
 ## Phase 3 — Hybrid Memory
-1. Inspect current telegram_users/user_bots relationships; use the internal telegram_users.id and bot_id scope only.
-2. Add service-role-only memory tables with RLS, a 30-minute session expiry, bounded history and explicit consent timestamps.
-3. Implement private-chat-only session context, persistent consent buttons, explicit preference-save confirmation, status/list, clear, off and on commands.
-4. Purge expired session messages through the existing five-minute scheduled Worker invocation.
-5. Add unit and migration-contract tests. Do not apply the migration to Production; validate CI and a dedicated Preview database before rollout.
-
-Acceptance: no persistent preference before consent and per-item confirmation; group chats cannot read/write personal memory; one user/bot scope cannot access another; denial clears persistent preferences; off deletes data and stops session writes; expiry cleanup removes old session rows.
+Implemented with migration and verification tests:
+- Memory scoped by internal telegram_users.id and bots.id.
+- Private-chat-only session context; latest 12 messages with 30-minute expiry.
+- Persistent preferences require explicit consent and per-item confirmation.
+- /memory, /memory add, /memory clear, /memory off and /memory on.
+- RLS enabled; service-role-only access; cleanup uses the existing scheduled Worker.
+- No Production migration has been applied.
 
 ## Phase 4 — Catalog knowledge and recommendations
-1. Implement typed read-only search tools against active movie_titles and genres.
-2. Return only catalog-backed metadata.
-3. Add relevance and empty-result tests; keep SQL access outside model control.
+Implemented:
+- Fixed read-only tools: search_catalog and recommend_catalog_titles.
+- Active/published catalog records only; no arbitrary SQL or model-generated SQL.
+- Bounded results and tool calls; catalog facts are grounded in returned records.
+- No catalog writes and no user-data mutations.
 
-Acceptance: model cannot fabricate catalog facts; tools only return active records.
+## Current verification evidence
+At commit 2522b9597980eaafa895a7a608ab4619325d9a52:
+- GitHub Actions: FINDLY Movies and Worker Tests — completed/success.
+- GitHub Actions: FINDLY tests — completed/success.
+- Recorded suite result: 111 tests passed, 0 failed.
+- Worker dry-run and dashboard build passed in the recorded CI run.
+- Disposable PostgreSQL migration/RLS verification passed.
+- Cloudflare Pages Preview deployment bb3098b8-ac83-44dc-bb33-010a0b385d9b completed successfully.
+- Preview URL: https://bb3098b8.findly-bottelegram.pages.dev
+- Preview page was fetched and returned the FINDLY ADMIN sign-in screen.
+- Authenticated API round-trip and live Telegram interaction are not yet verified; Preview is not connected to a dedicated test Supabase environment.
+- No Production deployment, live migration, AI activation, or provider secret setup has occurred.
 
-### Phase 4 implementation notes
-- Added fixed OpenAI-compatible function tools: `search_catalog` and `recommend_catalog_titles`.
-- Both tools query only `movie_titles.status = active`; all SQL and Supabase access remain in trusted Worker code.
-- Search supports title/original-title matching, exact-title relevance ranking, optional media-type filtering, and a maximum of five results.
-- Recommendations support optional genre/media-type filters and either top-rated or newest ordering, with bounded genre relation reads.
-- Tool responses include only catalog-backed title, year/date, rating, runtime, overview and genres. Long plot summaries, provider URLs, external IDs, draft/inactive titles and media delivery fields are not exposed.
-- AI receives the tools only when a trusted server-side Supabase handle is supplied. At most three tool calls are executed per turn; unknown tools and malformed arguments fail safely.
-- The follow-up model request is instructed to use returned catalog records only and to disclose when the catalog has no match.
-- No schema migration is required for this phase.
+## Phase 5 — Discovery quality (next for user-facing AI)
+Do not add user-data actions. Improve only read-only discovery:
+1. Add a grounded similar-title discovery path using catalog genres, media type, year and rating.
+2. Improve natural-language intent mapping for conversational search (e.g. mood, genre, era, language only where catalog fields support it).
+3. Add a detailed-title response path that exposes only approved catalog fields and a bounded overview.
+4. Add tests for relevance, missing metadata, empty results, and explicit disclosure when the catalog cannot answer.
+5. Preserve active-only filtering, per-bot isolation, query bounds and tool-call limits.
 
-Acceptance review:
-- Search/recommendation tests cover active-only filtering, bounded queries/results, empty results, exact-title relevance and safe database failures.
-- Runtime tests cover fixed tool exposure, tool-call execution, grounded tool-result handoff, no database handle, and unknown tool rejection.
-- CI verification is pending for the latest branch head.
+Acceptance: all suggestions and details are grounded in active catalog records; no model-invented titles or metadata; no database writes.
 
-## Phase 5 — Confirmed user actions
-1. Resolve telegram_users to auth.users securely before favorites integration.
-2. Create short-lived pending actions bound to user, bot and payload.
-3. Implement confirm/cancel callbacks with expiry, replay protection and ownership checks.
-4. Add audit logging without sensitive prompt or credential data.
+## Phase 6 — Privacy-safe observability and release readiness
+1. Add only necessary usage/error counters and redact prompts, personal data, credentials and provider response bodies.
+2. Test disabled AI, missing credentials, provider failures, rate limits and quota exhaustion with ordinary bot fallback intact.
+3. Verify Preview API flows against a dedicated test Supabase project before any live integration.
+4. Re-run backend tests, dashboard build, migration/RLS checks and security review.
+5. Keep PR Draft until the owner explicitly approves the next release step.
 
-Acceptance: no mutation without valid explicit confirmation; forged, replayed, expired and cross-user callbacks fail.
-
-## Phase 6 — Dashboard observability and release
-1. Add usage/error metrics and privacy-safe logs.
-2. Test provider failure, rate limits, quota exhaustion and fallback behavior.
-3. Run full backend tests, dashboard build, migration tests and security review.
-4. Deploy Preview only; obtain owner approval before Production merge/deploy.
+## Separate future track — Admin AI (after the user-facing work is finished)
+Build a distinct, admin-only assistant inside the control center. It must not share user-facing permissions or memory.
+Initial scope:
+- Movie Content Assistant: research title metadata from approved sources, prepare expanded summaries, short Telegram descriptions, translations and genre/category suggestions.
+- Library QA: detect duplicates, missing fields and inconsistent metadata.
+- Telegram operations helper: summarize bot health/errors and suggest fixes.
+- Admin reports: summarize catalog and bot activity where trustworthy metrics exist.
+Safety:
+- Admin AI drafts and recommends; it does not publish, alter catalog records, change bot configuration or execute operational actions without a separate explicit admin approval.
+- Source provenance must be visible; uncertain facts must be marked for review.
+- No new paid provider or external service without approval.
+- Start this track only after Phases 5–6 are complete and verified.
 
 ## Explicit exclusions
+- No AI actions to add favorites, create watchlists, or otherwise mutate user data.
 - No automatic paid provider activation or paid plan.
-- No production database migration, deployment, or main-branch merge without approval.
+- No Production database migration, deployment, or main-branch merge without explicit approval.
 - No arbitrary SQL/tool execution by the model.
 - No persistent memory without opt-in.
 - No claim of actual provider cost when only an estimate is available.
