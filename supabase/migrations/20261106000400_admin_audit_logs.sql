@@ -162,7 +162,7 @@ begin
     from jsonb_each(p_payload) e(k, value)
     where k = any(v_allowed_columns);
 
-    if jsonb_object_length(v_payload) = 0 then
+    if v_payload = '{}'::jsonb then
       raise exception 'Mutation payload is empty';
     end if;
 
