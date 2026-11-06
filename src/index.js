@@ -82,6 +82,7 @@ import {
 
 import { authorizeRequest } from "./lib/auth.js";
 import { getSupabase } from "./lib/supabase.js";
+import { activateDueMonetizationCampaigns } from "./lib/monetization.js";
 import { renderMovieSharePage } from "./lib/movie-sharing.js";
 
 import {
@@ -267,6 +268,16 @@ export default {
       started_at: startedAt
     });
 
+    let monetization = null;
+    try {
+      monetization = await activateDueMonetizationCampaigns(env);
+    } catch (error) {
+      console.error("FINDLY monetization schedule activation failed:", {
+        code: error?.code || null,
+        message: error?.message || "Unknown error"
+      });
+    }
+
     try {
       const result = await runJobsAutomation(env);
 
@@ -287,7 +298,8 @@ export default {
 
       console.log("FINDLY scheduled invocation completed:", {
         completed_at: new Date().toISOString(),
-        delivery
+        delivery,
+        monetization
       });
     } catch (error) {
       console.error("FINDLY scheduled invocation failed:", {
