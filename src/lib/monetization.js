@@ -1504,9 +1504,14 @@ export function validatePublicPlacementQuery(input = {}) {
   if (slotKey && !/^[a-z0-9][a-z0-9_-]*$/.test(slotKey)) {
     throw new Error("slot_key is invalid");
   }
+  const originHost = requireText(value.origin_host, "origin_host", 253).toLowerCase();
+  if (!/^(?:[a-z0-9-]+\\.)+[a-z]{2,63}$/.test(originHost)) {
+    throw new Error("origin_host must be a valid website hostname");
+  }
   return {
     page_key: pageKey,
     slot_key: slotKey,
+    origin_host: originHost,
     visitor_key: requireUuid(value.visitor_key, "visitor_key"),
     view_id: requireUuid(value.view_id, "view_id")
   };
@@ -1548,7 +1553,11 @@ export async function listPublicAdPlacements(env, filters = {}) {
       .eq("is_active", true)
       .maybeSingle();
     throwIfError(zoneError);
-    if (!zone) continue;
+    if (!zone || !zone.site_domain) continue;
+    if (
+      queryInput.origin_host !== zone.site_domain &&
+      !queryInput.origin_host.endsWith("." + zone.site_domain)
+    ) continue;
 
     const { data: provider, error: providerError } = await supabase
       .from("ad_providers")
