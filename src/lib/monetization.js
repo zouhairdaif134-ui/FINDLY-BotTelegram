@@ -1079,13 +1079,15 @@ export function buildTelegramAdPayload(campaign) {
   const body = escape(creative.body || "");
   const text = [title, body].filter(Boolean).join("\\n\\n");
   const ctaLabel = escape(creative.cta_label || "اعرف المزيد");
+  const targetUrl = validateHttpsUrl(campaign.target_url, "target_url", true);
   const replyMarkup = {
-    inline_keyboard: [[{ text: creative.cta_label || "اعرف المزيد", url: campaign.target_url }]]
+    inline_keyboard: [[{ text: creative.cta_label || "اعرف المزيد", url: targetUrl }]]
   };
 
   if (campaign.format === "telegram_card") {
-    const photo = creative.telegram_file_id || creative.image_url;
-    if (!photo) throw new Error("Telegram card image is missing");
+    const photo = creative.telegram_file_id
+      ? requireText(creative.telegram_file_id, "telegram_file_id", 512)
+      : validateHttpsUrl(creative.image_url, "image_url", true);
     return {
       method: "photo",
       photo,
