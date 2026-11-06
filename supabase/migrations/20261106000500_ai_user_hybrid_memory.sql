@@ -10,6 +10,7 @@ create table if not exists public.ai_user_memory_preferences (
   session_enabled boolean not null default true,
   preferences jsonb not null default '[]'::jsonb
     check (jsonb_typeof(preferences) = 'array'),
+  pending_preference text check (pending_preference is null or char_length(pending_preference) <= 300),
   consented_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
