@@ -111,3 +111,19 @@ test("keeps publisher networks and all ad placements disabled until verified act
   assert.match(migration, /is_enabled boolean not null default false/i);
   assert.match(migration, /alter table public\.ad_campaigns\s+alter column status set default 'draft'/i);
 });
+
+test("reserves Telegram delivery atomically and enforces frequency limits server-side", () => {
+  assert.match(migration, /create or replace function public\\.claim_monetization_ad_delivery/i);
+  assert.match(migration, /pg_advisory_xact_lock/i);
+  assert.match(migration, /max_per_user/i);
+  assert.match(migration, /max_per_session/i);
+  assert.match(migration, /cooldown_seconds/i);
+  assert.match(migration, /event_type = 'attempted'/i);
+  assert.match(migration, /on conflict \\(idempotency_key\\) do nothing/i);
+  assert.match(migration, /u\\.is_active = true and u\\.is_bot = false/i);
+  assert.match(migration, /grant execute on function public\\.claim_monetization_ad_delivery/i);
+});
+
+test("seeds independent website and Telegram default frequency policies", () => {
+  assert.match(migration, /values\\s*\\('website', 3, 3600, 1, 1440, true\\),\\s*\\('telegram', 3, 3600, 1, 1440, true\\)/i);
+});
