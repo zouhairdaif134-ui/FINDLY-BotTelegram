@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildMovieShareContent } from "../src/lib/movie-sharing.js";
+import { buildMovieShareContent, renderMovieSharePage } from "../src/lib/movie-sharing.js";
 
 const movie = {
   id: "550e8400-e29b-41d4-a716-446655440000",
@@ -44,4 +44,19 @@ test("Facebook shares a public movie landing page, not the Telegram deep link", 
   assert.match(share.facebookShareUrl, /sharer\/sharer\.php\?u=/);
   assert.ok(share.facebookShareUrl.includes(encodeURIComponent(share.sharePageUrl)));
   assert.ok(!share.facebookShareUrl.includes(encodeURIComponent(share.telegramUrl)));
+});
+
+test("renders Facebook crawler metadata and a Telegram action for the selected movie", () => {
+  const html = renderMovieSharePage(movie, "FindlyMoviesBot", "facebook", "https://findly-v3-api.berrchidcity99.workers.dev");
+  assert.match(html, /property="og:title" content="Wicker · 2026"/);
+  assert.match(html, /property="og:description"/);
+  assert.match(html, /property="og:image" content="https:\/\/image\.tmdb\.org/);
+  assert.match(html, /href="https:\/\/t\.me\/FindlyMoviesBot\?start=movie_/);
+  assert.match(html, /افتح الفيلم في FINDLY Movies/);
+});
+
+test("escapes movie text before placing it in Open Graph HTML", () => {
+  const html = renderMovieSharePage({ ...movie, title: '<script>alert("x")</script>' }, "FindlyMoviesBot", "facebook");
+  assert.ok(!html.includes('<script>alert("x")</script>'));
+  assert.match(html, /&lt;script&gt;/);
 });
