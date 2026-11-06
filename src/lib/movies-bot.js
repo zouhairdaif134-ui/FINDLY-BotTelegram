@@ -60,6 +60,19 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;");
 }
 
+
+export function buildTitleCaption(title) {
+  const heading = "<b>" + escapeHtml(title.title) + "</b>" + (title.release_year ? " · " + title.release_year : "") + " · FINDLY Movies";
+  const meta = [title.media_type === "series" ? "مسلسل" : "فيلم", title.runtime_minutes ? title.runtime_minutes + " دقيقة" : null, title.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : null].filter(Boolean).join(" · ");
+  const notice = title.metadata_status === "authorized_media_available" ? "المحتوى مسجل كمتاح بترخيص، لكن مسار التسليم داخل Telegram لم يتم تفعيله بعد." : "المشاهدة داخل FINDLY غير متاحة حالياً. لن نعرض رابطاً غير موثوق أو محتوى غير مرخّص.";
+  const prefix = heading + "\n" + meta + "\n\n";
+  const suffix = "\n\n" + notice;
+  const limit = Math.max(0, 1024 - prefix.replace(/<[^>]*>/g, "").length - suffix.length);
+  const overview = String(title.overview || "لا يتوفر ملخص لهذا العنوان حالياً.");
+  const shortOverview = overview.length > limit ? overview.slice(0, Math.max(0, limit - 1)).trimEnd() + "…" : overview;
+  return prefix + escapeHtml(shortOverview) + suffix;
+}
+
 async function getMoviesBot(env) {
   const { data, error } = await getSupabase(env)
     .from("bots")
