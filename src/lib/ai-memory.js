@@ -34,12 +34,15 @@ export function buildAIMemoryConsentKeyboard() {
   };
 }
 
-export function buildAIMemoryConfirmationKeyboard(action) {
+export function buildAIMemoryConfirmationKeyboard(action, token) {
+  if (!["save", "clear"].includes(action) || !/^[0-9a-f-]{36}$/i.test(String(token || ""))) {
+    throw new Error("A valid memory confirmation token is required");
+  }
   const save = action === "save";
   return {
     inline_keyboard: [[
-      { text: save ? "تأكيد الحفظ" : "تأكيد الحذف", callback_data: save ? "aimemory:confirm:save" : "aimemory:confirm:clear" },
-      { text: "إلغاء", callback_data: "aimemory:confirm:cancel" }
+      { text: save ? "تأكيد الحفظ" : "تأكيد الحذف", callback_data: (save ? "aimemory:confirm:save:" : "aimemory:confirm:clear:") + token },
+      { text: "إلغاء", callback_data: "aimemory:confirm:cancel:" + token }
     ]]
   };
 }
