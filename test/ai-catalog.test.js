@@ -73,6 +73,18 @@ test("searchCatalog filters to active titles, bounds query and returns catalog-b
   }
 });
 
+test("searchCatalog ranks exact title matches ahead of partial matches", async () => {
+  const exact = { ...title, id: "exact", title: "Dune", rating: 7.5 };
+  const partial = { ...title, id: "partial", title: "Dune: Part Two", rating: 9.0 };
+  const db = createSupabaseMock((table) => {
+    if (table === "movie_titles") return { data: [partial, exact], error: null };
+    if (table === "movie_title_genres") return { data: [], error: null };
+    throw new Error("unexpected table " + table);
+  });
+  const results = await searchCatalog(db, { query: "Dune" });
+  assert.deepEqual(results.map((item) => item.id), ["exact", "partial"]);
+});
+
 test("searchCatalog returns an empty list for an empty or unsafe-only query without database access", async () => {
   const db = createSupabaseMock(() => ({ data: [], error: null }));
   assert.deepEqual(await searchCatalog(db, { query: " %_* " }), []);
