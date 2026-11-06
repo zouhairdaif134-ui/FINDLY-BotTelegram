@@ -116,6 +116,18 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
   const activeZones = useMemo(() => zones.filter((zone) => zone.is_verified && zone.is_active), [zones]);
   const currentPolicy = policies.find((item) => item.channel === frequencyForm.channel && !item.campaign_id && !item.placement_id);
 
+  useEffect(() => {
+    if (!currentPolicy) return;
+    setFrequencyForm((old) => ({
+      ...old,
+      max_per_user: currentPolicy.max_per_user,
+      cooldown_seconds: currentPolicy.cooldown_seconds,
+      max_per_session: currentPolicy.max_per_session,
+      rolling_window_minutes: currentPolicy.rolling_window_minutes,
+      is_enabled: currentPolicy.is_enabled
+    }));
+  }, [currentPolicy?.id, frequencyForm.channel]);
+
   async function runMutation(path, method, body, successMessage) {
     setSaving(true);
     setError("");
@@ -271,13 +283,13 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
 
   async function saveRevenue(event) {
     event.preventDefault();
-    await runMutation("/api/monetization/transactions", "POST", {
+    const result = await runMutation("/api/monetization/transactions", "POST", {
       amount: revenueForm.amount, currency: revenueForm.currency,
       revenue_source: "external_ad", event_type: revenueForm.event_type,
       external_reference: revenueForm.external_reference || null,
       campaign_id: revenueForm.campaign_id || null
     }, "تسجّل الإيراد اليدوي فالسجل.");
-    setRevenueForm((old) => ({ ...old, amount: "", external_reference: "" }));
+    if (result) setRevenueForm((old) => ({ ...old, amount: "", external_reference: "" }));
   }
 
   async function reverseTransaction(item) {
