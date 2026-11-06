@@ -654,6 +654,26 @@ export async function saveAdProviderZone(env, input) {
 export async function saveAdPlacement(env, input) {
   const payload = validatePlacementInput(input);
   const supabase = getSupabase(env);
+  if (input.id) {
+    const placementId = requireUuid(input.id, "placement id");
+    const { data: links, error: linksError } = await supabase
+      .from("ad_campaign_placements")
+      .select("campaign_id")
+      .eq("placement_id", placementId);
+    throwIfError(linksError);
+    const campaignIds = (links || []).map((link) => link.campaign_id);
+    if (campaignIds.length) {
+      const { data: activeCampaigns, error: activeError } = await supabase
+        .from("ad_campaigns")
+        .select("id")
+        .in("id", campaignIds)
+        .in("status", ["active", "scheduled"]);
+      throwIfError(activeError);
+      if (activeCampaigns?.length) {
+        throw new Error("pause or cancel linked campaigns before editing this placement");
+      }
+    }
+  }
   if (payload.is_enabled) {
     if (!payload.provider_zone_id) throw new Error("an enabled placement requires a verified provider zone");
     const { data: zone, error } = await supabase
@@ -851,6 +871,30 @@ export async function setAdProviderZoneStatus(env, zoneId, enabled) {
   if (enabled === true && !zone.is_verified) {
     throw new Error("provider zone must be verified before it can be enabled");
   }
+  if (enabled === false) {
+    const { data: placements, error: placementsError } = await supabase
+      .from("ad_placements")
+      .select("id")
+      .eq("provider_zone_id", id);
+    throwIfError(placementsError);
+    const placementIds = (placements || []).map((item) => item.id);
+    if (placementIds.length) {
+      const { data: links, error: linksError } = await supabase
+        .from("ad_campaign_placements")
+        .select("campaign_id")
+        .in("placement_id", placementIds);
+      throwIfError(linksError);
+      const campaignIds = [...new Set((links || []).map((item) => item.campaign_id))];
+      if (campaignIds.length) {
+        const { error: pauseError } = await supabase
+          .from("ad_campaigns")
+          .update({ status: "paused", updated_at: new Date().toISOString() })
+          .in("id", campaignIds)
+          .in("status", ["active", "scheduled"]);
+        throwIfError(pauseError);
+      }
+    }
+  }
   const { data, error } = await supabase
     .from("ad_provider_zones")
     .update({ is_active: enabled === true, updated_at: new Date().toISOString() })
@@ -872,6 +916,14 @@ export async function setAdProviderStatus(env, providerId, enabled) {
   throwIfError(providerError);
   if (!provider) throw new Error("provider was not found");
   if (provider.provider_type === "direct") throw new Error("direct advertisers are locked until Phase 2");
+  if (enabled === false) {
+    const { error: pauseError } = await supabase
+      .from("ad_campaigns")
+      .update({ status: "paused", updated_at: new Date().toISOString() })
+      .eq("provider_id", id)
+      .in("status", ["active", "scheduled"]);
+    throwIfError(pauseError);
+  }
   if (enabled === true) {
     const { data: zones, error: zonesError } = await supabase
       .from("ad_provider_zones")
