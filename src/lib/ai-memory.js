@@ -64,7 +64,7 @@ export async function getAIMemoryState(supabase, userId, botId) {
   if (!userId || !botId) return null;
   const { data, error } = await supabase
     .from("ai_user_memory_preferences")
-    .select("consent_status,session_enabled,preferences,consented_at")
+    .select("consent_status,session_enabled,preferences,pending_preference,consented_at")
     .eq("user_id", userId)
     .eq("bot_id", botId)
     .maybeSingle();
@@ -127,7 +127,7 @@ export async function setAIMemoryConsent(supabase, userId, botId, status) {
   const { data, error } = await supabase
     .from("ai_user_memory_preferences")
     .upsert(payload, { onConflict: "user_id,bot_id" })
-    .select("consent_status,session_enabled,preferences,consented_at")
+    .select("consent_status,session_enabled,preferences,pending_preference,consented_at")
     .single();
   if (error) throw error;
   return data;
@@ -141,7 +141,7 @@ export async function setAIMemorySessionEnabled(supabase, userId, botId, enabled
       bot_id: botId,
       session_enabled: Boolean(enabled)
     }, { onConflict: "user_id,bot_id" })
-    .select("consent_status,session_enabled,preferences,consented_at")
+    .select("consent_status,session_enabled,preferences,pending_preference,consented_at")
     .single();
   if (error) throw error;
   return data;
