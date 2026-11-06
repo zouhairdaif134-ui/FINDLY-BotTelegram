@@ -23,7 +23,7 @@ export const AI_CATALOG_TOOLS = [
     type: "function",
     function: {
       name: "recommend_catalog_titles",
-      description: "Recommend published titles from FINDLY's catalog. Optionally filter by a genre or media type. Use top_rated unless the user asks for new or recent titles.",
+      description: "Recommend published titles from FINDLY's catalog for conversational mood, vibe, era, or broad-preference requests. Map a mood to a genre only when it matches an actual catalog genre; otherwise omit the genre filter. Optionally filter by media type. Use newest when the user asks for recent titles; otherwise use top_rated.",
       parameters: {
         type: "object",
         additionalProperties: false,
