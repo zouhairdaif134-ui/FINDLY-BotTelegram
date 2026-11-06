@@ -487,10 +487,16 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   return true;
 }
 
+export function parseMovieStartPayload(startPayload) {
+  const match = /^movie_([0-9a-f-]{36})(?:_(facebook|instagram))?$/i.exec(startPayload || "");
+  if (!match || !UUID_RE.test(match[1])) return null;
+  return { titleId: match[1], source: match[2] ? match[2].toLowerCase() : null };
+}
+
 export async function handleMoviesStart(env, bot, chatId, startPayload, telegramUserId) {
-  const match = /^movie_([0-9a-f-]{36})$/i.exec(startPayload || "");
-  if (match && UUID_RE.test(match[1])) {
-    await sendTitle(env, bot, chatId, match[1], telegramUserId);
+  const payload = parseMovieStartPayload(startPayload);
+  if (payload) {
+    await sendTitle(env, bot, chatId, payload.titleId, telegramUserId);
     return;
   }
   await showMoviesHome(env, bot, chatId);
