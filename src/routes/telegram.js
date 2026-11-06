@@ -13,6 +13,7 @@ import {
   handleMoviesCallback,
   handleMoviesText,
   handleMoviesStart,
+  parseMovieStartPayload,
   showMoviesHome,
   showMoviesSearchPrompt
 } from "../lib/movies-bot.js";
@@ -1244,6 +1245,14 @@ async function processTelegramUpdate(
       }
     }
     if (bot.slug === "movies") {
+      const referral = parseMovieStartPayload(startPayload);
+      if (referral?.source) {
+        await recordAnalytics(env, bot, telegramUser, "movie_referral_start", {
+          title_id: referral.titleId,
+          source: referral.source,
+          start_payload: startPayload
+        });
+      }
       await handleMoviesStart(env, bot, chatId, startPayload, telegramUser?.id);
       return { ok: true };
     }
