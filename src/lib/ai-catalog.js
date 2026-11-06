@@ -223,7 +223,9 @@ export async function findSimilarCatalogTitles(supabase, input = {}) {
     if (!relation?.title_id || relation.title_id === reference.id) continue;
     overlap.set(relation.title_id, (overlap.get(relation.title_id) || 0) + 1);
   }
-  const candidateIds = [...overlap.keys()].slice(0, MAX_SIMILAR_CANDIDATES);
+  const candidateIds = [...overlap.keys()]
+    .sort((a, b) => (overlap.get(b) || 0) - (overlap.get(a) || 0))
+    .slice(0, MAX_SIMILAR_CANDIDATES);
   if (!candidateIds.length) return [];
 
   let request = supabase
