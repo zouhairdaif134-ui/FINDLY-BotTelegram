@@ -30,6 +30,8 @@ Create a Telegram placement under **Ad Placement Manager** using one of these pa
 - `callback`: after an inline-button callback.
 - `message`: after an ordinary text message.
 
+Scheduled campaigns are activated by the Worker cron every five minutes after checking that the provider, verified zone, and at least one enabled compatible placement are ready. Expired active/scheduled campaigns are marked completed.
+
 A campaign is delivered only after the requested bot response succeeds. Group chats, channel posts, known bot identities, excluded users, duplicate Telegram updates, inactive providers/zones, and frequency-limited users do not receive the ad. A failed ad send does not fail or replay the user's original bot update.
 
 Default frequency policy per channel: 3 attempts per user in a rolling 30 days, one per 24-hour conversation window, and a one-hour cooldown. The Owner can change the channel default or set a campaign/placement override in the Dashboard. Failed delivery attempts still consume the safety cap to prevent repeated retries from spamming users.
