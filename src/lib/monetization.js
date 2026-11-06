@@ -440,7 +440,8 @@ export async function getMonetizationOverview(env) {
   return {
     mau_30d: Number(mauResult.data || 0),
     mau_target: 1000,
-    phase2_eligible: Number(mauResult.data || 0) >= 1000,\n    phase2_activation_requires_owner_approval: true,
+    phase2_eligible: Number(mauResult.data || 0) >= 1000,
+    phase2_activation_requires_owner_approval: true,
     campaigns_active: campaignResult.count || 0,
     placements_enabled: placementResult.count || 0,
     delivery_30d: {
@@ -903,7 +904,7 @@ export async function setCampaignStatus(env, campaignId, status) {
 }
 
 export async function recordManualRevenue(env, input) {
-  const payload = validateRevenueInput(input);
+  const payload = validateRevenueInput({ ...input, provenance: "manual" });
   const { data, error } = await getSupabase(env)
     .from("monetization_events")
     .insert({
