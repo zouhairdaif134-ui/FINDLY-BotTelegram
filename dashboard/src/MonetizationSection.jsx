@@ -78,7 +78,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
     max_deliveries: "", budget: "", currency: "MAD", priority: 100
   });
   const [revenueForm, setRevenueForm] = useState({
-    amount: "", currency: "MAD", event_type: "publisher_revenue", external_reference: "", campaign_id: ""
+    amount: "", currency: "MAD", provenance: "manual", event_type: "publisher_revenue", external_reference: "", campaign_id: ""
   });
   const [exclusionForm, setExclusionForm] = useState({ user_id: "", reason: "test", note: "" });
 
@@ -285,8 +285,8 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
     event.preventDefault();
     const result = await runMutation("/api/monetization/transactions", "POST", {
       amount: revenueForm.amount, currency: revenueForm.currency,
-      revenue_source: "external_ad", event_type: revenueForm.event_type,
-      external_reference: revenueForm.external_reference || null,
+      revenue_source: "external_ad", provenance: revenueForm.provenance,
+      event_type: revenueForm.event_type, external_reference: revenueForm.external_reference || null,
       campaign_id: revenueForm.campaign_id || null
     }, "تسجّل الإيراد اليدوي فالسجل.");
     if (result) setRevenueForm((old) => ({ ...old, amount: "", external_reference: "" }));
@@ -540,8 +540,9 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                 <form className="monetization-form" onSubmit={saveRevenue}>
                   <label>Amount<input type="number" min="0.01" step="0.01" value={revenueForm.amount} onChange={(e) => setRevenueForm({ ...revenueForm, amount: e.target.value })} required /></label>
                   <label>Currency<select value={revenueForm.currency} onChange={(e) => setRevenueForm({ ...revenueForm, currency: e.target.value })}><option>MAD</option><option>USD</option><option>EUR</option></select></label>
+                  <label>Provenance<select value={revenueForm.provenance} onChange={(e) => setRevenueForm({ ...revenueForm, provenance: e.target.value })}><option value="manual">Manual entry</option><option value="provider_reported">Provider report</option></select></label>
                   <label>Event type<input value={revenueForm.event_type} onChange={(e) => setRevenueForm({ ...revenueForm, event_type: e.target.value })} required /></label>
-                  <label>External reference<input value={revenueForm.external_reference} onChange={(e) => setRevenueForm({ ...revenueForm, external_reference: e.target.value })} /></label>
+                  <label>Report / external reference<input value={revenueForm.external_reference} onChange={(e) => setRevenueForm({ ...revenueForm, external_reference: e.target.value })} required={revenueForm.provenance === "provider_reported"} /></label>
                   <label>Campaign<select value={revenueForm.campaign_id} onChange={(e) => setRevenueForm({ ...revenueForm, campaign_id: e.target.value })}><option value="">No campaign reference</option>{campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
                   <button className="monetization-primary" disabled={saving}>Add ledger entry</button>
                 </form>
