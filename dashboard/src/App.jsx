@@ -4072,6 +4072,7 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
     setShareStatus("");
     setError("");
     let facebookPopup = null;
+    let facebookNavigated = false;
     try {
       if (platform === "facebook") {
         facebookPopup = window.open("about:blank", "_blank");
@@ -4097,7 +4098,9 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
           ? navigator.clipboard.writeText(share.caption).then(() => true).catch(() => false)
           : Promise.resolve(false);
 
+        facebookPopup.opener = null;
         facebookPopup.location.href = share.facebookShareUrl;
+        facebookNavigated = true;
 
         const copied = await clipboardPromise;
         setShareStatus(
@@ -4160,6 +4163,7 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
         "حمّلنا صورة الفيلم ونسخنا النص. افتح Instagram، اختار الصورة من Gallery، ولسق النص فالوصف."
       );
     } catch (error) {
+      if (facebookPopup && !facebookNavigated) facebookPopup.close();
       if (error?.name === "AbortError") {
         setShareStatus("تم إلغاء المشاركة.");
         return;
