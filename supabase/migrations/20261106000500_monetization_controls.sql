@@ -573,3 +573,134 @@ grant execute on function public.get_monetization_campaign_delivery_summary(time
 create unique index if not exists ad_placements_unique_website_zone_per_page_idx
   on public.ad_placements (provider_zone_id, page_key)
   where channel = 'website' and provider_zone_id is not null;
+
+
+create index if not exists ad_delivery_events_visitor_time_idx
+  on public.ad_delivery_events (visitor_key_hash, occurred_at desc)
+  where visitor_key_hash is not null;
+
+-- Website visitor frequency reservation. The client supplies random UUIDs only;
+-- the Worker hashes the visitor key before it reaches the database.
+create or replace function public.claim_monetization_website_ad_delivery(
+  p_idempotency_key text,
+  p_campaign_id uuid,
+  p_placement_id uuid,
+  p_provider_zone_id uuid,
+  p_visitor_key_hash text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_campaign public.ad_campaigns%rowtype;
+  v_placement public.ad_placements%rowtype;
+  v_policy public.ad_frequency_policies%rowtype;
+  v_user_count bigint;
+  v_session_count bigint;
+  v_last_attempt timestamptz;
+  v_delivery_attempts bigint;
+  v_inserted integer;
+begin
+  if p_idempotency_key is null or length(p_idempotency_key) < 8 or length(p_idempotency_key) > 200
+     or p_campaign_id is null or p_placement_id is null or p_provider_zone_id is null
+     or p_visitor_key_hash is null or p_visitor_key_hash !~ '^[0-9a-f]{64}$' then
+    return false;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_visitor_key_hash || ':website', 0));
+  perform pg_advisory_xact_lock(hashtextextended('campaign:' || p_campaign_id::text, 0));
+
+  select * into v_campaign
+  from public.ad_campaigns
+  where id = p_campaign_id and channel = 'website'
+    and campaign_type = 'external' and status = 'active'
+    and (starts_at is null or starts_at <= now())
+    and (ends_at is null or ends_at > now())
+  for share;
+  if not found then return false; end if;
+
+  select * into v_placement
+  from public.ad_placements
+  where id = p_placement_id and channel = 'website'
+    and format = v_campaign.format and is_enabled = true
+    and (starts_at is null or starts_at <= now())
+    and (ends_at is null or ends_at > now())
+  for share;
+  if not found or v_placement.provider_zone_id is distinct from p_provider_zone_id then return false; end if;
+
+  if not exists (
+    select 1 from public.ad_campaign_placements cp
+    where cp.campaign_id = p_campaign_id and cp.placement_id = p_placement_id
+  ) then return false; end if;
+
+  if not exists (
+    select 1 from public.ad_provider_zones z
+    join public.ad_providers p on p.id = z.provider_id
+    where z.id = p_provider_zone_id
+      and z.provider_id = v_campaign.provider_id
+      and z.channel = 'website' and z.format = v_campaign.format
+      and z.is_verified = true and z.is_active = true
+      and p.provider_type = 'external' and p.is_active = true
+  ) then return false; end if;
+
+  select * into v_policy
+  from public.ad_frequency_policies
+  where channel = 'website'
+    and (
+      campaign_id = p_campaign_id
+      or placement_id = p_placement_id
+      or (campaign_id is null and placement_id is null)
+    )
+  order by
+    case when campaign_id = p_campaign_id then 0
+         when placement_id = p_placement_id then 1
+         else 2 end
+  limit 1;
+  if not found or v_policy.is_enabled = false then return false; end if;
+
+  select count(*) filter (where occurred_at >= now() - interval '30 days'),
+         count(*) filter (where occurred_at >= now() - make_interval(mins => v_policy.rolling_window_minutes)),
+         max(occurred_at)
+    into v_user_count, v_session_count, v_last_attempt
+  from public.ad_delivery_events
+  where visitor_key_hash = p_visitor_key_hash and channel = 'website'
+    and event_type = 'attempted'
+    and (
+      (v_policy.campaign_id is not null and campaign_id = v_policy.campaign_id)
+      or (v_policy.placement_id is not null and placement_id = v_policy.placement_id)
+      or (v_policy.campaign_id is null and v_policy.placement_id is null)
+    );
+
+  if v_session_count >= v_policy.max_per_session then return false; end if;
+  if v_user_count >= v_policy.max_per_user then return false; end if;
+  if v_last_attempt is not null
+     and v_last_attempt > now() - make_interval(secs => v_policy.cooldown_seconds) then
+    return false;
+  end if;
+
+  if v_campaign.max_deliveries is not null then
+    select count(*) into v_delivery_attempts
+    from public.ad_delivery_events
+    where campaign_id = p_campaign_id and event_type = 'attempted';
+    if v_delivery_attempts >= v_campaign.max_deliveries then return false; end if;
+  end if;
+
+  insert into public.ad_delivery_events (
+    idempotency_key, campaign_id, placement_id, provider_zone_id,
+    channel, event_type, visitor_key_hash, metadata
+  ) values (
+    p_idempotency_key, p_campaign_id, p_placement_id, p_provider_zone_id,
+    'website', 'attempted', p_visitor_key_hash,
+    jsonb_build_object('trigger','website_page_view')
+  )
+  on conflict (idempotency_key) do nothing;
+
+  get diagnostics v_inserted = row_count;
+  return v_inserted = 1;
+end;
+$$;
+
+revoke all on function public.claim_monetization_website_ad_delivery(text,uuid,uuid,uuid,text) from public, anon, authenticated;
+grant execute on function public.claim_monetization_website_ad_delivery(text,uuid,uuid,uuid,text) to service_role;
