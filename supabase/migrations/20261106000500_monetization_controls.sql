@@ -211,7 +211,7 @@ language sql
 stable
 set search_path = pg_catalog, public
 as $$
-  select count(*)::bigint
+  select count(distinct u.telegram_user_id)::bigint
   from public.telegram_users u
   where u.is_active = true
     and u.is_bot = false
@@ -300,3 +300,8 @@ $$;
 
 revoke all on function public.get_monetization_revenue_summary(timestamptz) from public, anon, authenticated;
 grant execute on function public.get_monetization_revenue_summary(timestamptz) to service_role;
+
+
+create index if not exists telegram_users_mau_eligibility_idx
+  on public.telegram_users (last_seen_at, telegram_user_id)
+  where is_active = true and is_bot = false;
