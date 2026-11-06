@@ -11,6 +11,9 @@ alter table public.ad_campaigns
   add column if not exists priority integer not null default 100;
 
 alter table public.ad_campaigns
+  alter column status set default 'draft';
+
+alter table public.ad_campaigns
   drop constraint if exists ad_campaigns_status_check;
 
 alter table public.ad_campaigns
