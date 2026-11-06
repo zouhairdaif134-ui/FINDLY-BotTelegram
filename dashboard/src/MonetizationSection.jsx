@@ -322,6 +322,13 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
     }
     return [...totals.entries()];
   }, [overview]);
+  const revenueAllTimeByCurrency = useMemo(() => {
+    const totals = new Map();
+    for (const item of overview?.revenue_all_time || []) {
+      totals.set(item.currency, (totals.get(item.currency) || 0) + Number(item.net_amount || 0));
+    }
+    return [...totals.entries()];
+  }, [overview]);
 
   return (
     <section className="monetization-page">
@@ -368,7 +375,10 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                 <p className="monetization-muted">Delivery counts are not revenue. Revenue is recorded separately from provider reports or manual ledger entries.</p>
               </section>
               <section className="monetization-panel">
-                <h3>Net revenue · last 30 days</h3>
+                <h3>Net revenue</h3>
+                <p className="monetization-muted">All-time totals</p>
+                {revenueAllTimeByCurrency.length ? <div className="monetization-revenue-row">{revenueAllTimeByCurrency.map(([currency, amount]) => <strong key={currency}>{money(amount, currency)}</strong>)}</div> : <p className="monetization-muted">ما كاين حتى إيراد مسجل لحد الآن.</p>}
+                <p className="monetization-muted">Last 30 days</p>
                 {revenueTotalByCurrency.length ? <div className="monetization-revenue-row">{revenueTotalByCurrency.map(([currency, amount]) => <strong key={currency}>{money(amount, currency)}</strong>)}</div> : <p className="monetization-muted">ما كاين حتى إيراد مسجل فهاد الفترة.</p>}
                 <div className="monetization-table-wrap"><table><thead><tr><th>Source</th><th>Provenance</th><th>Currency</th><th>Net amount</th><th>Entries</th></tr></thead><tbody>{(overview?.revenue_30d || []).map((item, index) => <tr key={index}><td>{item.revenue_source}</td><td>{item.provenance}</td><td>{item.currency}</td><td>{money(item.net_amount, item.currency)}</td><td>{item.entry_count}</td></tr>)}</tbody></table></div>
               </section>
@@ -508,15 +518,16 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                   <button className="monetization-primary" disabled={saving || !providers.length || !bots.length}>{campaignEditId ? "Update draft campaign" : "Create draft campaign"}</button>
                   {campaignEditId && <button type="button" className="monetization-secondary" onClick={() => setCampaignEditId("")}>Cancel edit</button>}
                 </form>
-                <div className="monetization-table-wrap"><table><thead><tr><th>Campaign</th><th>Channel / format</th><th>Provider</th><th>Schedule</th><th>Status</th><th>Actions</th></tr></thead><tbody>{campaigns.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.channel} / {item.format}</td><td>{providers.find((p) => p.id === item.provider_id)?.name || "—"}</td><td>{dateLabel(item.starts_at)} → {dateLabel(item.ends_at)}</td><td>{item.status}</td><td className="monetization-actions">
+                <div className="monetization-table-wrap"><table><thead><tr><th>Campaign</th><th>Channel / format</th><th>Provider</th><th>Schedule</th><th>Delivery · 30d</th><th>Status</th><th>Actions</th></tr></thead><tbody>{campaigns.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.channel} / {item.format}</td><td>{providers.find((p) => p.id === item.provider_id)?.name || "—"}</td><td>{dateLabel(item.starts_at)} → {dateLabel(item.ends_at)}</td><td>{item.delivery_30d?.sent || 0} sent / {item.delivery_30d?.failed || 0} failed</td><td>{item.status}</td><td className="monetization-actions">
                   {["draft", "paused"].includes(item.status) && <button type="button" className="monetization-secondary" onClick={() => editCampaign(item)}>Edit</button>}
                   <button type="button" className="monetization-secondary" onClick={() => loadCampaignPlacements(item.id)}>Placements</button>
                   {item.status === "draft" && <button type="button" className="monetization-secondary" onClick={() => changeCampaignStatus(item, item.starts_at && new Date(item.starts_at) > new Date() ? "scheduled" : "active")}>Activate / Schedule</button>}
                   {item.status === "scheduled" && <button type="button" className="monetization-secondary" onClick={() => changeCampaignStatus(item, "paused")}>Pause</button>}
                   {item.status === "active" && <button type="button" className="monetization-secondary" onClick={() => changeCampaignStatus(item, "paused")}>Pause</button>}
                   {item.status === "paused" && <button type="button" className="monetization-secondary" onClick={() => changeCampaignStatus(item, item.starts_at && new Date(item.starts_at) > new Date() ? "scheduled" : "active")}>Resume</button>}
-                  </td></tr>)}{!campaigns.length && <tr><td colSpan="6">No campaigns created.</td></tr>}</tbody></table></div>
-                {selectedCampaign && <div className="monetization-placement-linker"><h4>Campaign placement assignment</h4><p>Selected campaign: {campaigns.find((c) => c.id === selectedCampaign)?.name || selectedCampaign}</p><div className="monetization-inline-search"><select value={selectedPlacement} onChange={(e) => setSelectedPlacement(e.target.value)}><option value="">Choose compatible placement</option>{placements.filter((p) => p.channel === campaigns.find((c) => c.id === selectedCampaign)?.channel && p.format === campaigns.find((c) => c.id === selectedCampaign)?.format).map((p) => <option key={p.id} value={p.id}>{p.page_key} · {p.slot_key} · {p.is_enabled ? "Enabled" : "Off"}</option>)}</select><button type="button" className="monetization-primary" disabled={!selectedPlacement || saving} onClick={linkPlacement}>Assign placement</button></div><ul>{campaignLinks.map((link) => <li key={link.placement_id}>{placements.find((p) => p.id === link.placement_id)?.slot_key || link.placement_id}</li>)}</ul></div>}
+                  {!["cancelled", "completed"].includes(item.status) && <button type="button" className="monetization-secondary" onClick={() => changeCampaignStatus(item, "cancelled")}>Cancel</button>}
+                  </td></tr>)}{!campaigns.length && <tr><td colSpan="7">No campaigns created.</td></tr>}</tbody></table></div>
+                {selectedCampaign && <div className="monetization-placement-linker"><h4>Campaign placement assignment</h4><p>Selected campaign: {campaigns.find((c) => c.id === selectedCampaign)?.name || selectedCampaign}</p><div className="monetization-inline-search"><select value={selectedPlacement} onChange={(e) => setSelectedPlacement(e.target.value)}><option value="">Choose compatible placement</option>{placements.filter((p) => p.is_enabled && p.channel === campaigns.find((c) => c.id === selectedCampaign)?.channel && p.format === campaigns.find((c) => c.id === selectedCampaign)?.format).map((p) => <option key={p.id} value={p.id}>{p.page_key} · {p.slot_key} · {p.is_enabled ? "Enabled" : "Off"}</option>)}</select><button type="button" className="monetization-primary" disabled={!selectedPlacement || saving} onClick={linkPlacement}>Assign placement</button></div><ul>{campaignLinks.map((link) => <li key={link.placement_id}>{placements.find((p) => p.id === link.placement_id)?.slot_key || link.placement_id}</li>)}</ul></div>}
               </section>
             </div>
           )}
