@@ -1,7 +1,7 @@
 import { getActivityLogs } from "../lib/admin-audit.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ENTITY_TYPES = new Set(["movie", "bot", "category", "content", "telegram_user", "setting", "admin"]);
+const ENTITY_TYPES = new Set(["movie", "bot", "category", "content", "telegram_user", "setting", "admin", "telegram_integration"]);
 
 function optionalDate(value, name) {
   if (!value) return null;
