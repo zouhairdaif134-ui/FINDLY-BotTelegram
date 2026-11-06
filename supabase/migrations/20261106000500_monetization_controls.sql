@@ -517,3 +517,20 @@ $$;
 
 revoke all on function public.claim_monetization_ad_delivery(text,uuid,uuid,uuid,uuid,uuid) from public, anon, authenticated;
 grant execute on function public.claim_monetization_ad_delivery(text,uuid,uuid,uuid,uuid,uuid) to service_role;
+
+
+-- Reserve the Direct Advertisers domain without activating it in Phase 1.
+insert into public.ad_providers (name, slug, provider_type, is_active, settings)
+values ('Direct Advertisers', 'direct', 'direct', false, '{}'::jsonb)
+on conflict (slug) do update
+set name = excluded.name,
+    provider_type = excluded.provider_type,
+    is_active = false,
+    updated_at = now();
+
+-- A direct-sold campaign must not remain live while Phase 1 is external-network only.
+update public.ad_campaigns
+set status = 'paused',
+    updated_at = now()
+where campaign_type = 'direct'
+  and status in ('active','scheduled');
