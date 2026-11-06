@@ -1203,10 +1203,14 @@ async function handleAIMemoryCommand(env, bot, chatId, userId, command) {
     const list = preferences.length
       ? "\n\n<b>التفضيلات المحفوظة:</b>\n" + preferences.map((item, index) => String(index + 1) + ". " + escapeMemoryHtml(item)).join("\n")
       : "";
-    const keyboard = preferences.length ? buildAIMemoryConfirmationKeyboard("clear") : undefined;
+    const keyboard = preferences.length
+      ? buildAIMemoryConfirmationKeyboard("clear")
+      : (!state || state.consent_status === "pending")
+        ? buildAIMemoryConsentKeyboard()
+        : undefined;
     await sendMessage(env, bot.slug, chatId,
       "<b>إعدادات الذاكرة ديالك</b>\n\n" + consent + "\n" + session + list +
-      "\n\nلإضافة تفضيل: <code>/memory add كنفضل الأجوبة المختصرة</code>\nلإيقاف الذاكرة وحذف بياناتها: <code>/memory off</code>",
+      "\n\nلإضافة تفضيل: <code>/memory add كنفضل الأجوبة المختصرة</code>\nما تحفظش كلمات السر أو معلومات حساسة.\nلإيقاف الذاكرة وحذف بياناتها: <code>/memory off</code>",
       keyboard ? { reply_markup: keyboard } : {}
     );
     return;
