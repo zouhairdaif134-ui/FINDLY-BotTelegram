@@ -51,6 +51,7 @@ import {
 } from "./routes/notifications.js";
 import { getAnalytics, getMovieReferralAnalytics } from "./routes/analytics.js";
 import { getActivity } from "./routes/activity.js";
+import { handleMonetizationRoute } from "./routes/monetization.js";
 import { recordAdminEvent } from "./lib/admin-audit.js";
 import {
   getSettings,
@@ -1876,6 +1877,15 @@ export default {
           )
         , request);
       }
+
+      const monetizationResponse = await handleMonetizationRoute(env, request, url, {
+        requirePermission,
+        readJson,
+        withCors,
+        success,
+        failure
+      });
+      if (monetizationResponse) return monetizationResponse;
 
       if (url.pathname === "/api/activity" && request.method === "GET") {
         const auth = await requirePermission(env, request, "activity.view");
