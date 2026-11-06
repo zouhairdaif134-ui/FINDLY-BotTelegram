@@ -1041,7 +1041,23 @@ export async function setCampaignStatus(env, campaignId, status) {
 
 export async function recordManualRevenue(env, input) {
   const payload = validateRevenueLedgerInput(input);
-  const { data, error } = await getSupabase(env)
+  const supabase = getSupabase(env);
+  if (payload.campaign_id) {
+    const { data: campaign, error: campaignError } = await supabase
+      .from("ad_campaigns")
+      .select("id,bot_id,campaign_type,channel")
+      .eq("id", payload.campaign_id)
+      .maybeSingle();
+    throwIfError(campaignError);
+    if (!campaign || campaign.campaign_type !== "external") {
+      throw new Error("revenue entries can only reference Phase 1 external ad campaigns");
+    }
+    if (payload.bot_id && payload.bot_id !== campaign.bot_id) {
+      throw new Error("revenue bot_id must match the referenced campaign");
+    }
+    payload.bot_id = campaign.bot_id;
+  }
+  const { data, error } = await supabase
     .from("monetization_events")
     .insert({
       ...payload,
