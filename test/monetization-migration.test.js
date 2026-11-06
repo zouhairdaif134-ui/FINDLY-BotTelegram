@@ -127,3 +127,8 @@ test("reserves Telegram delivery atomically and enforces frequency limits server
 test("seeds independent website and Telegram default frequency policies", () => {
   assert.match(migration, /values\s*\('website', 3, 3600, 1, 1440, true\),\s*\('telegram', 3, 3600, 1, 1440, true\)/i);
 });
+
+test("reserves Direct Advertisers as inactive and pauses any legacy direct campaigns", () => {
+  assert.match(migration, /values \\('Direct Advertisers', 'direct', 'direct', false/i);
+  assert.match(migration, /where campaign_type = 'direct'\\s+and status in \\('active','scheduled'\\)/i);
+});
