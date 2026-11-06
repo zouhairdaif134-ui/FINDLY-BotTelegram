@@ -26,16 +26,18 @@ function isPrivateIpv4(hostname) {
     (a === 100 && b >= 64 && b <= 127);
 }
 
-function safeProviderUrl(value, fallback) {
+function safeProviderUrl(value, fallback, allowedHosts = ["api.openai.com"]) {
   try {
     const url = new URL(value);
     const hostname = url.hostname.toLowerCase();
+    const allowed = new Set(allowedHosts.map((host) => host.trim().toLowerCase()).filter(Boolean));
     if (
       url.protocol !== "https:" ||
       url.username ||
       url.password ||
       url.hash ||
       !hostname ||
+      !allowed.has(hostname) ||
       hostname === "localhost" ||
       hostname.endsWith(".localhost") ||
       hostname.endsWith(".local") ||
@@ -61,9 +63,14 @@ export function normalizeAIConfig(value, env = {}) {
     ? value
     : {};
   const modelFallback = boundedString(env.AI_MODEL, DEFAULT_MODEL, 100);
+  const allowedHosts = typeof env.AI_ALLOWED_HOSTS === "string"
+    ? env.AI_ALLOWED_HOSTS.split(",").map((host) => host.trim().toLowerCase())
+    : ["api.openai.com"];
+  if (!allowedHosts.includes("api.openai.com")) allowedHosts.push("api.openai.com");
   const urlFallback = safeProviderUrl(
     boundedString(env.AI_API_URL, DEFAULT_API_URL, 500),
-    DEFAULT_API_URL
+    DEFAULT_API_URL,
+    allowedHosts
   );
   const temperature = typeof config.temperature === "number" &&
     Number.isFinite(config.temperature)
@@ -81,7 +88,8 @@ export function normalizeAIConfig(value, env = {}) {
     model: boundedString(config.model, modelFallback, 100),
     apiUrl: safeProviderUrl(
       boundedString(config.api_url, urlFallback, 500),
-      DEFAULT_API_URL
+      DEFAULT_API_URL,
+      allowedHosts
     ),
     systemPrompt: boundedString(
       config.system_prompt,
