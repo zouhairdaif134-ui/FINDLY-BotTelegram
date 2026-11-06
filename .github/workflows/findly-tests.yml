@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
-          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261106000500_monetization_controls.sql
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261106213400_monetization_controls.sql
       - name: Verify migration structure, grants and safe defaults
         run: |
           set -euo pipefail
