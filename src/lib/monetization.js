@@ -520,7 +520,28 @@ export async function listRevenueEvents(env, filters = {}) {
 
 export async function saveAdProvider(env, input) {
   const payload = validateProviderInput(input);
-  const { data, error } = await getSupabase(env)
+  const supabase = getSupabase(env);
+  const { data: existing, error: lookupError } = await supabase
+    .from("ad_providers")
+    .select("id,is_active,provider_type")
+    .eq("slug", payload.slug)
+    .maybeSingle();
+  throwIfError(lookupError);
+  if (existing && input.is_active === undefined && payload.provider_type !== "direct") {
+    delete payload.is_active;
+  }
+  if (input.is_active === true && payload.provider_type === "external") {
+    const { data: zones, error: zonesError } = await supabase
+      .from("ad_provider_zones")
+      .select("id")
+      .eq("provider_id", existing?.id || "00000000-0000-4000-8000-000000000000")
+      .eq("is_verified", true)
+      .eq("is_active", true)
+      .limit(1);
+    throwIfError(zonesError);
+    if (!zones?.length) throw new Error("provider requires a verified active zone before it can be enabled");
+  }
+  const { data, error } = await supabase
     .from("ad_providers")
     .upsert(payload, { onConflict: "slug" })
     .select("id,name,slug,provider_type,is_active,settings,created_at,updated_at")
@@ -861,6 +882,51 @@ export async function recordManualRevenue(env, input) {
       reconciliation_status: "unreconciled"
     })
     .select("id,revenue_source,event_type,amount,currency,provenance,entry_type,direction,reconciliation_status,occurred_at")
+    .single();
+  throwIfError(error);
+  return data;
+}
+
+export async function createRevenueAdjustment(env, input) {
+  const value = requireObject(input, "revenue adjustment");
+  rejectUnknownKeys(value, new Set(["original_event_id", "reason"]), "revenue adjustment");
+  const originalId = requireUuid(value.original_event_id, "original_event_id");
+  const reason = requireText(value.reason, "reason", 240);
+  const supabase = getSupabase(env);
+  const { data: original, error: originalError } = await supabase
+    .from("monetization_events")
+    .select("id,bot_id,campaign_id,revenue_source,event_type,amount,currency,provenance,entry_type,direction")
+    .eq("id", originalId)
+    .maybeSingle();
+  throwIfError(originalError);
+  if (!original) throw new Error("original revenue event was not found");
+  if (original.entry_type === "reversal" || original.direction === "debit") {
+    throw new Error("a reversal or debit entry cannot be reversed");
+  }
+  const { data: priorReversal, error: reversalError } = await supabase
+    .from("monetization_events")
+    .select("id")
+    .eq("reverses_event_id", originalId)
+    .maybeSingle();
+  throwIfError(reversalError);
+  if (priorReversal) throw new Error("this revenue event has already been reversed");
+  const { data, error } = await supabase
+    .from("monetization_events")
+    .insert({
+      bot_id: original.bot_id,
+      campaign_id: original.campaign_id,
+      revenue_source: original.revenue_source,
+      event_type: "reversal",
+      amount: String(original.amount),
+      currency: original.currency,
+      provenance: "manual",
+      entry_type: "reversal",
+      direction: "debit",
+      reverses_event_id: originalId,
+      reconciliation_status: "unreconciled",
+      event_data: { reason, original_event_type: original.event_type }
+    })
+    .select("id,revenue_source,event_type,amount,currency,provenance,entry_type,direction,reverses_event_id,reconciliation_status,occurred_at")
     .single();
   throwIfError(error);
   return data;
