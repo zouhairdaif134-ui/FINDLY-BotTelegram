@@ -1251,3 +1251,104 @@ export async function recordTelegramAdDelivery(env, reservation, eventType, erro
   throwIfError(error);
   return data;
 }
+
+
+const PUBLIC_WEBSITE_PAGE_KEYS = new Set([
+  "home", "search", "movie_details", "watch", "future"
+]);
+
+export function validatePublicPlacementQuery(input = {}) {
+  const value = requireObject(input, "public placement query");
+  const pageKey = requireText(value.page_key, "page_key", 64).toLowerCase();
+  if (!PUBLIC_WEBSITE_PAGE_KEYS.has(pageKey)) {
+    throw new Error("page_key is not a supported public website page");
+  }
+  const slotKey = value.slot_key
+    ? requireText(value.slot_key, "slot_key", 80).toLowerCase()
+    : null;
+  if (slotKey && !/^[a-z0-9][a-z0-9_-]*$/.test(slotKey)) {
+    throw new Error("slot_key is invalid");
+  }
+  return { page_key: pageKey, slot_key: slotKey };
+}
+
+export async function listPublicAdPlacements(env, filters = {}) {
+  const queryInput = validatePublicPlacementQuery(filters);
+  const supabase = getSupabase(env);
+  let query = supabase
+    .from("ad_placements")
+    .select("id,page_key,slot_key,position,format,provider_zone_id,starts_at,ends_at,priority")
+    .eq("channel", "website")
+    .eq("page_key", queryInput.page_key)
+    .eq("is_enabled", true)
+    .order("priority", { ascending: true });
+  if (queryInput.slot_key) query = query.eq("slot_key", queryInput.slot_key);
+  const { data: placements, error: placementError } = await query;
+  throwIfError(placementError);
+
+  const result = [];
+  for (const placement of placements || []) {
+    if (!placement.provider_zone_id || !isActiveSchedule(placement)) continue;
+    const { data: zone, error: zoneError } = await supabase
+      .from("ad_provider_zones")
+      .select("id,provider_id,external_zone_id,site_domain,channel,format")
+      .eq("id", placement.provider_zone_id)
+      .eq("channel", "website")
+      .eq("format", placement.format)
+      .eq("is_verified", true)
+      .eq("is_active", true)
+      .maybeSingle();
+    throwIfError(zoneError);
+    if (!zone) continue;
+
+    const { data: provider, error: providerError } = await supabase
+      .from("ad_providers")
+      .select("id,slug,name,provider_type,is_active")
+      .eq("id", zone.provider_id)
+      .eq("provider_type", "external")
+      .eq("is_active", true)
+      .maybeSingle();
+    throwIfError(providerError);
+    if (!provider) continue;
+
+    const { data: links, error: linksError } = await supabase
+      .from("ad_campaign_placements")
+      .select("campaign_id")
+      .eq("placement_id", placement.id);
+    throwIfError(linksError);
+    const campaignIds = (links || []).map((link) => link.campaign_id);
+    if (!campaignIds.length) continue;
+
+    const { data: campaigns, error: campaignError } = await supabase
+      .from("ad_campaigns")
+      .select("id,name,target_url,channel,format,provider_id,status,starts_at,ends_at,creative,priority")
+      .in("id", campaignIds)
+      .eq("channel", "website")
+      .eq("format", placement.format)
+      .eq("provider_id", provider.id)
+      .eq("campaign_type", "external")
+      .eq("status", "active")
+      .order("priority", { ascending: true });
+    throwIfError(campaignError);
+    const campaign = (campaigns || []).find((item) => isActiveSchedule(item));
+    if (!campaign) continue;
+
+    result.push({
+      placement_id: placement.id,
+      page_key: placement.page_key,
+      slot_key: placement.slot_key,
+      position: placement.position,
+      format: placement.format,
+      provider: { slug: provider.slug, name: provider.name },
+      external_zone_id: zone.external_zone_id,
+      site_domain: zone.site_domain,
+      campaign: {
+        id: campaign.id,
+        name: campaign.name,
+        target_url: campaign.target_url,
+        creative: campaign.creative || {}
+      }
+    });
+  }
+  return result;
+}
