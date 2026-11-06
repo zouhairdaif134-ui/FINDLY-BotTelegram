@@ -75,7 +75,7 @@ alter table public.ai_user_memory_preferences enable row level security;
 alter table public.ai_user_session_messages enable row level security;
 
 revoke all on public.ai_user_memory_preferences,
-  public.ai_user_session_messages from anon, authenticated;
+  public.ai_user_session_messages from public, anon, authenticated;
 grant all on public.ai_user_memory_preferences,
   public.ai_user_session_messages to service_role;
 
