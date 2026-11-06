@@ -620,19 +620,39 @@ export async function saveFrequencyPolicy(env, input) {
 export async function saveAdCampaign(env, input) {
   const payload = validateCampaignInput(input);
   const supabase = getSupabase(env);
-  if (payload.provider_id) {
-    const { data: provider, error: providerError } = await supabase
-      .from("ad_providers")
-      .select("id,provider_type")
-      .eq("id", payload.provider_id)
-      .maybeSingle();
-    throwIfError(providerError);
-    if (!provider) throw new Error("provider was not found");
-    if (provider.provider_type !== "external") throw new Error("direct advertiser campaigns are locked until Phase 2");
-  }
+  const { data: provider, error: providerError } = await supabase
+    .from("ad_providers")
+    .select("id,provider_type")
+    .eq("id", payload.provider_id)
+    .maybeSingle();
+  throwIfError(providerError);
+  if (!provider) throw new Error("provider was not found");
+  if (provider.provider_type !== "external") throw new Error("direct advertiser campaigns are locked until Phase 2");
+  const { data: bot, error: botError } = await supabase
+    .from("bots")
+    .select("id,is_active")
+    .eq("id", payload.bot_id)
+    .maybeSingle();
+  throwIfError(botError);
+  if (!bot || !bot.is_active) throw new Error("campaign bot must exist and be active");
   let query = supabase.from("ad_campaigns");
   if (input.id) {
-    query = query.update(payload).eq("id", requireUuid(input.id, "campaign id"));
+    const id = requireUuid(input.id, "campaign id");
+    const { data: existing, error: existingError } = await supabase
+      .from("ad_campaigns")
+      .select("id,status")
+      .eq("id", id)
+      .maybeSingle();
+    throwIfError(existingError);
+    if (!existing) throw new Error("campaign was not found");
+    if (["active", "scheduled"].includes(existing.status)) {
+      throw new Error("pause the campaign before editing it");
+    }
+    if (["completed", "cancelled"].includes(existing.status)) {
+      throw new Error("completed or cancelled campaigns cannot be edited");
+    }
+    payload.status = existing.status;
+    query = query.update(payload).eq("id", id);
   } else {
     query = query.insert(payload);
   }
