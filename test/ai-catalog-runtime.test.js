@@ -79,6 +79,9 @@ test("AI uses only the fixed catalog tools, executes search, then grounds its fi
     assert.equal(reply, "لقيت Dune (2021)، بتقييم 8/10.");
     assert.equal(requests.length, 2);
     assert.deepEqual(requests[0].tools.map((tool) => tool.function.name), ["search_catalog", "recommend_catalog_titles", "find_similar_titles"]);
+    assert.match(requests[0].messages[0].content, /conversational requests.*mood.*recommend_catalog_titles/i);
+    assert.match(requests[0].messages[0].content, /only when a matching genre exists in the catalog/i);
+    assert.match(requests[0].messages[0].content, /full details.*search_catalog/i);
     assert.equal(requests[1].tools, undefined);
     assert.ok(requests[1].messages.some((message) => message.role === "tool" && message.content.includes('"title":"Dune"')));
     assert.ok(db.calls.some((call) => call.table === "movie_titles" && call.operations.some(([method, column, value]) => method === "eq" && column === "status" && value === "active")));
