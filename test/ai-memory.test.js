@@ -29,9 +29,11 @@ test("parses memory commands without treating ordinary text as a command", () =>
 
 test("consent and confirmation callbacks are bounded Telegram callback payloads", () => {
   const consent = buildAIMemoryConsentKeyboard().inline_keyboard.flat();
-  const confirmation = buildAIMemoryConfirmationKeyboard("save").inline_keyboard.flat();
+  const confirmation = buildAIMemoryConfirmationKeyboard("save", "123e4567-e89b-12d3-a456-426614174000").inline_keyboard.flat();
   assert.equal(consent.length, 2);
   assert.equal(confirmation.length, 2);
+  assert.match(confirmation[0].callback_data, /123e4567-e89b-12d3-a456-426614174000$/);
+  assert.throws(() => buildAIMemoryConfirmationKeyboard("save"), /confirmation token is required/);
   for (const button of [...consent, ...confirmation]) {
     assert.ok(new TextEncoder().encode(button.callback_data).length <= 64);
   }
