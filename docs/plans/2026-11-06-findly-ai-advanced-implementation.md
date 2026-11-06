@@ -45,12 +45,13 @@ Acceptance: tests prove config precedence, no key leakage, bounded requests, dis
 Acceptance: unauthorized access denied; dashboard cannot read provider secrets; per-bot config round-trips safely.
 
 ## Phase 3 — Hybrid Memory
-1. Inspect current telegram_users/user_bots relationships and all identity mapping.
-2. Design additive tables with RLS, strict user/bot scoping, expiry and consent timestamps.
-3. Implement opt-in, opt-out, list, delete and session expiry.
-4. Add migration tests and isolation tests before applying any database migration.
+1. Inspect current telegram_users/user_bots relationships; use the internal telegram_users.id and bot_id scope only.
+2. Add service-role-only memory tables with RLS, a 30-minute session expiry, bounded history and explicit consent timestamps.
+3. Implement private-chat-only session context, persistent consent buttons, explicit preference-save confirmation, status/list, clear, off and on commands.
+4. Purge expired session messages through the existing five-minute scheduled Worker invocation.
+5. Add unit and migration-contract tests. Do not apply the migration to Production; validate CI and a dedicated Preview database before rollout.
 
-Acceptance: no persistent preference before consent; one user cannot read/delete another user's memory; revocation stops future writes.
+Acceptance: no persistent preference before consent and per-item confirmation; group chats cannot read/write personal memory; one user/bot scope cannot access another; denial clears persistent preferences; off deletes data and stops session writes; expiry cleanup removes old session rows.
 
 ## Phase 4 — Catalog knowledge and recommendations
 1. Implement typed read-only search tools against active movie_titles and genres.
