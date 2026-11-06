@@ -977,7 +977,13 @@ export async function setCampaignStatus(env, campaignId, status) {
 }
 
 export async function recordManualRevenue(env, input) {
-  const payload = validateRevenueInput({ ...input, provenance: "manual" });
+  const payload = validateRevenueInput(input);
+  if (!["manual", "provider_reported"].includes(payload.provenance)) {
+    throw new Error("revenue entries must be manual or provider-reported; estimates are not accepted as revenue");
+  }
+  if (payload.provenance === "provider_reported" && !payload.external_reference) {
+    throw new Error("provider-reported revenue requires a report or statement reference");
+  }
   const { data, error } = await getSupabase(env)
     .from("monetization_events")
     .insert({
