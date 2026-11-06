@@ -57,3 +57,36 @@ test("Movies webhook secret is isolated from the Master webhook secret", () => {
     (error) => error.code === "TELEGRAM_CONFIG_ERROR"
   );
 });
+
+import { buildTitleCaption } from "./movies-bot.js";
+
+test("builds a single photo caption with movie metadata and a Telegram-safe overview", () => {
+  const caption = buildTitleCaption({
+    title: "Wicker",
+    release_year: 2026,
+    media_type: "movie",
+    runtime_minutes: 104,
+    rating: 7.8,
+    overview: "A suspenseful story.",
+    metadata_status: "pending"
+  });
+  assert.match(caption, /Wicker/);
+  assert.match(caption, /2026/);
+  assert.match(caption, /فيلم/);
+  assert.match(caption, /104 دقيقة/);
+  assert.match(caption, /7\.8\/10/);
+  assert.match(caption, /A suspenseful story\./);
+  assert.ok(caption.length <= 1024);
+});
+
+test("truncates long overview without exceeding Telegram photo caption limit", () => {
+  const caption = buildTitleCaption({
+    title: "Long film",
+    release_year: 2026,
+    media_type: "movie",
+    overview: "قصة طويلة ".repeat(500),
+    metadata_status: "pending"
+  });
+  assert.ok(caption.length <= 1024);
+  assert.match(caption, /…$/);
+});
