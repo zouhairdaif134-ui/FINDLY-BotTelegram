@@ -207,7 +207,7 @@ test("builds Telegram image cards without accepting unsafe media URLs", () => {
   });
   assert.equal(payload.method, "photo");
   assert.equal(payload.photo, "https://cdn.example/ad.jpg");
-  assert.equal(payload.caption, "Partner offer\\n\\nDetails");
+  assert.equal(payload.caption, "Partner offer\n\nDetails");
   assert.throws(() => build({
     format: "telegram_card",
     target_url: "https://ads.example/offer",
