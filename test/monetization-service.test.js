@@ -313,3 +313,13 @@ test("rejects HTML and URL values where a plain provider zone identifier is requ
   assert.throws(() => validate({ ...base, external_zone_id: "<script>alert(1)</script>" }), /plain provider identifier/i);
   assert.throws(() => validate({ ...base, external_zone_id: "https://ads.example/zone" }), /plain provider identifier/i);
 });
+
+test("allows only the registered website host and its true subdomains", () => {
+  const isAllowed = requireFunction("isAllowedAdOrigin");
+  assert.equal(isAllowed("findly.example", "findly.example"), true);
+  assert.equal(isAllowed("www.findly.example", "findly.example"), true);
+  assert.equal(isAllowed("ads.findly.example", "findly.example"), true);
+  assert.equal(isAllowed("evilfindly.example", "findly.example"), false);
+  assert.equal(isAllowed("findly.example.evil.test", "findly.example"), false);
+  assert.equal(isAllowed(null, "findly.example"), false);
+});
