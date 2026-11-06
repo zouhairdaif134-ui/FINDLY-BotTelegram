@@ -80,7 +80,9 @@ export async function ensureAIMemoryState(supabase, userId, botId) {
       bot_id: botId,
       consent_status: "pending",
       session_enabled: true,
-      preferences: []
+      preferences: [],
+      pending_preference: null,
+      consented_at: null
     }, { onConflict: "user_id,bot_id", ignoreDuplicates: true });
   if (error) throw error;
   return getAIMemoryState(supabase, userId, botId);
@@ -118,16 +120,23 @@ export async function confirmPendingAIMemoryPreference(supabase, userId, botId) 
 
 export async function setAIMemoryConsent(supabase, userId, botId, status) {
   if (!["granted", "denied"].includes(status)) throw new Error("Invalid memory consent status");
+  const existing = await getAIMemoryState(supabase, userId, botId);
   const payload = {
-    user_id: userId,
-    bot_id: botId,
     consent_status: status,
     consented_at: status === "granted" ? new Date().toISOString() : null,
     ...(status === "denied" ? { preferences: [], pending_preference: null } : {})
   };
-  const { data, error } = await supabase
-    .from("ai_user_memory_preferences")
-    .upsert(payload, { onConflict: "user_id,bot_id" })
+  const query = existing
+    ? supabase.from("ai_user_memory_preferences").update(payload).eq("user_id", userId).eq("bot_id", botId)
+    : supabase.from("ai_user_memory_preferences").insert({
+        user_id: userId,
+        bot_id: botId,
+        session_enabled: true,
+        preferences: [],
+        pending_preference: null,
+        ...payload
+      });
+  const { data, error } = await query
     .select("consent_status,session_enabled,preferences,pending_preference,consented_at")
     .single();
   if (error) throw error;
@@ -135,13 +144,22 @@ export async function setAIMemoryConsent(supabase, userId, botId, status) {
 }
 
 export async function setAIMemorySessionEnabled(supabase, userId, botId, enabled) {
-  const { data, error } = await supabase
-    .from("ai_user_memory_preferences")
-    .upsert({
-      user_id: userId,
-      bot_id: botId,
-      session_enabled: Boolean(enabled)
-    }, { onConflict: "user_id,bot_id" })
+  const existing = await getAIMemoryState(supabase, userId, botId);
+  const query = existing
+    ? supabase.from("ai_user_memory_preferences")
+        .update({ session_enabled: Boolean(enabled) })
+        .eq("user_id", userId)
+        .eq("bot_id", botId)
+    : supabase.from("ai_user_memory_preferences").insert({
+        user_id: userId,
+        bot_id: botId,
+        consent_status: "pending",
+        session_enabled: Boolean(enabled),
+        preferences: [],
+        pending_preference: null,
+        consented_at: null
+      });
+  const { data, error } = await query
     .select("consent_status,session_enabled,preferences,pending_preference,consented_at")
     .single();
   if (error) throw error;
@@ -250,7 +268,8 @@ export async function clearAIMemory(supabase, userId, botId, revokeConsent = fal
         consent_status: "denied",
         session_enabled: false,
         preferences: [],
-        pending_preference: null
+        pending_preference: null,
+        consented_at: null
       }, { onConflict: "user_id,bot_id" })
       .select("consent_status,session_enabled,preferences")
       .single();
