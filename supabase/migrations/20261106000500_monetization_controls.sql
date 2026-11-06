@@ -398,7 +398,8 @@ declare
   v_zone public.ad_provider_zones%rowtype;
   v_provider public.ad_providers%rowtype;
   v_policy public.ad_frequency_policies%rowtype;
-  v_attempt_count bigint;
+  v_user_count bigint;
+  v_session_count bigint;
   v_last_attempt timestamptz;
   v_sent_count bigint;
   v_inserted integer;
@@ -429,7 +430,7 @@ begin
     and (starts_at is null or starts_at <= now())
     and (ends_at is null or ends_at > now())
   for share;
-  if not found or v_placement.provider_zone_id <> p_provider_zone_id then return false; end if;
+  if not found or v_placement.provider_zone_id is distinct from p_provider_zone_id then return false; end if;
 
   if not exists (
     select 1 from public.ad_campaign_placements cp
@@ -453,6 +454,10 @@ begin
   if exists (
     select 1 from public.monetization_user_exclusions e where e.user_id = p_user_id
   ) then return false; end if;
+  if not exists (
+    select 1 from public.telegram_users u
+    where u.id = p_user_id and u.is_active = true and u.is_bot = false
+  ) then return false; end if;
 
   select * into v_policy
   from public.ad_frequency_policies
@@ -469,20 +474,21 @@ begin
   limit 1;
   if not found or v_policy.is_enabled = false then return false; end if;
 
-  select count(*), max(occurred_at)
-    into v_attempt_count, v_last_attempt
+  select count(*) filter (where occurred_at >= now() - interval '30 days'),
+         count(*) filter (where occurred_at >= now() - make_interval(mins => v_policy.rolling_window_minutes)),
+         max(occurred_at)
+    into v_user_count, v_session_count, v_last_attempt
   from public.ad_delivery_events
   where user_id = p_user_id and channel = 'telegram'
     and event_type = 'attempted'
-    and occurred_at >= now() - make_interval(mins => v_policy.rolling_window_minutes)
     and (
       (v_policy.campaign_id is not null and campaign_id = v_policy.campaign_id)
       or (v_policy.placement_id is not null and placement_id = v_policy.placement_id)
       or (v_policy.campaign_id is null and v_policy.placement_id is null)
     );
 
-  if v_attempt_count >= v_policy.max_per_session then return false; end if;
-  if v_attempt_count >= v_policy.max_per_user then return false; end if;
+  if v_session_count >= v_policy.max_per_session then return false; end if;
+  if v_user_count >= v_policy.max_per_user then return false; end if;
   if v_last_attempt is not null
      and v_last_attempt > now() - make_interval(secs => v_policy.cooldown_seconds) then
     return false;
