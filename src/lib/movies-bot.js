@@ -259,7 +259,10 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
       callback_data: "movies:favorite:" + title.id
     }]);
   }
-  if (title.full_plot_summary) {\n    keyboard.push([{ text: "📖 قراءة الملخص الكامل (حرق الأحداث)", callback_data: "movies:plot:" + title.id }]);\n  }\n  if (title.media_type === "series") {
+  if (title.full_plot_summary) {
+    keyboard.push([{ text: "📖 قراءة الملخص الكامل (حرق الأحداث)", callback_data: "movies:plot:" + title.id }]);
+  }
+  if (title.media_type === "series") {
     keyboard.push([{ text: "📚 المواسم والحلقات", callback_data: "movies:seasons:" + title.id }]);
   }
   if (bot.slug === "findly") {
@@ -435,7 +438,8 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   }
   else if (parsed.action === "search") await showMoviesSearchPrompt(env, bot, chatId);
   else if (parsed.action === "favorites") await sendFavorites(env, bot, chatId, telegramUserId);
-  else if (parsed.action === "title") await sendTitle(env, bot, chatId, parsed.id, telegramUserId);\n  else if (parsed.action === "plot") await sendFullPlotSummary(env, bot, chatId, parsed.id);
+  else if (parsed.action === "title") await sendTitle(env, bot, chatId, parsed.id, telegramUserId);
+  else if (parsed.action === "plot") await sendFullPlotSummary(env, bot, chatId, parsed.id);
   else if (parsed.action === "favorite") await toggleFavorite(env, bot, chatId, parsed.id, telegramUserId);
   else if (parsed.action === "seasons") await sendSeasons(env, bot, chatId, parsed.id);
   else if (parsed.action === "season") await sendEpisodes(env, bot, chatId, parsed.id);
