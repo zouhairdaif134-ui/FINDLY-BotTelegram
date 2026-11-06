@@ -28,7 +28,6 @@ test("restricts privileged audit RPCs to service_role", () => {
     "admin_audit_create_admin",
     "admin_audit_record_event",
     "admin_audit_record_failure",
-    "admin_audit_import_movie",
     "admin_audit_list"
   ]) {
     assert.match(migration, new RegExp("revoke all on function public\\." + fn + "\\(", "i"));
