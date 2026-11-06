@@ -141,7 +141,7 @@ const PERMISSIONS = {
 function corsHeaders(request) {
   const origin = request?.headers.get("Origin") || "";
   const isAllowedPreviewOrigin =
-    /^https:\/\/(?:feat-findly-movies-runtime-h|[a-f0-9]{8})\.findly-bottelegram\.pages\.dev$/.test(origin);
+    /^https:\/\/(?:feat-findly-movies-runtime-h|feat-ai-advanced-phase1|[a-f0-9]{8})\.findly-bottelegram\.pages\.dev$/.test(origin);
   const isAllowedOrigin =
     origin === "https://findly-bottelegram.pages.dev" ||
     isAllowedPreviewOrigin;
