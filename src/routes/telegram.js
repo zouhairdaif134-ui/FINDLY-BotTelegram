@@ -16,7 +16,8 @@ import {
   parseAIMemoryCommand, buildAIMemoryConsentKeyboard, buildAIMemoryConfirmationKeyboard,
   getAIMemoryState, ensureAIMemoryState, setAIMemoryConsent, setAIMemorySessionEnabled,
   getAISessionHistory, appendAISessionMessage, setPendingAIMemoryPreference,
-  confirmPendingAIMemoryPreference, clearAIMemory
+  setPendingAIMemoryClear, confirmPendingAIMemoryPreference, confirmPendingAIMemoryClear,
+  cancelPendingAIMemoryAction, clearAIMemory
 } from "../lib/ai-memory.js";
 import {
   handleMoviesCallback,
@@ -1203,11 +1204,9 @@ async function handleAIMemoryCommand(env, bot, chatId, userId, command) {
     const list = preferences.length
       ? "\n\n<b>التفضيلات المحفوظة:</b>\n" + preferences.map((item, index) => String(index + 1) + ". " + escapeMemoryHtml(item)).join("\n")
       : "";
-    const keyboard = preferences.length
-      ? buildAIMemoryConfirmationKeyboard("clear")
-      : (!state || state.consent_status === "pending")
-        ? buildAIMemoryConsentKeyboard()
-        : undefined;
+    const keyboard = (!state || state.consent_status === "pending")
+      ? buildAIMemoryConsentKeyboard()
+      : undefined;
     await sendMessage(env, bot.slug, chatId,
       "<b>إعدادات الذاكرة ديالك</b>\n\n" + consent + "\n" + session + list +
       "\n\nلإضافة تفضيل: <code>/memory add كنفضل الأجوبة المختصرة</code>\nما تحفظش كلمات السر أو معلومات حساسة.\nلإيقاف الذاكرة وحذف بياناتها: <code>/memory off</code>",
@@ -1238,18 +1237,19 @@ async function handleAIMemoryCommand(env, bot, chatId, userId, command) {
       await sendMessage(env, bot.slug, chatId, "خاصك توافق أولاً على الذاكرة الدائمة. استعمل /memory واختار نعم أو لا.");
       return;
     }
-    await setPendingAIMemoryPreference(supabase, userId, bot.id, command.preference);
+    const token = await setPendingAIMemoryPreference(supabase, userId, bot.id, command.preference);
     await sendMessage(env, bot.slug, chatId,
       "<b>واش نحتافظ بهاد التفضيل؟</b>\n\n" + escapeMemoryHtml(command.preference) +
       "\n\nما غاديش يتحفظ حتى تضغط على تأكيد الحفظ.",
-      { reply_markup: buildAIMemoryConfirmationKeyboard("save") }
+      { reply_markup: buildAIMemoryConfirmationKeyboard("save", token) }
     );
     return;
   }
   if (command.action === "clear") {
+    const token = await setPendingAIMemoryClear(supabase, userId, bot.id);
     await sendMessage(env, bot.slug, chatId,
       "واش متأكد بغيتي تمسح التفضيلات الدائمة وسياق المحادثة المؤقت؟",
-      { reply_markup: buildAIMemoryConfirmationKeyboard("clear") }
+      { reply_markup: buildAIMemoryConfirmationKeyboard("clear", token) }
     );
     return;
   }
@@ -1281,23 +1281,20 @@ async function handleAIMemoryCallback(env, bot, chatId, callbackQuery, userId) {
     await sendMessage(env, bot.slug, chatId, "تم اختيار السياق المؤقت فقط. التفضيلات الدائمة ما غاديش تتحفظ.");
     return;
   }
-  if (data === "aimemory:confirm:save") {
-    const preferences = await confirmPendingAIMemoryPreference(supabase, userId, bot.id);
+  const confirmation = data.match(/^aimemory:confirm:(save|clear|cancel):([0-9a-f-]{36})$/i);
+  if (confirmation?.[1] === "save") {
+    const preferences = await confirmPendingAIMemoryPreference(supabase, userId, bot.id, confirmation[2]);
     await sendMessage(env, bot.slug, chatId, "تم حفظ التفضيل بموافقتك. عدد التفضيلات المحفوظة: " + preferences.length + ".");
     return;
   }
-  if (data === "aimemory:confirm:clear") {
-    await clearAIMemory(supabase, userId, bot.id, false);
+  if (confirmation?.[1] === "clear") {
+    await confirmPendingAIMemoryClear(supabase, userId, bot.id, confirmation[2]);
     await sendMessage(env, bot.slug, chatId, "تم حذف التفضيلات وسياق المحادثة المؤقت.");
     return;
   }
-  if (data === "aimemory:confirm:cancel") {
-    const { error } = await supabase.from("ai_user_memory_preferences")
-      .update({ pending_preference: null })
-      .eq("user_id", userId)
-      .eq("bot_id", bot.id);
-    if (error) throw error;
-    await sendMessage(env, bot.slug, chatId, "تلغى الحفظ. ما تخزن حتى تفضيل جديد.");
+  if (confirmation?.[1] === "cancel") {
+    await cancelPendingAIMemoryAction(supabase, userId, bot.id, confirmation[2]);
+    await sendMessage(env, bot.slug, chatId, "تلغى العملية. ما تبدل حتى تفضيل محفوظ.");
   }
 }
 
