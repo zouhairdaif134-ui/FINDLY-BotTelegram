@@ -417,37 +417,63 @@ function throwIfError(error) {
 export async function getMonetizationOverview(env) {
   const supabase = getSupabase(env);
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const count = (table, filters = []) => {
+    let query = supabase.from(table).select("id", { count: "exact", head: true });
+    for (const [method, field, value] of filters) query = query[method](field, value);
+    return query;
+  };
   const [
     mauResult,
     campaignResult,
     placementResult,
-    attemptedResult,
-    sentResult,
-    failedResult,
+    subscriptionResult,
+    websiteAttempted,
+    websiteSent,
+    websiteFailed,
+    telegramAttempted,
+    telegramSent,
+    telegramFailed,
     revenueResult
   ] = await Promise.all([
     supabase.rpc("get_monetization_mau", { p_since: since }),
-    supabase.from("ad_campaigns").select("id", { count: "exact", head: true }).eq("status", "active"),
-    supabase.from("ad_placements").select("id", { count: "exact", head: true }).eq("is_enabled", true),
-    supabase.from("ad_delivery_events").select("id", { count: "exact", head: true }).eq("event_type", "attempted").gte("occurred_at", since),
-    supabase.from("ad_delivery_events").select("id", { count: "exact", head: true }).eq("event_type", "sent").gte("occurred_at", since),
-    supabase.from("ad_delivery_events").select("id", { count: "exact", head: true }).eq("event_type", "failed").gte("occurred_at", since),
+    count("ad_campaigns", [["eq", "status", "active"]]),
+    count("ad_placements", [["eq", "is_enabled", true]]),
+    count("user_subscriptions", [["eq", "status", "active"]]),
+    count("ad_delivery_events", [["eq", "channel", "website"], ["eq", "event_type", "attempted"], ["gte", "occurred_at", since]]),
+    count("ad_delivery_events", [["eq", "channel", "website"], ["eq", "event_type", "sent"], ["gte", "occurred_at", since]]),
+    count("ad_delivery_events", [["eq", "channel", "website"], ["eq", "event_type", "failed"], ["gte", "occurred_at", since]]),
+    count("ad_delivery_events", [["eq", "channel", "telegram"], ["eq", "event_type", "attempted"], ["gte", "occurred_at", since]]),
+    count("ad_delivery_events", [["eq", "channel", "telegram"], ["eq", "event_type", "sent"], ["gte", "occurred_at", since]]),
+    count("ad_delivery_events", [["eq", "channel", "telegram"], ["eq", "event_type", "failed"], ["gte", "occurred_at", since]]),
     supabase.rpc("get_monetization_revenue_summary", { p_since: since })
   ]);
-  for (const result of [mauResult, campaignResult, placementResult, attemptedResult, sentResult, failedResult, revenueResult]) {
+  for (const result of [
+    mauResult, campaignResult, placementResult, subscriptionResult,
+    websiteAttempted, websiteSent, websiteFailed,
+    telegramAttempted, telegramSent, telegramFailed, revenueResult
+  ]) {
     throwIfError(result.error);
   }
+  const mau = Number(mauResult.data || 0);
   return {
-    mau_30d: Number(mauResult.data || 0),
+    mau_30d: mau,
     mau_target: 1000,
-    phase2_eligible: Number(mauResult.data || 0) >= 1000,
+    phase2_eligible: mau >= 1000,
     phase2_activation_requires_owner_approval: true,
+    active_subscriptions: subscriptionResult.count || 0,
     campaigns_active: campaignResult.count || 0,
     placements_enabled: placementResult.count || 0,
     delivery_30d: {
-      attempted: attemptedResult.count || 0,
-      sent: sentResult.count || 0,
-      failed: failedResult.count || 0
+      website: {
+        attempted: websiteAttempted.count || 0,
+        sent: websiteSent.count || 0,
+        failed: websiteFailed.count || 0
+      },
+      telegram: {
+        attempted: telegramAttempted.count || 0,
+        sent: telegramSent.count || 0,
+        failed: telegramFailed.count || 0
+      }
     },
     revenue_30d: revenueResult.data || []
   };
@@ -505,6 +531,17 @@ export async function listAdCampaigns(env, filters = {}) {
   if (filters.channel) query = query.eq("channel", filters.channel);
   if (filters.status) query = query.eq("status", filters.status);
   const { data, error } = await query;
+  throwIfError(error);
+  return data || [];
+}
+
+export async function listCampaignPlacements(env, campaignId) {
+  const id = requireUuid(campaignId, "campaign id");
+  const { data, error } = await getSupabase(env)
+    .from("ad_campaign_placements")
+    .select("placement_id,placement:ad_placements(id,channel,page_key,slot_key,position,format,provider_zone_id,is_enabled)")
+    .eq("campaign_id", id)
+    .order("created_at", { ascending: true });
   throwIfError(error);
   return data || [];
 }
