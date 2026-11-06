@@ -28,8 +28,8 @@ TDD evidence:
 - The other earlier tests were added after some implementation and are not represented as observed red-green cycles.
 
 Release blockers:
-1. No Supabase staging branch exists. The disposable PostgreSQL 17 integration job passed without additional Supabase cost, but the migration has not been applied to the actual Supabase project. A Supabase branch quote is USD 0.01344/hour; no paid branch was created. Production migration history currently contains only the four existing migrations through admin_audit_logs; 20261106000500_monetization_controls is NOT applied.
+1. No Supabase staging branch exists. The disposable PostgreSQL 17 integration job passed without additional Supabase cost. The additive Monetization migration was subsequently applied to the live FINDLY Supabase project as version 20261106213400 and its tables/default-off state were verified.
 2. Actual consumer website frontend repository/integration target is still missing, so website ad rendering is not end-to-end verifiable.
 3. No provider account credentials, real zone IDs or domain verification have been supplied; all ad delivery remains OFF by default.
 
-No Production migration, Worker deployment, Production Pages deployment, provider activation, payment activation, or merge has been performed by this feature branch.
+The Monetization migration is applied to Production. Worker deployment, Production Pages deployment, and PR merge are pending. Providers remain inactive; no ad delivery or payment activation has occurred.

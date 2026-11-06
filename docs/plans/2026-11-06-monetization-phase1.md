@@ -27,7 +27,7 @@
 ### Task 1: Complete the Monetization database contract and access controls
 
 **Files:**
-- Modify: `supabase/migrations/20261106000500_monetization_controls.sql`
+- Modify: `supabase/migrations/20261106213400_monetization_controls.sql`
 - Test: `test/monetization-migration.test.js`
 - Test: `test/telegram-user-profile.test.js`
 

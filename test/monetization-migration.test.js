@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 
 const migrationPath = new URL(
-  "../supabase/migrations/20261106000500_monetization_controls.sql",
+  "../supabase/migrations/20261106213400_monetization_controls.sql",
   import.meta.url
 );
 const migration = existsSync(migrationPath)
