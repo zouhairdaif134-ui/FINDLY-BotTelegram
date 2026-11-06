@@ -4043,36 +4043,104 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh }) {
   const [editing,setEditing]=useState(null),[form,setForm]=useState(null),[saving,setSaving]=useState(false),[error,setError]=useState("");
   const [filter,setFilter]=useState("all"),[tmdbQuery,setTmdbQuery]=useState(""),[tmdbType,setTmdbType]=useState("movie"),[tmdbResults,setTmdbResults]=useState([]),[tmdbLoading,setTmdbLoading]=useState(false),[importingId,setImportingId]=useState(null);
   const [shareStatus,setShareStatus]=useState("");
-  async function shareMovie(item,platform){
+  async function shareMovie(item, platform) {
     setShareStatus("");
+    setError("");
     try {
-      const moviesBot=bots.find(bot=>bot.slug==="movies"&&bot.is_active);
-      const share=buildMovieShareContent(item,moviesBot?.telegram_username,platform);
-      let files=[];
-      if(share.posterUrl){
+      const moviesBot = bots.find((bot) => bot.slug === "movies" && bot.is_active);
+      const share = buildMovieShareContent(
+        item,
+        moviesBot?.telegram_username,
+        platform,
+        API_URL
+      );
+
+      if (platform === "facebook") {
+        const popup = window.open(
+          share.facebookShareUrl,
+          "_blank",
+          "noopener,noreferrer"
+        );
+        if (!popup) {
+          window.location.href = share.facebookShareUrl;
+        }
+        setShareStatus(
+          "فتحنا مشاركة Facebook برابط خاص بالفيلم. خاص Facebook يجيب الصورة والعنوان والملخص من بيانات Open Graph."
+        );
+        return;
+      }
+
+      const response = await fetch(share.posterDownloadUrl, { mode: "cors" });
+      if (!response.ok) {
+        throw new Error("ما قدرناش نجيبو صورة الفيلم. ما غاديش نرسل مشاركة ناقصة.");
+      }
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/") || !blob.size) {
+        throw new Error("ملف صورة الفيلم غير صالح للمشاركة.");
+      }
+      const safeName = (item.title || "findly-movie")
+        .replace(/[^a-z0-9-_]/gi, "-")
+        .slice(0, 70);
+      const file = new File(
+        [blob],
+        safeName + ".jpg",
+        { type: blob.type || "image/jpeg" }
+      );
+
+      const clipboardPromise = navigator.clipboard?.writeText
+        ? navigator.clipboard.writeText(share.caption).catch(() => false)
+        : Promise.resolve(false);
+
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
         try {
-          const response=await fetch(share.posterUrl,{mode:"cors"});
-          if(response.ok){const blob=await response.blob();files=[new File([blob],(item.title||"findly-movie").replace(/[^a-z0-9-_]/gi,"-")+".jpg",{type:blob.type||"image/jpeg"})];}
-        } catch { /* The poster remains available through its direct URL as a manual fallback. */ }
+          await navigator.share({
+            title: item.title,
+            text: share.caption,
+            files: [file]
+          });
+          setShareStatus(
+            "تجهزات صورة الفيلم والنص للمشاركة. اختار Instagram من القائمة. إذا التطبيق ما نقلش النص، راه نسخناه باش تلصقو."
+          );
+          await clipboardPromise;
+          return;
+        } catch (shareError) {
+          if (shareError?.name === "AbortError") {
+            setShareStatus("تلغات المشاركة. النص بقى منسوخ والصورة واجدة للتحميل.");
+            await clipboardPromise;
+            downloadPosterBlob(blob, safeName);
+            return;
+          }
+          if (shareError?.name !== "NotAllowedError" && shareError?.name !== "DataError") {
+            throw shareError;
+          }
+        }
       }
-      if(files.length&&navigator.canShare?.({files})&&navigator.share){
-        await navigator.share({title:item.title,text:share.caption,files});
-        setShareStatus("وجدنا الصورة والنص. اختار "+(platform==="facebook"?"Facebook":"Instagram")+" من قائمة المشاركة.");
+
+      await clipboardPromise;
+      downloadPosterBlob(blob, safeName);
+      setShareStatus(
+        "حمّلنا صورة الفيلم ونسخنا النص. افتح Instagram، اختار الصورة من Gallery، ولسق النص فالوصف."
+      );
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        setShareStatus("تم إلغاء المشاركة.");
         return;
       }
-      if(navigator.share){
-        await navigator.share({title:item.title,text:share.caption});
-        setShareStatus("تم فتح المشاركة بالنص. حمّل الصورة من رابط الملصق إذا ما ترفقاتش تلقائياً.");
-        return;
-      }
-      if(navigator.clipboard?.writeText) await navigator.clipboard.writeText(share.caption);
-      if(platform==="facebook") window.open(share.facebookShareUrl,"_blank","noopener,noreferrer");
-      setShareStatus(platform==="instagram"?"تنسخ النص. حمّل صورة الفيلم من رابط الملصق ثم شاركهما في Instagram.":"تنسخ النص وفتحنا نافذة Facebook. أضف صورة الفيلم يدوياً إذا ما ظهرتش.");
-    } catch(e) {
-      if(e?.name==="AbortError"){setShareStatus("تم إلغاء المشاركة.");return;}
-      setError(e.message||"تعذر تجهيز المشاركة");
+      setError(error?.message || "تعذر تجهيز مشاركة الفيلم.");
     }
   }
+
+  function downloadPosterBlob(blob, fileName) {
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = fileName + ".jpg";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+  }
+
   const visible=movies.filter(item=>filter==="all"||item.status===filter);
   async function searchTmdb(event){event.preventDefault();if(!tmdbQuery.trim())return;setTmdbLoading(true);setError("");try{const params=new URLSearchParams({query:tmdbQuery.trim(),media_type:tmdbType});setTmdbResults(await fetchApi("/api/movies/tmdb/search?"+params.toString()));}catch(e){setError(e.message||"TMDB search failed");}finally{setTmdbLoading(false);}}
   function edit(item){setEditing(item.id);setForm({title:item.title||"",overview:item.overview||"",full_plot_summary:item.full_plot_summary||""});setError("");}
