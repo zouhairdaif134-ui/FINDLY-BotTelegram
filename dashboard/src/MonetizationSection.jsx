@@ -434,7 +434,9 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                       slug: provider.slug, name: provider.name, site_domain: provider.settings?.site_domain || "",
                       publisher_id: provider.settings?.publisher_id || "", integration: provider.settings?.integration || ""
                     })}>Edit settings</button>
-                    <button type="button" className="monetization-secondary" disabled={saving} onClick={() => toggleProvider(provider)}>{provider.is_active ? "Disable provider" : "Enable provider"}</button>
+                    {provider.provider_type === "direct"
+                      ? <span className="state-locked">Locked until Phase 2</span>
+                      : <button type="button" className="monetization-secondary" disabled={saving} onClick={() => toggleProvider(provider)}>{provider.is_active ? "Disable provider" : "Enable provider"}</button>}
                   </article>)}
                 </div>
                 <form className="monetization-form" onSubmit={saveProvider}>
@@ -497,7 +499,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                   <button className="monetization-primary" disabled={saving || (frequencyForm.scope === "campaign" && !frequencyForm.campaign_id) || (frequencyForm.scope === "placement" && !frequencyForm.placement_id)}>Save frequency policy</button>
                 </form>
                 <p className="monetization-muted">Current saved policy: {currentPolicy ? currentPolicy.max_per_user + " / user per 30d · " + currentPolicy.cooldown_seconds + "s cooldown · " + currentPolicy.max_per_session + " / " + currentPolicy.rolling_window_minutes + "m" : "No saved policy for this scope."}</p>
-                <div className="monetization-table-wrap"><table><thead><tr><th>Channel</th><th>Scope</th><th>Max / user</th><th>Cooldown</th><th>Max / window</th><th>Status</th></tr></thead><tbody>{policies.map((policy) => <tr key={policy.id}><td>{policy.channel}</td><td>{policy.campaign_id ? "Campaign" : policy.placement_id ? "Placement" : "Default"}</td><td>{policy.max_per_user}</td><td>{policy.cooldown_seconds}s</td><td>{policy.max_per_session} / {policy.rolling_window_minutes}m</td><td>{policy.is_enabled ? "Enabled" : "Off"}</td></tr>)}</tbody></table></div>
+                <div className="monetization-table-wrap"><table><thead><tr><th>Channel</th><th>Scope</th><th>Max / user</th><th>Cooldown</th><th>Max / window</th><th>Status</th></tr></thead><tbody>{policies.map((policy) => <tr key={policy.id}><td>{policy.channel}</td><td>{policy.campaign_id ? "Campaign · " + (externalCampaigns.find((c) => c.id === policy.campaign_id)?.name || policy.campaign_id) : policy.placement_id ? "Placement · " + (placements.find((p) => p.id === policy.placement_id)?.slot_key || policy.placement_id) : "Default"}</td><td>{policy.max_per_user}</td><td>{policy.cooldown_seconds}s</td><td>{policy.max_per_session} / {policy.rolling_window_minutes}m</td><td>{policy.is_enabled ? "Enabled" : "Off"}</td></tr>)}</tbody></table></div>
                 <div className="monetization-table-wrap"><table><thead><tr><th>User ID</th><th>Reason</th><th>Note</th><th></th></tr></thead><tbody>{exclusions.map((item) => <tr key={item.user_id}><td>{item.user_id}</td><td>{item.reason}</td><td>{item.note || "—"}</td><td><button type="button" className="monetization-secondary" onClick={() => includeUser(item)}>Remove exclusion</button></td></tr>)}{!exclusions.length && <tr><td colSpan="4">No excluded users.</td></tr>}</tbody></table></div>
                 <form className="monetization-form" onSubmit={excludeUser}>
                   <label>User ID<input value={exclusionForm.user_id} onChange={(e) => setExclusionForm({ ...exclusionForm, user_id: e.target.value })} required /></label>
