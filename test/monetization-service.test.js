@@ -342,3 +342,19 @@ test("keeps website video ads unavailable until a supported player is verified",
     creative: { title: "Video", body: "Video ad" }
   }), /video.*not available|player.*verified/i);
 });
+
+test("website campaigns do not require a Telegram bot while Telegram campaigns do", () => {
+  const validate = requireFunction("validateCampaignInput");
+  const website = validate({
+    provider_id: UUID, name: "Website banner", campaign_type: "external",
+    channel: "website", format: "banner", target_url: "https://advertiser.example",
+    creative: { title: "Offer", body: "A website offer" }
+  });
+  assert.equal(website.bot_id, null);
+  assert.throws(() => validate({
+    provider_id: UUID, name: "Telegram text", campaign_type: "external",
+    channel: "telegram", format: "telegram_text",
+    target_url: "https://advertiser.example",
+    creative: { body: "Offer", cta_label: "اعرف المزيد" }
+  }), /bot_id/i);
+});
