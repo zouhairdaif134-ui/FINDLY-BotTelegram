@@ -1,4 +1,5 @@
 import { getSupabase } from "../lib/supabase.js";
+import { recordAdminMutation, recordAdminFailure } from "../lib/admin-audit.js";
 
 const FIELDS =
   "id, bot_id, category_id, content_type, title, description, image_url, external_url, metadata, is_active, published_at, created_at, updated_at";
@@ -115,134 +116,36 @@ export async function getContent(
   return data || [];
 }
 
-export async function createContent(
-  env,
-  body
-) {
-  const supabase = getSupabase(env);
-
-  const item =
-    normalizeContent(body);
-
-  const { data, error } =
-    await supabase
-      .from("content_items")
-      .insert(item)
-      .select(FIELDS)
-      .single();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
+export async function createContent(env, body, actor) {
+  const item = normalizeContent(body);
+  return recordAdminMutation(env, actor, {
+    action: "content.create", entityType: "content", operation: "create", payload: item
+  });
 }
 
-export async function updateContent(
-  env,
-  id,
-  body
-) {
-  const supabase = getSupabase(env);
-
-  if (!id) {
-    throw new Error(
-      "Content id is required"
-    );
-  }
-
-  const allowed = [
-    "bot_id",
-    "category_id",
-    "content_type",
-    "title",
-    "description",
-    "image_url",
-    "external_url",
-    "metadata",
-    "is_active",
-    "published_at"
-  ];
-
+export async function updateContent(env, id, body, actor) {
+  if (!id) throw new Error("Content id is required");
+  const allowed = ["bot_id","category_id","content_type","title","description","image_url","external_url","metadata","is_active","published_at"];
   const updates = {};
-
-  for (const key of allowed) {
-    if (body[key] !== undefined) {
-      updates[key] = body[key];
-    }
+  for (const key of allowed) if (body?.[key] !== undefined) updates[key] = body[key];
+  if (updates.title !== undefined) {
+    updates.title = cleanText(updates.title);
+    if (!updates.title) throw new Error("Content title cannot be empty");
   }
-
-  if (
-    updates.title !== undefined
-  ) {
-    updates.title =
-      cleanText(updates.title);
-
-    if (!updates.title) {
-      throw new Error(
-        "Content title cannot be empty"
-      );
-    }
+  for (const key of ["description","image_url","external_url"]) {
+    if (updates[key] !== undefined) updates[key] = cleanText(updates[key]) || null;
   }
-
-  for (const key of [
-    "description",
-    "image_url",
-    "external_url"
-  ]) {
-    if (updates[key] !== undefined) {
-      updates[key] =
-        cleanText(updates[key]) ||
-        null;
-    }
-  }
-
-  if (
-    updates.content_type !==
-    undefined
-  ) {
-    updates.content_type =
-      cleanText(
-        updates.content_type
-      ) || "general";
-  }
-
-  if (
-    Object.keys(updates).length === 0
-  ) {
-    throw new Error(
-      "No fields to update"
-    );
-  }
-
-  const { data, error } =
-    await supabase
-      .from("content_items")
-      .update(updates)
-      .eq("id", id)
-      .select(FIELDS)
-      .single();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
+  if (updates.content_type !== undefined) updates.content_type = cleanText(updates.content_type) || "general";
+  if (!Object.keys(updates).length) throw new Error("No fields to update");
+  const action = updates.is_active === true ? "content.activate" : updates.is_active === false ? "content.deactivate" : "content.update";
+  return recordAdminMutation(env, actor, {
+    action, entityType: "content", entityId: id, operation: "update", payload: updates
+  });
 }
 
-export async function deleteContent(
-  env,
-  id
-) {
-  return updateContent(
-    env,
-    id,
-    {
-      is_active: false
-    }
-  );
+export async function deleteContent(env, id, actor) {
+  return updateContent(env, id, { is_active: false }, actor);
 }
-
 
 // FINDLY Movies catalog administration. All writes run through the
 // authenticated Worker using its service-role Supabase client.
@@ -307,30 +210,31 @@ export async function getMoviesCatalog(env, status = null) {
   }));
 }
 
-export async function createMovieCatalogItem(env, body) {
+export async function createMovieCatalogItem(env, body, actor) {
   const item = normalizeMovie(body);
   if (!item.media_type || !item.title) throw new Error("media_type and title are required");
-  const { data, error } = await getSupabase(env).from("movie_titles").insert(item).select(MOVIE_FIELDS).single();
-  if (error) throw error;
-  return data;
+  return recordAdminMutation(env, actor, {
+    action: "movie.create", entityType: "movie", operation: "create", payload: item
+  });
 }
 
-export async function updateMovieCatalogItem(env, id, body) {
+export async function updateMovieCatalogItem(env, id, body, actor) {
   if (!id) throw new Error("Movie id is required");
   const updates = normalizeMovie(body, true);
   if (!Object.keys(updates).length) throw new Error("No fields to update");
-  const { data, error } = await getSupabase(env).from("movie_titles").update(updates).eq("id", id).select(MOVIE_FIELDS).single();
-  if (error) throw error;
-  return data;
+  const action = updates.status === "active" ? "movie.publish" : updates.status === "inactive" ? "movie.deactivate" : "movie.update";
+  return recordAdminMutation(env, actor, {
+    action, entityType: "movie", entityId: id, operation: "update", payload: updates
+  });
 }
 
-export async function deleteMovieCatalogItem(env, id) {
+export async function deleteMovieCatalogItem(env, id, actor) {
   if (!id) throw new Error("Movie id is required");
-  const { data, error } = await getSupabase(env).from("movie_titles").delete().eq("id", id).select("id").single();
-  if (error) throw error;
-  return data;
+  const result = await recordAdminMutation(env, actor, {
+    action: "movie.delete", entityType: "movie", entityId: id, operation: "delete", payload: {}
+  });
+  return { id: result.id };
 }
-
 
 function tmdbImage(path, size = "w500") {
   return path ? "https://image.tmdb.org/t/p/" + size + path : null;
@@ -382,7 +286,8 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
   }));
 }
 
-export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
+
+export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", actor) {
   if (!/^\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
   if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
   const isSeries = mediaType === "series";
@@ -393,49 +298,76 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie") {
   const originalTitle = isSeries ? details.original_name : details.original_title;
   const releaseDate = isSeries ? details.first_air_date : details.release_date;
   const releaseYear = Number(String(releaseDate || "").slice(0, 4)) || null;
-  const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   if (!title) throw new Error("TMDB response does not contain a title");
+
   const supabase = getSupabase(env);
   const { data: existingId, error: lookupError } = await supabase
-    .from("movie_external_ids").select("title_id").eq("provider", "tmdb").eq("external_id", String(tmdbId)).maybeSingle();
+    .from("movie_external_ids").select("title_id")
+    .eq("provider", "tmdb").eq("external_id", String(tmdbId)).maybeSingle();
   if (lookupError) throw lookupError;
-  const record = {
-    media_type: mediaType, title, original_title: originalTitle || null,
-    normalized_title: normalized, overview: details.overview || null,
-    release_date: releaseDate || null, release_year: releaseYear,
+
+  const movie = {
+    media_type: mediaType,
+    title,
+    original_title: originalTitle || null,
+    normalized_title: normalized,
+    overview: details.overview || null,
+    release_date: releaseDate || null,
+    release_year: releaseYear,
     runtime_minutes: isSeries ? null : details.runtime || null,
     rating: Number.isFinite(Number(details.vote_average)) ? Math.round(Number(details.vote_average) * 10) / 10 : null,
-    poster_path: tmdbImage(details.poster_path), backdrop_path: tmdbImage(details.backdrop_path),
-    status: "draft", metadata_status: "metadata_only"
+    poster_path: tmdbImage(details.poster_path),
+    backdrop_path: tmdbImage(details.backdrop_path),
+    status: "draft",
+    metadata_status: "metadata_only"
   };
-  let saved;
-  if (existingId?.title_id) {
-    const { data, error } = await supabase.from("movie_titles").update(record).eq("id", existingId.title_id).select(MOVIE_FIELDS).single();
-    if (error) throw error;
-    saved = data;
-  } else {
-    const { data, error } = await supabase.from("movie_titles").insert(record).select(MOVIE_FIELDS).single();
-    if (error) throw error;
-    saved = data;
-    const { error: externalError } = await supabase.from("movie_external_ids").insert({
-      title_id: saved.id, provider: "tmdb", external_id: String(tmdbId), external_type: mediaType
+
+  const saved = await recordAdminMutation(env, actor, {
+    action: "movie.import_tmdb",
+    entityType: "movie",
+    entityId: existingId?.title_id || null,
+    operation: existingId?.title_id ? "update" : "create",
+    payload: movie
+  });
+
+  try {
+    if (!existingId?.title_id) {
+      const { error: externalError } = await supabase.from("movie_external_ids").insert({
+        title_id: saved.id, provider: "tmdb", external_id: String(tmdbId), external_type: mediaType
+      });
+      if (externalError) throw externalError;
+    }
+
+    const genreRows = (details.genres || []).map((genre) => ({
+      name: genre.name, slug: "tmdb-" + genre.id, source: "provider", external_id: String(genre.id)
+    }));
+    for (const genre of genreRows) {
+      const { error } = await supabase.from("movie_genres").upsert(genre, { onConflict: "source,external_id" });
+      if (error) throw error;
+    }
+    if (genreRows.length) {
+      const ids = genreRows.map((genre) => genre.external_id);
+      const { data: genres, error: genreError } = await supabase
+        .from("movie_genres").select("id,external_id")
+        .eq("source", "provider").in("external_id", ids);
+      if (genreError) throw genreError;
+      const links = (genres || []).map((genre) => ({ title_id: saved.id, genre_id: genre.id }));
+      const { error: linkError } = await supabase.from("movie_title_genres")
+        .upsert(links, { onConflict: "title_id,genre_id" });
+      if (linkError) throw linkError;
+    }
+  } catch (error) {
+    await recordAdminFailure(env, actor, {
+      action: "movie.import_relations",
+      entityType: "movie",
+      entityId: saved.id,
+      failureCode: error?.code || "MOVIE_IMPORT_RELATIONS_FAILED",
+      failureType: error?.name || "Error"
     });
-    if (externalError) throw externalError;
+    throw error;
   }
-  const genreRows = (details.genres || []).map((genre) => ({
-    name: genre.name, slug: "tmdb-" + genre.id, source: "provider", external_id: String(genre.id)
-  }));
-  for (const genre of genreRows) {
-    const { error } = await supabase.from("movie_genres").upsert(genre, { onConflict: "source,external_id" });
-    if (error) throw error;
-  }
-  if (genreRows.length) {
-    const ids = genreRows.map((genre) => genre.external_id);
-    const { data: genres, error: genreError } = await supabase.from("movie_genres").select("id,external_id").eq("source", "provider").in("external_id", ids);
-    if (genreError) throw genreError;
-    const links = (genres || []).map((genre) => ({ title_id: saved.id, genre_id: genre.id }));
-    const { error: linkError } = await supabase.from("movie_title_genres").upsert(links, { onConflict: "title_id,genre_id" });
-    if (linkError) throw linkError;
-  }
+
   return saved;
 }

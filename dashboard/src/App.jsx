@@ -3,6 +3,7 @@ import { supabase } from "./supabase.js";
 import NotificationsSection from "./NotificationsSection.jsx";
 import AnalyticsSection from "./AnalyticsSection.jsx";
 import AdminsSection from "./AdminsSection.jsx";
+import ActivityLogSection from "./ActivityLogSection.jsx";
 import { buildMovieShareContent } from "../../src/lib/movie-sharing.js";
 
 const PRODUCTION_API_URL =
@@ -1956,10 +1957,13 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
           />
         )}
 
+        {activeSection === "Activity Log" && (
+          <ActivityLogSection fetchApi={fetchApi} />
+        )}
+
         {[
           "Monetization",
           "AI",
-          "Activity Log",
           "Settings"
         ].includes(activeSection) && (
           <ComingSoonSection section={activeSection} />
@@ -4067,7 +4071,17 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
   async function shareMovie(item, platform) {
     setShareStatus("");
     setError("");
+    let facebookPopup = null;
+    let facebookNavigated = false;
     try {
+      if (platform === "facebook") {
+        facebookPopup = window.open("about:blank", "_blank");
+        if (!facebookPopup) throw new Error("سمح للنوافذ المنبثقة باش نكملو مشاركة Facebook.");
+      }
+      await fetchApi(`/api/movies/${encodeURIComponent(item.id)}/share`, {
+        method: "POST",
+        body: JSON.stringify({ platform })
+      });
       const moviesBot = bots.find((bot) => bot.slug === "movies" && bot.is_active);
       const share = buildMovieShareContent(
         item,
@@ -4084,11 +4098,9 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
           ? navigator.clipboard.writeText(share.caption).then(() => true).catch(() => false)
           : Promise.resolve(false);
 
-        window.open(
-          share.facebookShareUrl,
-          "_blank",
-          "noopener,noreferrer"
-        );
+        facebookPopup.opener = null;
+        facebookPopup.location.href = share.facebookShareUrl;
+        facebookNavigated = true;
 
         const copied = await clipboardPromise;
         setShareStatus(
@@ -4151,6 +4163,7 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
         "حمّلنا صورة الفيلم ونسخنا النص. افتح Instagram، اختار الصورة من Gallery، ولسق النص فالوصف."
       );
     } catch (error) {
+      if (facebookPopup && !facebookNavigated) facebookPopup.close();
       if (error?.name === "AbortError") {
         setShareStatus("تم إلغاء المشاركة.");
         return;

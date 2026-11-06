@@ -50,6 +50,8 @@ import {
   deleteNotification
 } from "./routes/notifications.js";
 import { getAnalytics, getMovieReferralAnalytics } from "./routes/analytics.js";
+import { getActivity } from "./routes/activity.js";
+import { recordAdminEvent } from "./lib/admin-audit.js";
 import {
   getSettings,
   createSetting,
@@ -708,6 +710,13 @@ export default {
             webhookUrl
           );
 
+        await recordAdminEvent(env, auth, {
+          action: "telegram.webhook.connect",
+          entityType: "telegram_integration",
+          entityId: null,
+          details: { bot_slug: botSlug }
+        });
+
         return withCors(
           success({
             bot:
@@ -831,6 +840,13 @@ export default {
             botSlug
           );
 
+        await recordAdminEvent(env, auth, {
+          action: "telegram.webhook.disconnect",
+          entityType: "telegram_integration",
+          entityId: null,
+          details: { bot_slug: botSlug }
+        });
+
         return withCors(
           success({
             bot:
@@ -866,12 +882,7 @@ export default {
         }
 
         const data =
-          await createBot(
-            env,
-            await readJson(
-              request
-            )
-          );
+          await createBot(env, await readJson(request), auth);
 
         return withCors(
           success(data)
@@ -899,13 +910,7 @@ export default {
         }
 
         const data =
-          await updateBot(
-            env,
-            getId(url),
-            await readJson(
-              request
-            )
-          );
+          await updateBot(env, getId(url), await readJson(request), auth);
 
         return withCors(
           success(data)
@@ -933,10 +938,7 @@ export default {
         }
 
         const data =
-          await deleteBot(
-            env,
-            getId(url)
-          );
+          await deleteBot(env, getId(url), auth);
 
         return withCors(
           success(data)
@@ -1026,12 +1028,7 @@ export default {
 
         return withCors(
           success(
-            await createCategory(
-              env,
-              await readJson(
-                request
-              )
-            )
+            await createCategory(env, await readJson(request), auth)
           )
         , request);
       }
@@ -1058,13 +1055,7 @@ export default {
 
         return withCors(
           success(
-            await updateCategory(
-              env,
-              getId(url),
-              await readJson(
-                request
-              )
-            )
+            await updateCategory(env, getId(url), await readJson(request), auth)
           )
         , request);
       }
@@ -1091,10 +1082,7 @@ export default {
 
         return withCors(
           success(
-            await deleteCategory(
-              env,
-              getId(url)
-            )
+            await deleteCategory(env, getId(url), auth)
           )
         , request);
       }
@@ -1248,7 +1236,7 @@ export default {
         const auth = await requirePermission(env, request, PERMISSIONS.contentCreate);
         if (auth.response) return withCors(auth.response, request);
         const body = await readJson(request);
-        const result = await importTmdbCatalogItem(env, body.tmdb_id, body.media_type || "movie");
+        const result = await importTmdbCatalogItem(env, body.tmdb_id, body.media_type || "movie", auth);
         return withCors(success(result), request);
       }
 
@@ -1261,19 +1249,19 @@ export default {
       if (url.pathname === "/api/movies" && request.method === "POST") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentCreate);
         if (auth.response) return withCors(auth.response, request);
-        return withCors(success(await createMovieCatalogItem(env, await readJson(request))), request);
+        return withCors(success(await createMovieCatalogItem(env, await readJson(request), auth)), request);
       }
 
       if (url.pathname.startsWith("/api/movies/") && request.method === "PUT") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentUpdate);
         if (auth.response) return withCors(auth.response, request);
-        return withCors(success(await updateMovieCatalogItem(env, getId(url), await readJson(request))), request);
+        return withCors(success(await updateMovieCatalogItem(env, getId(url), await readJson(request), auth)), request);
       }
 
       if (url.pathname.startsWith("/api/movies/") && request.method === "DELETE") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentDelete);
         if (auth.response) return withCors(auth.response, request);
-        return withCors(success(await deleteMovieCatalogItem(env, getId(url))), request);
+        return withCors(success(await deleteMovieCatalogItem(env, getId(url), auth)), request);
       }
 
       /*
@@ -1337,12 +1325,7 @@ export default {
 
         return withCors(
           success(
-            await createContent(
-              env,
-              await readJson(
-                request
-              )
-            )
+            await createContent(env, await readJson(request), auth)
           )
         , request);
       }
@@ -1369,13 +1352,7 @@ export default {
 
         return withCors(
           success(
-            await updateContent(
-              env,
-              getId(url),
-              await readJson(
-                request
-              )
-            )
+            await updateContent(env, getId(url), await readJson(request), auth)
           )
         , request);
       }
@@ -1402,10 +1379,7 @@ export default {
 
         return withCors(
           success(
-            await deleteContent(
-              env,
-              getId(url)
-            )
+            await deleteContent(env, getId(url), auth)
           )
         , request);
       }
@@ -1430,13 +1404,13 @@ export default {
       if (url.pathname === "/api/admins/invite" && request.method === "POST") {
         const auth = await requirePermission(env, request, PERMISSIONS.adminsManage);
         if (auth.response) return withCors(auth.response, request);
-        return withCors(success(await inviteAdmin(env, await readJson(request))), request);
+        return withCors(success(await inviteAdmin(env, await readJson(request), auth)), request);
       }
 
       if (url.pathname.startsWith("/api/admins/") && request.method === "PUT") {
         const auth = await requirePermission(env, request, PERMISSIONS.adminsManage);
         if (auth.response) return withCors(auth.response, request);
-        return withCors(success(await updateAdmin(env, getId(url), await readJson(request), auth.userId)), request);
+        return withCors(success(await updateAdmin(env, getId(url), await readJson(request), auth)), request);
       }
 
       /*
@@ -1498,13 +1472,7 @@ export default {
 
         return withCors(
           success(
-            await updateUser(
-              env,
-              getId(url),
-              await readJson(
-                request
-              )
-            )
+            await updateUser(env, getId(url), await readJson(request), auth)
           )
         , request);
       }
@@ -1850,12 +1818,7 @@ export default {
 
         return withCors(
           success(
-            await createSetting(
-              env,
-              await readJson(
-                request
-              )
-            )
+            await createSetting(env, await readJson(request), auth)
           )
         , request);
       }
@@ -1882,13 +1845,7 @@ export default {
 
         return withCors(
           success(
-            await updateSetting(
-              env,
-              getId(url),
-              await readJson(
-                request
-              )
-            )
+            await updateSetting(env, getId(url), await readJson(request), auth)
           )
         , request);
       }
@@ -1915,12 +1872,33 @@ export default {
 
         return withCors(
           success(
-            await deleteSetting(
-              env,
-              getId(url)
-            )
+            await deleteSetting(env, getId(url), auth)
           )
         , request);
+      }
+
+      if (url.pathname === "/api/activity" && request.method === "GET") {
+        const auth = await requirePermission(env, request, "activity.view");
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await getActivity(env, url)), request);
+      }
+
+      if (url.pathname.match(/^\/api\/movies\/[0-9a-f-]{36}\/share$/i) && request.method === "POST") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentView);
+        if (auth.response) return withCors(auth.response, request);
+        const movieId = getId(url);
+        const body = await readJson(request);
+        const platform = body?.platform;
+        if (!["facebook", "instagram"].includes(platform)) {
+          return withCors(failure("BAD_REQUEST", "platform must be facebook or instagram", 400), request);
+        }
+        await recordAdminEvent(env, auth, {
+          action: "movie.share." + platform,
+          entityType: "movie",
+          entityId: movieId,
+          details: { platform }
+        });
+        return withCors(success({ recorded: true }), request);
       }
 
       return withCors(
