@@ -114,6 +114,8 @@ test("buildTitleCaption escapes metadata and keeps the rendered caption within T
   const rendered = caption
     .replace(/<b>/g, "")
     .replace(/<\/b>/g, "")
+    .replace(/<i>/g, "")
+    .replace(/<\/i>/g, "")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
