@@ -1068,6 +1068,9 @@ export async function createRevenueAdjustment(env, input) {
     .maybeSingle();
   throwIfError(originalError);
   if (!original) throw new Error("original revenue event was not found");
+  if (original.revenue_source !== "external_ad") {
+    throw new Error("only Phase 1 external advertising revenue can be reversed");
+  }
   if (original.entry_type === "reversal" || original.direction === "debit") {
     throw new Error("a reversal or debit entry cannot be reversed");
   }
