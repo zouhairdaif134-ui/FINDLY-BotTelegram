@@ -355,6 +355,17 @@ export function validateRevenueInput(input) {
   };
 }
 
+export function validateRevenueLedgerInput(input) {
+  const payload = validateRevenueInput(input);
+  if (!["manual", "provider_reported"].includes(payload.provenance)) {
+    throw new Error("revenue entries must be manual or provider-reported; estimates are not accepted as revenue");
+  }
+  if (payload.provenance === "provider_reported" && !payload.external_reference) {
+    throw new Error("provider-reported revenue requires a report or statement reference");
+  }
+  return payload;
+}
+
 export function validateFrequencyPolicyInput(input) {
   const value = requireObject(input, "frequency policy");
   rejectUnknownKeys(value, new Set([
@@ -977,13 +988,7 @@ export async function setCampaignStatus(env, campaignId, status) {
 }
 
 export async function recordManualRevenue(env, input) {
-  const payload = validateRevenueInput(input);
-  if (!["manual", "provider_reported"].includes(payload.provenance)) {
-    throw new Error("revenue entries must be manual or provider-reported; estimates are not accepted as revenue");
-  }
-  if (payload.provenance === "provider_reported" && !payload.external_reference) {
-    throw new Error("provider-reported revenue requires a report or statement reference");
-  }
+  const payload = validateRevenueLedgerInput(input);
   const { data, error } = await getSupabase(env)
     .from("monetization_events")
     .insert({
