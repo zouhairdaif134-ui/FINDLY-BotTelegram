@@ -157,6 +157,46 @@ test("findSimilarCatalogTitles ranks active titles by shared genres and excludes
   assert.ok(!candidateQuery.operations.some(([method, column, values]) => method === "in" && column === "id" && values.includes("dune")));
 });
 
+
+test("findSimilarCatalogTitles ranks genre overlap before applying the candidate cap", async () => {
+  const reference = { ...title, id: "reference", title: "Reference Film" };
+  const lowOverlap = Array.from({ length: 100 }, (_, index) => ({
+    ...title,
+    id: "candidate-" + String(index).padStart(3, "0"),
+    title: "Candidate " + index,
+    rating: 9.5
+  }));
+  const bestMatch = { ...title, id: "best-match", title: "Best Match", rating: 7.5 };
+  const db = createSupabaseMock((table, ops) => {
+    if (table === "movie_titles") {
+      const isSearch = ops.some(([method]) => method === "ilike");
+      if (isSearch) return { data: [reference], error: null };
+      const ids = ops.find(([method, column]) => method === "in" && column === "id")?.[2] || [];
+      return { data: [...lowOverlap, bestMatch].filter((row) => ids.includes(row.id)), error: null };
+    }
+    if (table === "movie_title_genres") {
+      const select = ops.find(([method]) => method === "select")?.[1];
+      if (select === "genre_id") {
+        return { data: [{ genre_id: "genre-a" }, { genre_id: "genre-b" }], error: null };
+      }
+      if (select === "title_id,genre_id") {
+        return {
+          data: [
+            ...lowOverlap.map((row) => ({ title_id: row.id, genre_id: "genre-a" })),
+            { title_id: bestMatch.id, genre_id: "genre-a" },
+            { title_id: bestMatch.id, genre_id: "genre-b" }
+          ],
+          error: null
+        };
+      }
+      return { data: [], error: null };
+    }
+    throw new Error("unexpected table " + table);
+  });
+  const results = await findSimilarCatalogTitles(db, { title: "Reference Film", limit: 1 });
+  assert.deepEqual(results.map((item) => item.id), ["best-match"]);
+});
+
 test("findSimilarCatalogTitles returns no results when the reference title has no catalog genres", async () => {
   const db = createSupabaseMock((table, ops) => {
     if (table === "movie_titles") return { data: [title], error: null };
