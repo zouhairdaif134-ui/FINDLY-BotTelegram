@@ -12,6 +12,7 @@ import {
   listFrequencyPolicies,
   saveFrequencyPolicy,
   listAdCampaigns,
+  listCampaignPlacements,
   saveAdCampaign,
   setCampaignStatus,
   addCampaignPlacement,
