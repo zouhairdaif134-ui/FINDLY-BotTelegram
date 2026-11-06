@@ -569,6 +569,7 @@ export async function listRevenueEvents(env, filters = {}) {
 
 export async function saveAdProvider(env, input) {
   const payload = validateProviderInput(input);
+  if (payload.provider_type === "direct") throw new Error("direct advertiser providers are locked until Phase 2");
   const supabase = getSupabase(env);
   const { data: existing, error: lookupError } = await supabase
     .from("ad_providers")
