@@ -11,7 +11,7 @@ import {
   showSharedJob,
   handleJobsCallback
 } from "../lib/jobs-ui.js";
-import { generateAIReply } from "../lib/ai.js";
+import { generateAIReply, getAIConfig } from "../lib/ai.js";
 import {
   parseAIMemoryCommand, buildAIMemoryConsentKeyboard, buildAIMemoryConfirmationKeyboard,
   getAIMemoryState, ensureAIMemoryState, setAIMemoryConsent, setAIMemorySessionEnabled,
@@ -1506,22 +1506,25 @@ async function processTelegramUpdate(
 
   try {
     const memoryUserId = message.chat?.type === "private" ? internalUser?.id : null;
-    const memoryState = memoryUserId
+    const aiConfig = await getAIConfig(env, bot.id);
+    const memoryState = aiConfig.enabled && memoryUserId
       ? await getAIMemoryState(getSupabase(env), memoryUserId, bot.id)
       : null;
     const memoryEnabled = memoryState?.session_enabled !== false;
-    const memoryHistory = memoryEnabled && memoryUserId
+    const memoryHistory = aiConfig.enabled && memoryEnabled && memoryUserId
       ? await getAISessionHistory(getSupabase(env), memoryUserId, bot.id)
       : [];
-    const memoryPreferences = memoryState?.consent_status === "granted" && Array.isArray(memoryState.preferences)
+    const memoryPreferences = aiConfig.enabled && memoryState?.consent_status === "granted" && Array.isArray(memoryState.preferences)
       ? memoryState.preferences
       : [];
-    const aiReply = await generateAIReply(
-      env,
-      bot,
-      text,
-      { history: memoryHistory, preferences: memoryPreferences }
-    );
+    const aiReply = aiConfig.enabled
+      ? await generateAIReply(
+          env,
+          bot,
+          text,
+          { history: memoryHistory, preferences: memoryPreferences, config: aiConfig }
+        )
+      : null;
 
     if (aiReply) {
       if (memoryEnabled && memoryUserId) {
