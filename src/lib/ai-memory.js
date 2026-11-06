@@ -111,6 +111,7 @@ export async function setPendingAIMemoryPreference(supabase, userId, botId, pref
 }
 
 export async function setPendingAIMemoryClear(supabase, userId, botId) {
+  await ensureAIMemoryState(supabase, userId, botId);
   const token = crypto.randomUUID();
   const { error } = await supabase
     .from("ai_user_memory_preferences")
