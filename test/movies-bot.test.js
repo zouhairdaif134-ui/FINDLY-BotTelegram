@@ -21,7 +21,7 @@ test("rejects malformed callback data and non-UUID title identifiers", () => {
 
 test("parses title, favorite and season callbacks only with UUID identifiers", () => {
   const id = "550e8400-e29b-41d4-a716-446655440000";
-  assert.deepEqual(parseMoviesCallback("movies:title:" + id), { action: "title", id });
+  assert.deepEqual(parseMoviesCallback("movies:title:" + id), { action: "title", id });\n  assert.deepEqual(parseMoviesCallback("movies:plot:" + id), { action: "plot", id });
   assert.deepEqual(parseMoviesCallback("movies:favorite:" + id), { action: "favorite", id });
   assert.deepEqual(parseMoviesCallback("movies:season:" + id), { action: "season", id });
 });

@@ -44,7 +44,7 @@ export function parseMoviesCallback(value) {
     const page = Number(parts[2] || 0);
     return { action, page: Number.isInteger(page) && page >= 0 ? page : 0 };
   }
-  if (["title", "favorite", "seasons"].includes(action) && UUID_RE.test(parts[2] || "")) {
+  if (["title", "favorite", "seasons", "plot"].includes(action) && UUID_RE.test(parts[2] || "")) {
     return { action, id: parts[2] };
   }
   if (action === "season" && UUID_RE.test(parts[2] || "")) {
@@ -216,7 +216,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   const supabase = getSupabase(env);
   const { data: title, error } = await supabase
     .from("movie_titles")
-    .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,metadata_status")
+    .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,full_plot_summary,metadata_status")
     .eq("id", titleId)
     .eq("status", "active")
     .maybeSingle();
@@ -259,7 +259,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
       callback_data: "movies:favorite:" + title.id
     }]);
   }
-  if (title.media_type === "series") {
+  if (title.full_plot_summary) {\n    keyboard.push([{ text: "📖 قراءة الملخص الكامل (حرق الأحداث)", callback_data: "movies:plot:" + title.id }]);\n  }\n  if (title.media_type === "series") {
     keyboard.push([{ text: "📚 المواسم والحلقات", callback_data: "movies:seasons:" + title.id }]);
   }
   if (bot.slug === "findly") {
@@ -277,6 +277,16 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   await sendMessage(env, bot.slug, chatId, lines.join("\n"), {
     reply_markup: { inline_keyboard: keyboard }
   });
+}
+
+async function sendFullPlotSummary(env, bot, chatId, titleId) {
+  const {data:title,error}=await getSupabase(env).from("movie_titles").select("title,full_plot_summary").eq("id",titleId).eq("status","active").maybeSingle();
+  if(error)throw error;
+  if(!title?.full_plot_summary){await sendMessage(env,bot.slug,chatId,"الملخص المفصل غير متوفر حالياً.");return;}
+  const chunks=[];let remaining=String(title.full_plot_summary).trim();
+  while(remaining.length>3500){let splitAt=remaining.lastIndexOf(" ",3500);if(splitAt<1800)splitAt=3500;chunks.push(remaining.slice(0,splitAt));remaining=remaining.slice(splitAt).trimStart();}
+  if(remaining)chunks.push(remaining);
+  for(let i=0;i<chunks.length;i++){const heading=i===0?"<b>📖 الملخص الكامل: "+escapeHtml(title.title)+"</b>\\n\\n":"<b>📖 تكملة الملخص ("+(i+1)+"/"+chunks.length+")</b>\\n\\n";await sendMessage(env,bot.slug,chatId,heading+escapeHtml(chunks[i]));}
 }
 
 async function toggleFavorite(env, bot, chatId, titleId, telegramUserId) {
@@ -425,7 +435,7 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   }
   else if (parsed.action === "search") await showMoviesSearchPrompt(env, bot, chatId);
   else if (parsed.action === "favorites") await sendFavorites(env, bot, chatId, telegramUserId);
-  else if (parsed.action === "title") await sendTitle(env, bot, chatId, parsed.id, telegramUserId);
+  else if (parsed.action === "title") await sendTitle(env, bot, chatId, parsed.id, telegramUserId);\n  else if (parsed.action === "plot") await sendFullPlotSummary(env, bot, chatId, parsed.id);
   else if (parsed.action === "favorite") await toggleFavorite(env, bot, chatId, parsed.id, telegramUserId);
   else if (parsed.action === "seasons") await sendSeasons(env, bot, chatId, parsed.id);
   else if (parsed.action === "season") await sendEpisodes(env, bot, chatId, parsed.id);

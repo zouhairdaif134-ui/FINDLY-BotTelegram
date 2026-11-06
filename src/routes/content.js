@@ -246,11 +246,11 @@ export async function deleteContent(
 
 // FINDLY Movies catalog administration. All writes run through the
 // authenticated Worker using its service-role Supabase client.
-const MOVIE_FIELDS = "id,media_type,title,original_title,normalized_title,overview,release_date,release_year,runtime_minutes,rating,poster_path,backdrop_path,status,metadata_status,created_at,updated_at";
+const MOVIE_FIELDS = "id,media_type,title,original_title,normalized_title,overview,full_plot_summary,release_date,release_year,runtime_minutes,rating,poster_path,backdrop_path,status,metadata_status,created_at,updated_at";
 
 function normalizeMovie(body = {}, partial = false) {
   const item = {};
-  const allowed = ["media_type", "title", "original_title", "overview", "release_date", "release_year", "runtime_minutes", "rating", "poster_path", "backdrop_path", "status", "metadata_status"];
+  const allowed = ["media_type", "title", "original_title", "overview", "full_plot_summary", "release_date", "release_year", "runtime_minutes", "rating", "poster_path", "backdrop_path", "status", "metadata_status"];
   for (const key of allowed) {
     if (body[key] !== undefined || !partial && ["media_type", "title"].includes(key)) {
       item[key] = body[key] === "" ? null : body[key];
@@ -272,7 +272,7 @@ function normalizeMovie(body = {}, partial = false) {
     }
   }
   if (item.rating !== undefined && item.rating !== null) item.rating = Number(item.rating);
-  for (const key of ["original_title", "overview", "release_date", "poster_path", "backdrop_path"]) {
+  for (const key of ["original_title", "overview", "full_plot_summary", "release_date", "poster_path", "backdrop_path"]) {
     if (item[key] !== undefined && typeof item[key] === "string") item[key] = item[key].trim() || null;
   }
   return item;
