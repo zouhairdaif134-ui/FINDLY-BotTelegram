@@ -768,6 +768,21 @@ export async function verifyAdProviderZone(env, zoneId, actor, confirmation) {
   if (confirmation !== true) throw new Error("explicit Owner confirmation is required after testing the provider zone");
   if (!actor?.userId) throw new Error("verified administrator identity is required");
   const supabase = getSupabase(env);
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("admin_roles")
+    .select("role_id")
+    .eq("admin_id", actor.userId);
+  throwIfError(assignmentsError);
+  const roleIds = (assignments || []).map((item) => item.role_id);
+  if (!roleIds.length) throw new Error("Owner role is required to verify provider zones");
+  const { data: roles, error: rolesError } = await supabase
+    .from("roles")
+    .select("name")
+    .in("id", roleIds);
+  throwIfError(rolesError);
+  if (!(roles || []).some((role) => role.name === "owner")) {
+    throw new Error("Only the Owner can verify a provider zone");
+  }
   const { data: zone, error: zoneError } = await supabase
     .from("ad_provider_zones")
     .select("id,is_verified")
