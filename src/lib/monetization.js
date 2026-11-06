@@ -1282,7 +1282,7 @@ export async function listExclusionCandidates(env, filters = {}) {
 }
 
 
-function isActiveSchedule(item, now = Date.now()) {
+export function isActiveSchedule(item, now = Date.now()) {
   const startsAt = item?.starts_at ? new Date(item.starts_at).getTime() : null;
   const endsAt = item?.ends_at ? new Date(item.ends_at).getTime() : null;
   return (!startsAt || startsAt <= now) && (!endsAt || endsAt > now);
