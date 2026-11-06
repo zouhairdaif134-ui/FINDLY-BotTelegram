@@ -109,5 +109,5 @@ test("keeps publisher networks and all ad placements disabled until verified act
   assert.match(migration, /is_verified boolean not null default false/i);
   assert.match(migration, /is_active boolean not null default false/i);
   assert.match(migration, /is_enabled boolean not null default false/i);
-  assert.match(migration, /alter table public\\.ad_campaigns alter column status set default 'draft'/i);
+  assert.match(migration, /alter table public\.ad_campaigns alter column status set default 'draft'/i);
 });
