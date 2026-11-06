@@ -1,8 +1,10 @@
 import { getSupabase } from "../lib/supabase.js";
 import { buildTelegramUserProfile } from "../lib/telegram-user.js";
+import { claimTelegramAdDelivery, buildTelegramAdPayload, recordTelegramAdDelivery } from "../lib/monetization.js";
 import {
   sendMessage,
-  answerCallback
+  answerCallback,
+  telegramRequest
 } from "../lib/telegram.js";
 import {
   showJobsCategory,
@@ -1077,6 +1079,51 @@ export async function handleTelegramUpdate(
         update,
         claim.recordId
       );
+
+    // Advertising is appended only after the requested bot interaction succeeds.
+    // A campaign/provider failure must never cause the core Telegram update to retry.
+    let adReservation = null;
+    try {
+      adReservation = await claimTelegramAdDelivery(env, bot, update);
+      if (adReservation) {
+        const ad = buildTelegramAdPayload(adReservation.campaign);
+        const chatId = update?.message?.chat?.id || update?.callback_query?.message?.chat?.id;
+        if (ad.method === "photo") {
+          await telegramRequest(env, bot.slug, "sendPhoto", {
+            chat_id: chatId,
+            photo: ad.photo,
+            caption: ad.caption,
+            parse_mode: ad.parse_mode,
+            reply_markup: ad.reply_markup
+          });
+        } else {
+          await sendMessage(env, bot.slug, chatId, ad.text, {
+            reply_markup: ad.reply_markup
+          });
+        }
+        await recordTelegramAdDelivery(env, adReservation, "sent");
+      }
+    } catch (adError) {
+      if (adReservation) {
+        try {
+          await recordTelegramAdDelivery(
+            env,
+            adReservation,
+            "failed",
+            adError?.code || "TELEGRAM_AD_SEND_FAILED"
+          );
+        } catch (ledgerError) {
+          console.error("FINDLY_MONETIZATION_DELIVERY_LOG_FAILED", {
+            code: ledgerError?.code || null
+          });
+        }
+      }
+      console.error("FINDLY_TELEGRAM_AD_SKIPPED", {
+        botSlug: bot?.slug || null,
+        update_id: update?.update_id ?? null,
+        code: adError?.code || "TELEGRAM_AD_DELIVERY_FAILED"
+      });
+    }
 
     await markTelegramUpdateProcessed(
       env,
