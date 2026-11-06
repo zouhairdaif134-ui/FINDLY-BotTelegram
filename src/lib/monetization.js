@@ -80,6 +80,9 @@ function requireUuid(value, label) {
 
 function validateChannelFormat(channel, format) {
   if (!FORMATS[channel]) throw new Error("channel must be website or telegram");
+  if (channel === "website" && format === "video") {
+    throw new Error("video ads are not available until a supported provider player is verified");
+  }
   if (!FORMATS[channel].has(format)) {
     throw new Error("format is not supported for the selected channel");
   }
