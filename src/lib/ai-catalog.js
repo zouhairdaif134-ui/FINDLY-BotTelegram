@@ -1,0 +1,176 @@
+const MAX_QUERY_LENGTH = 80;
+const MAX_RESULTS = 5;
+
+export const AI_CATALOG_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "search_catalog",
+      description: "Search FINDLY's published movie and series catalog. Use this for a title the user mentions. Return only active catalog records.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          query: { type: "string", minLength: 1, maxLength: 80 },
+          media_type: { type: "string", enum: ["movie", "series"] }
+        },
+        required: ["query"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "recommend_catalog_titles",
+      description: "Recommend published titles from FINDLY's catalog. Optionally filter by a genre or media type. Use top_rated unless the user asks for new or recent titles.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          genre: { type: "string", maxLength: 40 },
+          media_type: { type: "string", enum: ["movie", "series"] },
+          sort: { type: "string", enum: ["top_rated", "newest"] },
+          limit: { type: "integer", minimum: 1, maximum: 5 }
+        }
+      }
+    }
+  }
+];
+
+function cleanQuery(value, maxLength = MAX_QUERY_LENGTH) {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/[%_*]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function normalizeTitle(row, genres = []) {
+  return {
+    id: row.id,
+    title: row.title,
+    original_title: row.original_title || null,
+    media_type: row.media_type,
+    release_year: row.release_year || null,
+    release_date: row.release_date || null,
+    rating: row.rating == null ? null : Number(row.rating),
+    runtime_minutes: row.runtime_minutes || null,
+    overview: row.overview || null,
+    genres
+  };
+}
+
+async function attachGenres(supabase, rows) {
+  if (!rows.length) return [];
+  const ids = rows.map((row) => row.id);
+  const { data, error } = await supabase
+    .from("movie_title_genres")
+    .select("title_id,movie_genres(name)")
+    .in("title_id", ids);
+  if (error) throw error;
+  const byTitle = new Map();
+  for (const relation of data || []) {
+    const name = relation?.movie_genres?.name;
+    if (!name) continue;
+    const current = byTitle.get(relation.title_id) || [];
+    if (!current.includes(name)) current.push(name);
+    byTitle.set(relation.title_id, current);
+  }
+  return rows.map((row) => normalizeTitle(row, byTitle.get(row.id) || []));
+}
+
+export async function searchCatalog(supabase, input = {}) {
+  const query = cleanQuery(input.query);
+  if (!query) return [];
+  const mediaType = ["movie", "series"].includes(input.media_type) ? input.media_type : null;
+  const columns = "id,title,original_title,media_type,release_year,release_date,rating,runtime_minutes,overview";
+  const searches = await Promise.all(["title", "original_title"].map(async (column) => {
+    let request = supabase
+      .from("movie_titles")
+      .select(columns)
+      .eq("status", "active")
+      .ilike(column, "%" + query + "%")
+      .order("release_date", { ascending: false, nullsFirst: false })
+      .limit(MAX_RESULTS);
+    if (mediaType) request = request.eq("media_type", mediaType);
+    const { data, error } = await request;
+    if (error) throw error;
+    return data || [];
+  }));
+  const unique = new Map();
+  for (const row of searches.flat()) unique.set(row.id, row);
+  const rows = [...unique.values()].slice(0, MAX_RESULTS);
+  return attachGenres(supabase, rows);
+}
+
+export async function recommendCatalogTitles(supabase, input = {}) {
+  const limit = Number.isInteger(input.limit) ? Math.min(MAX_RESULTS, Math.max(1, input.limit)) : 5;
+  const sort = input.sort === "newest" ? "newest" : "top_rated";
+  const mediaType = ["movie", "series"].includes(input.media_type) ? input.media_type : null;
+  let titleIds = null;
+  const genre = cleanQuery(input.genre, 40);
+  if (genre) {
+    const { data: genres, error: genreError } = await supabase
+      .from("movie_genres")
+      .select("id,name")
+      .ilike("name", "%" + genre + "%")
+      .limit(5);
+    if (genreError) throw genreError;
+    if (!genres?.length) return [];
+    const { data: relations, error: relationError } = await supabase
+      .from("movie_title_genres")
+      .select("title_id")
+      .in("genre_id", genres.map((item) => item.id));
+    if (relationError) throw relationError;
+    titleIds = [...new Set((relations || []).map((item) => item.title_id))];
+    if (!titleIds.length) return [];
+  }
+
+  const columns = "id,title,original_title,media_type,release_year,release_date,rating,runtime_minutes,overview";
+  let request = supabase
+    .from("movie_titles")
+    .select(columns)
+    .eq("status", "active");
+  if (mediaType) request = request.eq("media_type", mediaType);
+  if (titleIds) request = request.in("id", titleIds);
+  if (sort === "newest") {
+    request = request
+      .order("release_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
+  } else {
+    request = request
+      .not("rating", "is", null)
+      .order("rating", { ascending: false })
+      .order("release_date", { ascending: false, nullsFirst: false });
+  }
+  const { data, error } = await request.limit(limit);
+  if (error) throw error;
+  return attachGenres(supabase, data || []);
+}
+
+export async function executeCatalogTool(supabase, name, rawArguments) {
+  let args;
+  try {
+    args = typeof rawArguments === "string" ? JSON.parse(rawArguments) : rawArguments;
+  } catch {
+    return { error: "Invalid tool arguments." };
+  }
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return { error: "Invalid tool arguments." };
+  }
+  try {
+    if (name === "search_catalog") {
+      const results = await searchCatalog(supabase, args);
+      return { count: results.length, results };
+    }
+    if (name === "recommend_catalog_titles") {
+      const results = await recommendCatalogTitles(supabase, args);
+      return { count: results.length, results };
+    }
+    return { error: "Unsupported catalog tool." };
+  } catch {
+    return { error: "Catalog lookup is temporarily unavailable." };
+  }
+}
