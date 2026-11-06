@@ -15,6 +15,10 @@ const PAGE_OPTIONS = [
   ["movie_details", "Movie / Series Details"],
   ["watch", "Watch"],
   ["all_interactions", "All Telegram interactions"],
+  ["start", "After /start"],
+  ["search", "After /search"],
+  ["callback", "After button interaction"],
+  ["message", "After text message"],
   ["future", "Future page"]
 ];
 const WEBSITE_FORMATS = ["banner", "native", "popup", "video"];
@@ -178,7 +182,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
     event.preventDefault();
     const body = {
       channel: placementForm.channel,
-      page_key: placementForm.channel === "telegram" ? "all_interactions" : placementForm.page_key,
+      page_key: placementForm.page_key,
       slot_key: placementForm.slot_key, position: placementForm.channel === "telegram" ? "interaction_trigger" : placementForm.position,
       format: placementForm.format, provider_zone_id: placementForm.provider_zone_id || null,
       is_enabled: placementForm.is_enabled, priority: Number(placementForm.priority)
@@ -465,7 +469,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                 <div className="monetization-panel-title"><div><h3>Ad Placement Manager</h3><p>إعداد مواضع متعددة لكل صفحة، مع تحكم مستقل فـ Website وTelegram.</p></div></div>
                 <div className="monetization-channel-switch"><button type="button" className={channel === "website" ? "active" : ""} onClick={() => { setChannel("website"); setPlacementForm((old) => ({ ...old, channel: "website", page_key: "home", position: "top", format: "banner" })); }}>Website</button><button type="button" className={channel === "telegram" ? "active" : ""} onClick={() => { setChannel("telegram"); setPlacementForm((old) => ({ ...old, channel: "telegram", page_key: "all_interactions", position: "interaction_trigger", format: "telegram_text" })); }}>Telegram</button></div>
                 <form className="monetization-form" onSubmit={savePlacement}>
-                  <label>Page<select disabled={channel === "telegram"} value={placementForm.page_key} onChange={(e) => setPlacementForm({ ...placementForm, page_key: e.target.value })}>{PAGE_OPTIONS.filter(([key]) => channel === "website" ? key !== "all_interactions" : key === "all_interactions").map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+                  <label>Page<select value={placementForm.page_key} onChange={(e) => setPlacementForm({ ...placementForm, page_key: e.target.value })}>{PAGE_OPTIONS.filter(([key]) => channel === "website" ? ["home","search","movie_details","watch","future"].includes(key) : ["all_interactions","start","search","callback","message"].includes(key)).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
                   <label>Slot key<input value={placementForm.slot_key} onChange={(e) => setPlacementForm({ ...placementForm, slot_key: e.target.value })} placeholder="home-top-banner" required /></label>
                   <label>Position<select disabled={channel === "telegram"} value={placementForm.position} onChange={(e) => setPlacementForm({ ...placementForm, position: e.target.value })}>{(channel === "website" ? ["top", "bottom", "between_cards", "within_content"] : ["interaction_trigger"]).map((p) => <option key={p}>{p}</option>)}</select></label>
                   <label>Format<select value={placementForm.format} onChange={(e) => setPlacementForm({ ...placementForm, format: e.target.value })}>{(channel === "website" ? WEBSITE_FORMATS : TELEGRAM_FORMATS).map((f) => <option key={f}>{f}</option>)}</select></label>
