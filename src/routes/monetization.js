@@ -47,6 +47,16 @@ function send(helpers, request, data) {
   return helpers.withCors(helpers.success(data), request);
 }
 
+function getRequestOriginHost(request) {
+  const source = request?.headers?.get("Origin") || request?.headers?.get("Referer");
+  if (!source || source === "null") return null;
+  try {
+    return new URL(source).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 function sendPublic(helpers, request, data) {
   const response = helpers.success(data);
   const headers = new Headers(response.headers);
@@ -121,6 +131,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       return sendPublic(helpers, request, await listPublicAdPlacements(env, {
         page_key: url.searchParams.get("page"),
         slot_key: url.searchParams.get("slot"),
+        origin_host: getRequestOriginHost(request),
         visitor_key: url.searchParams.get("visitor"),
         view_id: url.searchParams.get("view")
       }));
