@@ -1210,8 +1210,8 @@ export function buildTelegramAdPayload(campaign) {
 export function getTelegramAdTrigger(update) {
   if (update?.callback_query) return "callback";
   const text = String(update?.message?.text || "").trim();
-  if (/^\\/start(?:\\s|$)/i.test(text)) return "start";
-  if (/^\\/search(?:\\s|$)/i.test(text)) return "search";
+  if (/^\/start(?:\s|$)/i.test(text)) return "start";
+  if (/^\/search(?:\s|$)/i.test(text)) return "search";
   return "message";
 }
 
