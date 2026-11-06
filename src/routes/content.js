@@ -1,5 +1,5 @@
 import { getSupabase } from "../lib/supabase.js";
-import { recordAdminMutation, recordAdminMovieImport } from "../lib/admin-audit.js";
+import { recordAdminMutation, recordAdminFailure } from "../lib/admin-audit.js";
 
 const FIELDS =
   "id, bot_id, category_id, content_type, title, description, image_url, external_url, metadata, is_active, published_at, created_at, updated_at";
@@ -301,6 +301,13 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", ac
   const normalized = String(title || "").toLocaleLowerCase().normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   if (!title) throw new Error("TMDB response does not contain a title");
+
+  const supabase = getSupabase(env);
+  const { data: existingId, error: lookupError } = await supabase
+    .from("movie_external_ids").select("title_id")
+    .eq("provider", "tmdb").eq("external_id", String(tmdbId)).maybeSingle();
+  if (lookupError) throw lookupError;
+
   const movie = {
     media_type: mediaType,
     title,
@@ -312,12 +319,55 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", ac
     runtime_minutes: isSeries ? null : details.runtime || null,
     rating: Number.isFinite(Number(details.vote_average)) ? Math.round(Number(details.vote_average) * 10) / 10 : null,
     poster_path: tmdbImage(details.poster_path),
-    backdrop_path: tmdbImage(details.backdrop_path)
+    backdrop_path: tmdbImage(details.backdrop_path),
+    status: "draft",
+    metadata_status: "metadata_only"
   };
-  const genres = (details.genres || []).map((genre) => ({
-    name: genre.name,
-    slug: "tmdb-" + genre.id,
-    external_id: String(genre.id)
-  }));
-  return recordAdminMovieImport(env, actor, { tmdbId, mediaType, movie, genres });
+
+  const saved = await recordAdminMutation(env, actor, {
+    action: "movie.import_tmdb",
+    entityType: "movie",
+    entityId: existingId?.title_id || null,
+    operation: existingId?.title_id ? "update" : "create",
+    payload: movie
+  });
+
+  try {
+    if (!existingId?.title_id) {
+      const { error: externalError } = await supabase.from("movie_external_ids").insert({
+        title_id: saved.id, provider: "tmdb", external_id: String(tmdbId), external_type: mediaType
+      });
+      if (externalError) throw externalError;
+    }
+
+    const genreRows = (details.genres || []).map((genre) => ({
+      name: genre.name, slug: "tmdb-" + genre.id, source: "provider", external_id: String(genre.id)
+    }));
+    for (const genre of genreRows) {
+      const { error } = await supabase.from("movie_genres").upsert(genre, { onConflict: "source,external_id" });
+      if (error) throw error;
+    }
+    if (genreRows.length) {
+      const ids = genreRows.map((genre) => genre.external_id);
+      const { data: genres, error: genreError } = await supabase
+        .from("movie_genres").select("id,external_id")
+        .eq("source", "provider").in("external_id", ids);
+      if (genreError) throw genreError;
+      const links = (genres || []).map((genre) => ({ title_id: saved.id, genre_id: genre.id }));
+      const { error: linkError } = await supabase.from("movie_title_genres")
+        .upsert(links, { onConflict: "title_id,genre_id" });
+      if (linkError) throw linkError;
+    }
+  } catch (error) {
+    await recordAdminFailure(env, actor, {
+      action: "movie.import_relations",
+      entityType: "movie",
+      entityId: saved.id,
+      failureCode: error?.code || "MOVIE_IMPORT_RELATIONS_FAILED",
+      failureType: error?.name || "Error"
+    });
+    throw error;
+  }
+
+  return saved;
 }
