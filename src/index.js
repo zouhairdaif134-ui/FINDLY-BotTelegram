@@ -1783,9 +1783,15 @@ export default {
         )
       , request);
     } catch (error) {
-      console.error(
-        error
-      );
+      console.error("FINDLY_API_ERROR", {
+        name: error?.name || "Error",
+        message: error?.message || String(error),
+        code: error?.code || null,
+        details: error?.details || null,
+        hint: error?.hint || null,
+        status: error?.status || null,
+        path: url?.pathname || null
+      });
 
       if (error?.code === "TELEGRAM_CONFIG_ERROR") {
         return withCors(
