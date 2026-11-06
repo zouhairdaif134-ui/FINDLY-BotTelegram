@@ -467,7 +467,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                   <label>Channel<select value={zoneForm.channel} onChange={(e) => setZoneForm({ ...zoneForm, channel: e.target.value, format: e.target.value === "website" ? "banner" : "telegram_text" })}><option value="website">Website</option><option value="telegram">Telegram</option></select></label>
                   <label>Format<select value={zoneForm.format} onChange={(e) => setZoneForm({ ...zoneForm, format: e.target.value })}>{(zoneForm.channel === "website" ? WEBSITE_FORMATS : TELEGRAM_FORMATS).map((format) => <option key={format}>{format}</option>)}</select></label>
                   <label>External Zone / Smartlink ID<input value={zoneForm.external_zone_id} onChange={(e) => setZoneForm({ ...zoneForm, external_zone_id: e.target.value })} required /></label>
-                  {zoneForm.channel === "website" && <label>Site domain<input value={zoneForm.site_domain} onChange={(e) => setZoneForm({ ...zoneForm, site_domain: e.target.value })} placeholder="findly.example" /></label>}
+                  {zoneForm.channel === "website" && <label>Site domain<input value={zoneForm.site_domain} onChange={(e) => setZoneForm({ ...zoneForm, site_domain: e.target.value })} placeholder="findly.example" required /></label>}
                   <button className="monetization-primary" disabled={saving || !providers.length}>Add inactive zone</button>
                 </form>
                 <div className="monetization-table-wrap"><table><thead><tr><th>Provider</th><th>Channel / format</th><th>Zone ID</th><th>Verified</th><th>Status</th><th>Actions</th></tr></thead><tbody>
