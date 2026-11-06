@@ -108,7 +108,9 @@ export async function setPendingAIMemoryPreference(supabase, userId, botId, pref
     })
     .eq("user_id", userId)
     .eq("bot_id", botId)
-    .eq("consent_status", "granted");
+    .eq("consent_status", "granted")
+    .select("id")
+    .single();
   if (error) throw error;
   return token;
 }
@@ -124,7 +126,9 @@ export async function setPendingAIMemoryClear(supabase, userId, botId) {
       pending_action_token: token
     })
     .eq("user_id", userId)
-    .eq("bot_id", botId);
+    .eq("bot_id", botId)
+    .select("id")
+    .single();
   if (error) throw error;
   return token;
 }
@@ -188,7 +192,7 @@ export async function confirmPendingAIMemoryClear(supabase, userId, botId, token
 }
 
 export async function cancelPendingAIMemoryAction(supabase, userId, botId, token) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("ai_user_memory_preferences")
     .update({
       pending_preference: null,
@@ -197,8 +201,11 @@ export async function cancelPendingAIMemoryAction(supabase, userId, botId, token
     })
     .eq("user_id", userId)
     .eq("bot_id", botId)
-    .eq("pending_action_token", token);
+    .eq("pending_action_token", token)
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("No matching memory confirmation is pending");
 }
 
 export async function setAIMemoryConsent(supabase, userId, botId, status) {
