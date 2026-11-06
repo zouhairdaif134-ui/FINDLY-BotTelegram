@@ -103,3 +103,11 @@ test("seeds granular monetization permissions for Owner without granting Manager
   assert.match(migration, /monetization\.users\.manage/i);
   assert.match(migration, /where r\.name = 'owner'/i);
 });
+
+test("keeps publisher networks and all ad placements disabled until verified activation", () => {
+  assert.match(migration, /update public\\.ad_providers[\\s\\S]*set is_active = false[\\s\\S]*slug in \\('monetag','adsterra'\\)/i);
+  assert.match(migration, /is_verified boolean not null default false/i);
+  assert.match(migration, /is_active boolean not null default false/i);
+  assert.match(migration, /is_enabled boolean not null default false/i);
+  assert.match(migration, /status text not null default 'draft'/i);
+});
