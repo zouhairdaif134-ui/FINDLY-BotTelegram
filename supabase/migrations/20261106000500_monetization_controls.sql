@@ -534,3 +534,34 @@ set status = 'paused',
     updated_at = now()
 where campaign_type = 'direct'
   and status in ('active','scheduled');
+
+
+create or replace function public.get_monetization_campaign_delivery_summary(
+  p_since timestamptz default (now() - interval '30 days')
+)
+returns table (
+  campaign_id uuid,
+  channel text,
+  attempted bigint,
+  sent bigint,
+  failed bigint
+)
+language sql
+stable
+set search_path = pg_catalog, public
+as $$
+  select
+    e.campaign_id,
+    e.channel,
+    count(*) filter (where e.event_type = 'attempted')::bigint as attempted,
+    count(*) filter (where e.event_type = 'sent')::bigint as sent,
+    count(*) filter (where e.event_type = 'failed')::bigint as failed
+  from public.ad_delivery_events e
+  where e.occurred_at >= p_since
+    and e.occurred_at <= now()
+  group by e.campaign_id, e.channel
+  order by e.campaign_id, e.channel;
+$$;
+
+revoke all on function public.get_monetization_campaign_delivery_summary(timestamptz) from public, anon, authenticated;
+grant execute on function public.get_monetization_campaign_delivery_summary(timestamptz) to service_role;
