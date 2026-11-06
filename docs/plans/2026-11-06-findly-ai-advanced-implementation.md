@@ -60,6 +60,21 @@ Acceptance: no persistent preference before consent and per-item confirmation; g
 
 Acceptance: model cannot fabricate catalog facts; tools only return active records.
 
+### Phase 4 implementation notes
+- Added fixed OpenAI-compatible function tools: `search_catalog` and `recommend_catalog_titles`.
+- Both tools query only `movie_titles.status = active`; all SQL and Supabase access remain in trusted Worker code.
+- Search supports title/original-title matching, exact-title relevance ranking, optional media-type filtering, and a maximum of five results.
+- Recommendations support optional genre/media-type filters and either top-rated or newest ordering, with bounded genre relation reads.
+- Tool responses include only catalog-backed title, year/date, rating, runtime, overview and genres. Long plot summaries, provider URLs, external IDs, draft/inactive titles and media delivery fields are not exposed.
+- AI receives the tools only when a trusted server-side Supabase handle is supplied. At most three tool calls are executed per turn; unknown tools and malformed arguments fail safely.
+- The follow-up model request is instructed to use returned catalog records only and to disclose when the catalog has no match.
+- No schema migration is required for this phase.
+
+Acceptance review:
+- Search/recommendation tests cover active-only filtering, bounded queries/results, empty results, exact-title relevance and safe database failures.
+- Runtime tests cover fixed tool exposure, tool-call execution, grounded tool-result handoff, no database handle, and unknown tool rejection.
+- CI verification is pending for the latest branch head.
+
 ## Phase 5 — Confirmed user actions
 1. Resolve telegram_users to auth.users securely before favorites integration.
 2. Create short-lived pending actions bound to user, bot and payload.
