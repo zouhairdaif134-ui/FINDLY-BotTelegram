@@ -286,7 +286,6 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
   }));
 }
 
-undefined
 
 export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", actor) {
   if (!/^\d+$/.test(String(tmdbId))) throw new Error("Invalid TMDB id");
