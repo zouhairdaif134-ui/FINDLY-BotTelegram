@@ -21,7 +21,7 @@ const PAGE_OPTIONS = [
   ["message", "After text message"],
   ["future", "Future page"]
 ];
-const WEBSITE_FORMATS = ["banner", "native", "popup", "video"];
+const WEBSITE_FORMATS = ["banner", "native", "popup"];
 const TELEGRAM_FORMATS = ["telegram_text", "telegram_card"];
 
 function money(value, currency = "MAD") {
