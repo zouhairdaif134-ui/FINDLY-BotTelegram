@@ -323,3 +323,22 @@ test("allows only the registered website host and its true subdomains", () => {
   assert.equal(isAllowed("findly.example.evil.test", "findly.example"), false);
   assert.equal(isAllowed(null, "findly.example"), false);
 });
+
+test("keeps website video ads unavailable until a supported player is verified", () => {
+  const validateZone = requireFunction("validateProviderZoneInput");
+  const validatePlacement = requireFunction("validatePlacementInput");
+  const validateCampaign = requireFunction("validateCampaignInput");
+  assert.throws(() => validateZone({
+    provider_id: UUID, channel: "website", format: "video",
+    external_zone_id: "video-zone", site_domain: "www.findly.example"
+  }), /video.*not available|player.*verified/i);
+  assert.throws(() => validatePlacement({
+    channel: "website", page_key: "home", slot_key: "video-slot",
+    position: "top", format: "video"
+  }), /video.*not available|player.*verified/i);
+  assert.throws(() => validateCampaign({
+    bot_id: UUID, provider_id: UUID, name: "Video campaign",
+    channel: "website", format: "video", target_url: "https://advertiser.example",
+    creative: { title: "Video", body: "Video ad" }
+  }), /video.*not available|player.*verified/i);
+});
