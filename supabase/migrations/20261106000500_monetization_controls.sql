@@ -179,3 +179,22 @@ grant all on table public.ad_placements to service_role;
 grant all on table public.ad_campaign_placements to service_role;
 grant all on table public.ad_frequency_policies to service_role;
 grant all on table public.ad_delivery_events to service_role;
+
+
+-- MAU eligibility: retain the Telegram Bot API's bot flag and allow Owner-managed
+-- explicit exclusions for administrator and test accounts.
+alter table public.telegram_users
+  add column if not exists is_bot boolean not null default false;
+
+create table if not exists public.monetization_user_exclusions (
+  user_id uuid primary key references public.telegram_users(id) on delete cascade,
+  reason text not null check (reason in ('admin','test','manual')),
+  note text,
+  created_by uuid references public.admin_profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.monetization_user_exclusions enable row level security;
+revoke all on table public.monetization_user_exclusions from public, anon, authenticated;
+grant all on table public.monetization_user_exclusions to service_role;
