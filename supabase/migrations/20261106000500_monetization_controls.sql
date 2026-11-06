@@ -401,7 +401,7 @@ declare
   v_user_count bigint;
   v_session_count bigint;
   v_last_attempt timestamptz;
-  v_sent_count bigint;
+  v_delivery_attempts bigint;
   v_inserted integer;
 begin
   if p_idempotency_key is null or length(p_idempotency_key) < 8 or length(p_idempotency_key) > 200
@@ -496,10 +496,10 @@ begin
   end if;
 
   if v_campaign.max_deliveries is not null then
-    select count(*) into v_sent_count
+    select count(*) into v_delivery_attempts
     from public.ad_delivery_events
-    where campaign_id = p_campaign_id and event_type = 'sent';
-    if v_sent_count >= v_campaign.max_deliveries then return false; end if;
+    where campaign_id = p_campaign_id and event_type = 'attempted';
+    if v_delivery_attempts >= v_campaign.max_deliveries then return false; end if;
   end if;
 
   insert into public.ad_delivery_events (
