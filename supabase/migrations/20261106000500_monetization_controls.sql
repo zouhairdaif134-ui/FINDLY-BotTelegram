@@ -305,3 +305,19 @@ grant execute on function public.get_monetization_revenue_summary(timestamptz) t
 create index if not exists telegram_users_mau_eligibility_idx
   on public.telegram_users (last_seen_at, telegram_user_id)
   where is_active = true and is_bot = false;
+
+
+alter table public.ad_provider_zones
+  add column if not exists verified_by uuid references public.admin_profiles(id) on delete set null,
+  add column if not exists verification_method text;
+
+alter table public.ad_provider_zones
+  add constraint ad_provider_zones_verification_method_check
+    check (verification_method is null or verification_method in ('owner_test_confirmation','provider_api')),
+  add constraint ad_provider_zones_verification_evidence_check
+    check (
+      is_verified = false
+      or (verified_at is not null and verified_by is not null and verification_method is not null)
+    ),
+  add constraint ad_provider_zones_active_requires_verified_check
+    check (is_active = false or is_verified = true);
