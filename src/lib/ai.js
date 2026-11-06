@@ -182,13 +182,17 @@ export async function generateAIReply(env, bot, userText, memory = {}) {
   const input = String(userText || "").trim().slice(0, 4000);
   if (!input) return null;
 
+  const supabase = memory.supabase || null;
+  const systemPrompt = supabase
+    ? config.systemPrompt +
+      "\\n\\nFINDLY catalog rules: For every question asking to search, identify, compare, or recommend movies or series from FINDLY, call the appropriate catalog function before answering. Treat tool results as the only source of FINDLY catalog facts. Never invent titles, ratings, release years, runtimes, genres, or plot details. If no matching records are returned, say the catalog has no matching record."
+    : config.systemPrompt;
   const messages = buildAIMemoryMessages(
-    config.systemPrompt,
+    systemPrompt,
     memory.history,
     input,
     memory.preferences
   );
-  const supabase = memory.supabase || null;
   const firstMessage = await requestAIProvider(config, apiKey, messages, Boolean(supabase));
   const toolCalls = Array.isArray(firstMessage.tool_calls)
     ? firstMessage.tool_calls.slice(0, 3)
