@@ -50,18 +50,18 @@ test("uses idempotency keys and indexed UTC event timestamps", () => {
 });
 
 test("supports explicit test/admin exclusions and known Telegram bot identities", () => {
-  assert.match(migration, /alter table public\\.telegram_users[\\s\\S]*add column if not exists is_bot boolean not null default false/i);
-  assert.match(migration, /create table(?: if not exists)? public\\.monetization_user_exclusions/i);
-  assert.match(migration, /reason text not null check \\(reason in \\('admin','test','manual'\\)\\)/i);
-  assert.match(migration, /alter table public\\.monetization_user_exclusions enable row level security/i);
-  assert.match(migration, /grant all on table public\\.monetization_user_exclusions to service_role/i);
+  assert.match(migration, /alter table public\.telegram_users[\s\S]*add column if not exists is_bot boolean not null default false/i);
+  assert.match(migration, /create table(?: if not exists)? public\.monetization_user_exclusions/i);
+  assert.match(migration, /reason text not null check \(reason in \('admin','test','manual'\)\)/i);
+  assert.match(migration, /alter table public\.monetization_user_exclusions enable row level security/i);
+  assert.match(migration, /grant all on table public\.monetization_user_exclusions to service_role/i);
 });
 
 test("calculates rolling MAU from real Telegram activity while excluding ineligible users", () => {
-  assert.match(migration, /create or replace function public\\.get_monetization_mau/i);
+  assert.match(migration, /create or replace function public\.get_monetization_mau/i);
   assert.match(migration, /last_seen_at >= p_since/i);
   assert.match(migration, /is_active = true/i);
   assert.match(migration, /is_bot = false/i);
-  assert.match(migration, /not exists \\(\\s*select 1 from public\\.monetization_user_exclusions/is);
-  assert.match(migration, /grant execute on function public\\.get_monetization_mau\\(timestamptz\\) to service_role/i);
+  assert.match(migration, /not exists \(\s*select 1 from public\.monetization_user_exclusions/is);
+  assert.match(migration, /grant execute on function public\.get_monetization_mau\(timestamptz\) to service_role/i);
 });
