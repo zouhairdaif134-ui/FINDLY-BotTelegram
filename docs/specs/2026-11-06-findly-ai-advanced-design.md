@@ -23,11 +23,16 @@ The dashboard manages configuration and observability through authenticated, per
 - No automatic provider failover that could incur cost.
 
 ### Memory and privacy
-- Session memory has a documented retention/expiry policy.
-- Persistent preference storage is disabled until user consent is recorded.
-- Consent, revocation, viewing and deletion are explicit operations.
-- Memory is keyed by the verified internal user identity and bot scope; Telegram numeric IDs alone are not treated as database authorization.
-- Do not store credentials, payment data, or sensitive personal information.
+- Session memory stores at most the latest 12 user/assistant messages per Telegram user and bot, each expiring after 30 minutes; scheduled cleanup runs with the existing five-minute Worker cron.
+- Session memory is used only in private Telegram chats. Group chats never read or write personal memory.
+- The first successful AI response explains temporary context and asks separately for persistent-memory opt-in.
+- Persistent preference storage is disabled until the user selects the explicit consent button.
+- A user preference is saved only after `/memory add <text>` and a second confirmation button. Maximum 20 preferences, 300 characters each.
+- `/memory` displays status and saved preferences; `/memory clear` requests confirmation before deletion; `/memory off` clears data and disables session storage; `/memory on` re-enables temporary context and asks for persistent consent when needed.
+- Denial clears persistent preferences; revocation prevents future session writes until re-enabled.
+- Memory is keyed by `telegram_users.id` plus `bots.id`; Telegram numeric IDs and Supabase Auth IDs are not substituted for the internal identity.
+- Memory tables have RLS enabled and are accessible only through the trusted Worker service role.
+- Do not store credentials, payment data, or sensitive personal information. Users are warned not to send secrets to the assistant.
 
 ### Knowledge and tools
 - Catalog search and recommendations use published FINDLY movie/series records and genre relations.
