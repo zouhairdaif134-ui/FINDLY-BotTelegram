@@ -152,7 +152,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       const result = await audited(env, auth, {
         action: "monetization.provider_zone.create",
         entityType: "ad_provider_zone"
-      }, () => saveAdProviderZone(env, await helpers.readJson(request)));
+      }, async () => saveAdProviderZone(env, await helpers.readJson(request)));
       return send(helpers, request, result);
     }
     if (resource === "provider-zones" && parts.length === 3 && action === "verify" && request.method === "POST") {
@@ -195,7 +195,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       const result = await audited(env, auth, {
         action: "monetization.placement.create",
         entityType: "ad_placement"
-      }, () => saveAdPlacement(env, await helpers.readJson(request)));
+      }, async () => saveAdPlacement(env, await helpers.readJson(request)));
       return send(helpers, request, result);
     }
     if (resource === "placements" && parts.length === 2 && request.method === "PUT") {
@@ -223,7 +223,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       const result = await audited(env, auth, {
         action: "monetization.frequency_policy.update",
         entityType: "ad_frequency_policy"
-      }, () => saveFrequencyPolicy(env, await helpers.readJson(request)));
+      }, async () => saveFrequencyPolicy(env, await helpers.readJson(request)));
       return send(helpers, request, result);
     }
 
@@ -241,7 +241,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       const result = await audited(env, auth, {
         action: "monetization.campaign.create",
         entityType: "ad_campaign"
-      }, () => saveAdCampaign(env, await helpers.readJson(request)));
+      }, async () => saveAdCampaign(env, await helpers.readJson(request)));
       return send(helpers, request, result);
     }
     if (resource === "campaigns" && parts.length === 2 && request.method === "PUT") {
@@ -267,7 +267,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       }, () => setCampaignStatus(env, id, body.status));
       return send(helpers, request, result);
     }
-    if (resource === "campaigns" && parts.length === 4 && action === "placements" && request.method === "POST") {
+    if (resource === "campaigns" && parts.length === 3 && action === "placements" && request.method === "POST") {
       const { auth, response } = await authorize(env, request, PERMISSIONS.campaigns, helpers);
       if (response) return response;
       const body = await helpers.readJson(request);
@@ -279,7 +279,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       }, () => addCampaignPlacement(env, id, body.placement_id));
       return send(helpers, request, result);
     }
-    if (resource === "campaigns" && parts.length === 5 && action === "placements" && request.method === "DELETE") {
+    if (resource === "campaigns" && parts.length === 4 && action === "placements" && request.method === "DELETE") {
       const { auth, response } = await authorize(env, request, PERMISSIONS.campaigns, helpers);
       if (response) return response;
       const result = await audited(env, auth, {
@@ -311,7 +311,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       const result = await audited(env, auth, {
         action: "monetization.transaction.manual_entry",
         entityType: "monetization_event"
-      }, () => recordManualRevenue(env, await helpers.readJson(request)));
+      }, async () => recordManualRevenue(env, await helpers.readJson(request)));
       return send(helpers, request, result);
     }
     if (resource === "transactions" && parts.length === 3 && action === "reversal" && request.method === "POST") {
@@ -321,7 +321,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
         action: "monetization.transaction.reversal",
         entityType: "monetization_event",
         entityId: id
-      }, () => createRevenueAdjustment(env, {
+      }, async () => createRevenueAdjustment(env, {
         original_event_id: id,
         ...(await helpers.readJson(request))
       }));
@@ -347,7 +347,7 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
       const result = await audited(env, auth, {
         action: "monetization.user.exclude",
         entityType: "telegram_user"
-      }, () => saveUserExclusion(env, await helpers.readJson(request), auth));
+      }, async () => saveUserExclusion(env, await helpers.readJson(request), auth));
       return send(helpers, request, result);
     }
     if (resource === "exclusions" && parts.length === 2 && request.method === "DELETE") {
