@@ -226,3 +226,44 @@ $$;
 
 revoke all on function public.get_monetization_mau(timestamptz) from public, anon, authenticated;
 grant execute on function public.get_monetization_mau(timestamptz) to service_role;
+
+
+-- Revenue events retain their source and reconciliation provenance. Corrections
+-- are new debit entries linked to the original event; historical rows are immutable.
+alter table public.monetization_events
+  add column if not exists provenance text not null default 'provider_reported',
+  add column if not exists entry_type text not null default 'revenue',
+  add column if not exists direction text not null default 'credit',
+  add column if not exists reverses_event_id uuid references public.monetization_events(id) on delete restrict,
+  add column if not exists reconciliation_status text not null default 'unreconciled';
+
+alter table public.monetization_events
+  add constraint monetization_events_provenance_check
+    check (provenance in ('provider_reported','manual','estimated')),
+  add constraint monetization_events_entry_type_check
+    check (entry_type in ('revenue','adjustment','reversal')),
+  add constraint monetization_events_direction_check
+    check (direction in ('credit','debit')),
+  add constraint monetization_events_reconciliation_check
+    check (reconciliation_status in ('unreconciled','reconciled','disputed')),
+  add constraint monetization_events_reversal_shape_check
+    check (
+      (entry_type = 'reversal' and reverses_event_id is not null and direction = 'debit')
+      or
+      (entry_type <> 'reversal' and reverses_event_id is null)
+    );
+
+create unique index if not exists monetization_events_single_reversal_idx
+  on public.monetization_events (reverses_event_id)
+  where reverses_event_id is not null;
+
+create index if not exists monetization_events_provenance_status_idx
+  on public.monetization_events (provenance, reconciliation_status, occurred_at desc);
+
+-- Delivery and financial events are append-only. State changes are represented
+-- by additional events rather than destructive updates.
+revoke update, delete on table public.monetization_events from public, anon, authenticated, service_role;
+grant select, insert on table public.monetization_events to service_role;
+
+revoke update, delete on table public.ad_delivery_events from public, anon, authenticated, service_role;
+grant select, insert on table public.ad_delivery_events to service_role;
