@@ -181,11 +181,15 @@ export function validateProviderZoneInput(input) {
   if (channel === "website" && !siteDomain) {
     throw new Error("website provider zones require an approved site_domain");
   }
+  const externalZoneId = requireText(value.external_zone_id, "external_zone_id", 160);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(externalZoneId)) {
+    throw new Error("external_zone_id must be a plain provider identifier, not markup or a URL");
+  }
   return {
     provider_id: requireUuid(value.provider_id, "provider_id"),
     channel,
     format,
-    external_zone_id: requireText(value.external_zone_id, "external_zone_id", 160),
+    external_zone_id: externalZoneId,
     site_domain: siteDomain,
     metadata,
     is_verified: false,
