@@ -4,6 +4,7 @@ import {
   AI_CATALOG_TOOLS,
   searchCatalog,
   recommendCatalogTitles,
+  findSimilarCatalogTitles,
   executeCatalogTool
 } from "../src/lib/ai-catalog.js";
 
@@ -41,10 +42,10 @@ const title = {
   overview: "A science fiction story."
 };
 
-test("catalog tools expose only the two fixed read-only functions", () => {
+test("catalog tools expose only fixed read-only functions", () => {
   assert.deepEqual(
     AI_CATALOG_TOOLS.map((tool) => tool.function.name),
-    ["search_catalog", "recommend_catalog_titles"]
+    ["search_catalog", "recommend_catalog_titles", "find_similar_titles"]
   );
   for (const tool of AI_CATALOG_TOOLS) {
     assert.equal(tool.function.parameters.additionalProperties, false);
@@ -52,7 +53,7 @@ test("catalog tools expose only the two fixed read-only functions", () => {
 });
 
 test("searchCatalog filters to active titles, bounds query and returns catalog-backed fields", async () => {
-  const db = createSupabaseMock((table, ops) => {
+  const db = createSupabaseMock((table) => {
     if (table === "movie_titles") return { data: [title], error: null };
     if (table === "movie_title_genres") {
       return { data: [{ title_id: title.id, movie_genres: { name: "Science Fiction" } }], error: null };
@@ -118,6 +119,54 @@ test("recommendCatalogTitles returns no titles when the requested genre does not
   });
   assert.deepEqual(await recommendCatalogTitles(db, { genre: "Unknown" }), []);
   assert.equal(db.calls.length, 1);
+});
+
+test("findSimilarCatalogTitles ranks active titles by shared genres and excludes the reference title", async () => {
+  const reference = { ...title, id: "dune", title: "Dune" };
+  const arrival = { ...title, id: "arrival", title: "Arrival", rating: 7.9 };
+  const bladeRunner = { ...title, id: "blade-runner", title: "Blade Runner 2049", rating: 8.0 };
+  const db = createSupabaseMock((table, ops) => {
+    if (table === "movie_titles") {
+      const isSearch = ops.some(([method]) => method === "ilike");
+      return { data: isSearch ? [reference] : [arrival, bladeRunner], error: null };
+    }
+    if (table === "movie_title_genres") {
+      const select = ops.find(([method]) => method === "select")?.[1];
+      if (select === "genre_id") return { data: [{ genre_id: "scifi" }], error: null };
+      if (select === "title_id,genre_id") {
+        return { data: [
+          { title_id: "dune", genre_id: "scifi" },
+          { title_id: "arrival", genre_id: "scifi" },
+          { title_id: "blade-runner", genre_id: "scifi" }
+        ], error: null };
+      }
+      return { data: [
+        { title_id: "arrival", movie_genres: { name: "Science Fiction" } },
+        { title_id: "blade-runner", movie_genres: { name: "Science Fiction" } }
+      ], error: null };
+    }
+    throw new Error("unexpected table " + table);
+  });
+  const results = await findSimilarCatalogTitles(db, { title: "Dune", media_type: "movie", limit: 2 });
+  assert.deepEqual(results.map((item) => item.id), ["blade-runner", "arrival"]);
+  const candidateQuery = db.calls.find((call) =>
+    call.table === "movie_titles" && call.operations.some(([method, column]) => method === "in" && column === "id")
+  );
+  assert.ok(candidateQuery.operations.some(([method, column, value]) => method === "eq" && column === "status" && value === "active"));
+  assert.ok(candidateQuery.operations.some(([method, column, value]) => method === "eq" && column === "media_type" && value === "movie"));
+  assert.ok(!candidateQuery.operations.some(([method, column, values]) => method === "in" && column === "id" && values.includes("dune")));
+});
+
+test("findSimilarCatalogTitles returns no results when the reference title has no catalog genres", async () => {
+  const db = createSupabaseMock((table, ops) => {
+    if (table === "movie_titles") return { data: [title], error: null };
+    if (table === "movie_title_genres") {
+      const select = ops.find(([method]) => method === "select")?.[1];
+      return { data: select === "genre_id" ? [] : [], error: null };
+    }
+    throw new Error("unexpected table " + table);
+  });
+  assert.deepEqual(await findSimilarCatalogTitles(db, { title: "Dune" }), []);
 });
 
 test("executeCatalogTool rejects malformed arguments and unknown tool names safely", async () => {
