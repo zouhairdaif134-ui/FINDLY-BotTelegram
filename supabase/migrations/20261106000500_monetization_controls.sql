@@ -267,3 +267,36 @@ grant select, insert on table public.monetization_events to service_role;
 
 revoke update, delete on table public.ad_delivery_events from public, anon, authenticated, service_role;
 grant select, insert on table public.ad_delivery_events to service_role;
+
+
+-- Aggregate revenue independently from ad delivery events. Debits represent
+-- reversals/adjustments and are subtracted from credits.
+create or replace function public.get_monetization_revenue_summary(
+  p_since timestamptz default (now() - interval '30 days')
+)
+returns table (
+  currency text,
+  revenue_source text,
+  provenance text,
+  net_amount numeric,
+  entry_count bigint
+)
+language sql
+stable
+set search_path = pg_catalog, public
+as $$
+  select
+    e.currency,
+    e.revenue_source,
+    e.provenance,
+    sum(case e.direction when 'credit' then e.amount else -e.amount end)::numeric as net_amount,
+    count(*)::bigint as entry_count
+  from public.monetization_events e
+  where e.occurred_at >= p_since
+    and e.occurred_at <= now()
+  group by e.currency, e.revenue_source, e.provenance
+  order by e.currency, e.revenue_source, e.provenance;
+$$;
+
+revoke all on function public.get_monetization_revenue_summary(timestamptz) from public, anon, authenticated;
+grant execute on function public.get_monetization_revenue_summary(timestamptz) to service_role;
