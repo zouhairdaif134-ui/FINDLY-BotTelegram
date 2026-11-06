@@ -3,7 +3,7 @@
 Date: 2026-11-06
 Branch: feat/ai-advanced-phase1
 Base: main at production merge 58fcd0bc6b4932c6c562fa8b35425c49d8f4936e
-Status: Phases 1–5 implemented in the feature branch; CI verification in progress for the latest prompt-guidance commit. No Production release.
+Status: Phases 1–5 implemented; privacy-safe AI telemetry added in Phase 6. Latest CI passed; dedicated test-Supabase runtime verification remains blocked. No Production release.
 
 ## Repository facts verified
 - Worker backend: src/index.js
@@ -72,11 +72,25 @@ Implemented on the feature branch; no user-data actions were added:
 Acceptance: recommendations and details are grounded in active catalog records; no model-invented catalog facts; no database writes. The latest test run passed 114/114 before the prompt-contract assertions; final CI for the current head is tracked separately.
 
 ## Phase 6 — Privacy-safe observability and release readiness
-1. Add only necessary usage/error counters and redact prompts, personal data, credentials and provider response bodies.
-2. Test disabled AI, missing credentials, provider failures, rate limits and quota exhaustion with ordinary bot fallback intact.
-3. Verify Preview API flows against a dedicated test Supabase project before any live integration.
-4. Re-run backend tests, dashboard build, migration/RLS checks and security review.
-5. Keep PR Draft until the owner explicitly approves the next release step.
+Implemented so far:
+1. Successful AI replies emit an ai_message analytics event with response duration only.
+2. AI failures emit an ai_error event with a bounded category (timeout, provider_missing, rate_limited, provider_rejected, provider_unavailable, or internal_error).
+3. AI telemetry events omit the Telegram user identity and message/update content. Console errors contain only bot slug and the safe category; raw exception messages and provider response bodies are not logged.
+4. Added tests for safe classification and non-disclosure of private prompt/error text.
+
+Verification at commit 121a381b5a261b7e8985468afde0e2a15c90924e:
+- 115 Node tests passed, 0 failed.
+- Dashboard build passed.
+- Wrangler Worker dry-run passed.
+- Disposable PostgreSQL migration and AI memory RLS verification passed.
+
+Still required before release readiness:
+1. Connect Preview to a dedicated test Supabase project and verify authenticated API flows.
+2. Run a real Telegram Preview conversation, including AI disabled, missing provider credentials, provider error/rate limit, and ordinary bot fallback. Do not use Production credentials or data.
+3. Review dashboard analytics presentation for ai_message and ai_error event counts.
+4. Keep PR Draft until the owner explicitly approves the next release step.
+
+The Preview currently lacks a dedicated test Supabase environment, so authenticated API and real Telegram runtime behavior are not claimed as verified.
 
 ## Separate future track — Admin AI (after the user-facing work is finished)
 Build a distinct, admin-only assistant inside the control center. It must not share user-facing permissions or memory.
