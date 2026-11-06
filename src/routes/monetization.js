@@ -1,5 +1,6 @@
 import {
   getMonetizationOverview,
+  listPublicAdPlacements,
   listAdProviders,
   saveAdProvider,
   setAdProviderStatus,
@@ -104,6 +105,13 @@ export async function handleMonetizationRoute(env, request, url, helpers) {
   const [resource, id, action, childId] = parts;
 
   try {
+    if (resource === "public" && id === "placements" && parts.length === 2 && request.method === "GET") {
+      return send(helpers, request, await listPublicAdPlacements(env, {
+        page_key: url.searchParams.get("page"),
+        slot_key: url.searchParams.get("slot")
+      }));
+    }
+
     if (resource === "overview" && parts.length === 1 && request.method === "GET") {
       const { auth, response } = await authorize(env, request, PERMISSIONS.view, helpers);
       if (response) return response;
