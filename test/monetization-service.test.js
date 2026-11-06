@@ -289,3 +289,17 @@ test("evaluates campaign and placement schedules at the supplied clock", () => {
     ends_at: "2026-11-06T12:05:00.000Z"
   }, now), true);
 });
+
+test("requires an approved site domain for website provider zones", () => {
+  const validate = requireFunction("validateProviderZoneInput");
+  const base = {
+    provider_id: UUID, channel: "website", format: "banner",
+    external_zone_id: "zone-123"
+  };
+  assert.throws(() => validate(base), /site_domain/i);
+  assert.equal(validate({ ...base, site_domain: "www.findly.example" }).site_domain, "www.findly.example");
+  assert.equal(validate({
+    provider_id: UUID, channel: "telegram", format: "telegram_text",
+    external_zone_id: "smartlink-123"
+  }).site_domain, null);
+});
