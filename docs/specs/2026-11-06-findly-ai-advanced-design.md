@@ -1,19 +1,19 @@
-# FINDLY AI Advanced — Design Specification v1.0
+# FINDLY AI Advanced — Design Specification v1.1
 
 Date: 2026-11-06
-Status: Approved by product owner
+Status: Product direction approved
 Target: FINDLY Telegram bots and Admin Dashboard
 
 ## Product decisions
-- One shared AI orchestration runtime; user data and conversational context are isolated per Telegram user and per bot.
-- Hybrid memory: short-lived session context plus persistent user preferences only after explicit Telegram opt-in.
-- User-facing mutations require a clear preview and explicit confirmation. AI never receives unrestricted database write access.
+- User-facing FINDLY AI is a search and discovery assistant only.
+- Supported user functions: movie/series search, detailed catalog-backed information, smart recommendations, conversational search and similar-title discovery.
+- AI must not add favorites, create watchlists, or mutate any user data through chat.
+- One shared AI orchestration runtime may serve the bots, but user context and configuration remain isolated per Telegram user and per bot.
 - AI remains disabled by default. Existing bot commands and catalog browsing continue to work when AI is disabled, unavailable, or over quota.
-- Prefer free tiers and existing infrastructure. No paid provider, subscription, or production deployment is activated automatically.
+- Prefer free tiers and existing infrastructure. No paid provider, subscription, or Production deployment is activated automatically.
 
-## Architecture
-Telegram update -> bot-specific AI configuration -> AI orchestrator -> allowlisted read tools / pending confirmed actions -> Telegram response.
-The dashboard manages configuration and observability through authenticated, permission-checked API routes.
+## User-facing architecture
+Telegram update -> bot-specific AI configuration -> read-only AI orchestrator -> allowlisted catalog search/recommendation tools -> Telegram response.
 
 ### Configuration
 - Per-bot configuration with global defaults.
@@ -25,34 +25,49 @@ The dashboard manages configuration and observability through authenticated, per
 ### Memory and privacy
 - Session memory stores at most the latest 12 user/assistant messages per Telegram user and bot, each expiring after 30 minutes; scheduled cleanup runs with the existing five-minute Worker cron.
 - Session memory is used only in private Telegram chats. Group chats never read or write personal memory.
-- The first successful AI response explains temporary context and asks separately for persistent-memory opt-in.
 - Persistent preference storage is disabled until the user selects the explicit consent button.
-- A user preference is saved only after `/memory add <text>` and a second confirmation button. Maximum 20 preferences, 300 characters each.
-- `/memory` displays status and saved preferences; `/memory clear` requests confirmation before deletion; `/memory off` clears data and disables session storage; `/memory on` re-enables temporary context and asks for persistent consent when needed.
-- Denial clears persistent preferences; revocation prevents future session writes until re-enabled.
-- Memory is keyed by `telegram_users.id` plus `bots.id`; Telegram numeric IDs and Supabase Auth IDs are not substituted for the internal identity.
+- A user preference is saved only after /memory add <text> and a second confirmation button. Maximum 20 preferences, 300 characters each.
+- /memory displays status and saved preferences; /memory clear requests confirmation before deletion; /memory off clears data and disables session storage; /memory on re-enables temporary context and asks for persistent consent when needed.
+- Memory is keyed by telegram_users.id plus bots.id; Telegram numeric IDs and Supabase Auth IDs are not substituted for the internal identity.
 - Memory tables have RLS enabled and are accessible only through the trusted Worker service role.
 - Do not store credentials, payment data, or sensitive personal information. Users are warned not to send secrets to the assistant.
 
 ### Knowledge and tools
-- Catalog search and recommendations use published FINDLY movie/series records and genre relations.
-- Model output must not invent title metadata, ratings, availability or links.
-- Tools expose narrow typed operations, not arbitrary SQL or general database access.
+- Catalog search, recommendations and similar-title discovery use active/published FINDLY movie/series records and approved genre relations.
+- Tool operations are narrow, typed and read-only. The model cannot issue SQL or access arbitrary database fields.
+- Model output must not invent title metadata, ratings, availability, plot details or links.
+- When the catalog lacks the requested fact, AI must say so clearly rather than guess.
+- Conversational intent extraction may only filter on fields actually present and verified in the catalog.
 
-### Confirmed actions
-- The model may propose supported actions only.
-- Server creates a short-lived, user-bound pending action.
-- Telegram callback confirmation revalidates user, bot, action, expiry and payload before executing.
-- Cancellation, expiry, replay protection and audit events are required.
-- Favorites integration must first resolve the identity mismatch between Telegram users and auth.users used by movie_favorites.
+## Separate Admin AI track
+Admin AI is a separate, admin-only assistant in the control center and is scheduled only after the user-facing discovery work is complete and verified.
 
-### Dashboard
-- Overview, bot configuration, provider/model settings, memory policy, tools, logs and usage.
-- API routes require existing RBAC permissions; secrets are never returned to clients.
-- Usage and cost are estimates based on provider-reported usage where available; never label estimates as settled billing.
+Initial proposed capabilities:
+- Movie Content Assistant: prepare expanded summaries, short Telegram descriptions, translations and category/genre suggestions from approved sources.
+- Library QA: detect duplicates, missing fields and inconsistent metadata.
+- Telegram operations helper: summarize bot health/errors and suggest fixes.
+- Admin reports: summarize catalog and bot activity when trustworthy metrics exist.
+
+Admin AI safety:
+- Separate admin authorization, tools, context and logs from user-facing AI.
+- Draft and recommend by default. Do not publish content, alter catalog records, change bot settings or execute operational actions without explicit admin approval.
+- Show source provenance and flag uncertain information for review.
+- No new paid provider or external service without approval.
+
+## Dashboard
+- Existing AI configuration is RBAC-protected; settings.manage is reused.
+- Secrets are never returned to clients.
+- Future user-facing observability must redact prompts and personal data.
+- Admin AI will have a distinct interface and permission boundary; it must not be exposed to ordinary Telegram users.
 
 ## Delivery and safety
 - Develop on feat/ai-advanced-phase1; do not merge to main or deploy Production without explicit approval.
 - Each phase uses tests-first development and verified CI/build evidence.
-- Database migrations are additive, reviewed, and tested for RLS and isolation before any production application.
-- First delivery slice is AI Core configuration and safe provider invocation. Memory, tools, actions and dashboard are subsequent slices.
+- Database migrations are additive, reviewed, and tested for RLS and isolation before any Production application.
+- Preview must use a dedicated test Supabase environment before authenticated API or Telegram runtime claims are made.
+
+## Explicit exclusions
+- No favorites/watchlist actions or other user-data mutations through AI.
+- No arbitrary SQL or unrestricted database access.
+- No paid provider activation or Production deployment without approval.
+- No persistent memory without opt-in.
