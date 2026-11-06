@@ -68,7 +68,8 @@ async function attachGenres(supabase, rows) {
   const { data, error } = await supabase
     .from("movie_title_genres")
     .select("title_id,movie_genres(name)")
-    .in("title_id", ids);
+    .in("title_id", ids)
+    .limit(50);
   if (error) throw error;
   const byTitle = new Map();
   for (const relation of data || []) {
@@ -141,7 +142,8 @@ export async function recommendCatalogTitles(supabase, input = {}) {
     const { data: relations, error: relationError } = await supabase
       .from("movie_title_genres")
       .select("title_id")
-      .in("genre_id", genres.map((item) => item.id));
+      .in("genre_id", genres.map((item) => item.id))
+      .limit(200);
     if (relationError) throw relationError;
     titleIds = [...new Set((relations || []).map((item) => item.title_id))];
     if (!titleIds.length) return [];
