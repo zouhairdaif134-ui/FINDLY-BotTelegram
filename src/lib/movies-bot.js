@@ -61,7 +61,7 @@ function escapeHtml(value) {
 }
 
 
-export function buildTitleCaption(title) {
+export export function buildTitleCaption(title) {
   const heading = "<b>" + escapeHtml(title.title) + "</b>" + (title.release_year ? " · " + title.release_year : "") + " · FINDLY Movies";
   const meta = [title.media_type === "series" ? "مسلسل" : "فيلم", title.runtime_minutes ? title.runtime_minutes + " دقيقة" : null, title.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : null].filter(Boolean).join(" · ");
   const genres = Array.isArray(title.genres) ? title.genres.filter(Boolean).join("، ") : "";
