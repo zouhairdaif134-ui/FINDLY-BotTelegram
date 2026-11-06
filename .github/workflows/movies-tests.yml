@@ -3,7 +3,7 @@ name: FINDLY Movies and Worker Tests
 on:
   push:
     branches:
-      - feat/findly-movies-runtime-hardening
+      - main
   pull_request:
     branches:
       - main

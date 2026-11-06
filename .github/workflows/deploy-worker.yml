@@ -28,4 +28,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: b8c52af50edd68677fef16f2161c671b
-          command: deploy
+          command: deploy src/index.js --config wrangler.jsonc
