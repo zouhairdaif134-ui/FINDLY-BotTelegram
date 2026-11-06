@@ -1039,6 +1039,107 @@ export async function setCampaignStatus(env, campaignId, status) {
   return data;
 }
 
+export async function activateDueMonetizationCampaigns(env) {
+  const supabase = getSupabase(env);
+  const nowIso = new Date().toISOString();
+  const { data: expired, error: expiredError } = await supabase
+    .from("ad_campaigns")
+    .update({ status: "completed", updated_at: nowIso })
+    .in("status", ["active", "scheduled"])
+    .not("ends_at", "is", null)
+    .lte("ends_at", nowIso)
+    .select("id");
+  throwIfError(expiredError);
+
+  const { data: dueCampaigns, error: dueError } = await supabase
+    .from("ad_campaigns")
+    .select("id,provider_id,channel,format,starts_at,ends_at,status")
+    .eq("campaign_type", "external")
+    .eq("status", "scheduled")
+    .lte("starts_at", nowIso);
+  throwIfError(dueError);
+
+  let activated = 0;
+  let waiting = 0;
+  for (const campaign of dueCampaigns || []) {
+    if (!isActiveSchedule(campaign)) {
+      waiting += 1;
+      continue;
+    }
+    const { data: provider, error: providerError } = await supabase
+      .from("ad_providers")
+      .select("id,provider_type,is_active")
+      .eq("id", campaign.provider_id)
+      .eq("provider_type", "external")
+      .eq("is_active", true)
+      .maybeSingle();
+    throwIfError(providerError);
+    if (!provider) {
+      waiting += 1;
+      continue;
+    }
+
+    const { data: links, error: linksError } = await supabase
+      .from("ad_campaign_placements")
+      .select("placement_id")
+      .eq("campaign_id", campaign.id);
+    throwIfError(linksError);
+    const placementIds = (links || []).map((item) => item.placement_id);
+    if (!placementIds.length) {
+      waiting += 1;
+      continue;
+    }
+    const { data: placements, error: placementsError } = await supabase
+      .from("ad_placements")
+      .select("id,channel,format,provider_zone_id,is_enabled,starts_at,ends_at")
+      .in("id", placementIds)
+      .eq("channel", campaign.channel)
+      .eq("format", campaign.format)
+      .eq("is_enabled", true);
+    throwIfError(placementsError);
+
+    let ready = false;
+    for (const placement of placements || []) {
+      if (!placement.provider_zone_id || !isActiveSchedule(placement)) continue;
+      const { data: zone, error: zoneError } = await supabase
+        .from("ad_provider_zones")
+        .select("id")
+        .eq("id", placement.provider_zone_id)
+        .eq("provider_id", campaign.provider_id)
+        .eq("channel", campaign.channel)
+        .eq("format", campaign.format)
+        .eq("is_verified", true)
+        .eq("is_active", true)
+        .maybeSingle();
+      throwIfError(zoneError);
+      if (zone) {
+        ready = true;
+        break;
+      }
+    }
+    if (!ready) {
+      waiting += 1;
+      continue;
+    }
+
+    const { data: updated, error: updateError } = await supabase
+      .from("ad_campaigns")
+      .update({ status: "active", updated_at: nowIso })
+      .eq("id", campaign.id)
+      .eq("status", "scheduled")
+      .select("id")
+      .maybeSingle();
+    throwIfError(updateError);
+    if (updated) activated += 1;
+  }
+
+  return {
+    activated,
+    completed: (expired || []).length,
+    waiting
+  };
+}
+
 export async function recordManualRevenue(env, input) {
   const payload = validateRevenueLedgerInput(input);
   const supabase = getSupabase(env);
