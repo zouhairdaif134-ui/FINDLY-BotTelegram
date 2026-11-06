@@ -411,6 +411,7 @@ begin
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended(p_user_id::text || ':telegram', 0));
+  perform pg_advisory_xact_lock(hashtextextended('campaign:' || p_campaign_id::text, 0));
 
   select * into v_campaign
   from public.ad_campaigns
