@@ -35,3 +35,15 @@ export async function getAnalytics(
 
   return data;
 }
+
+export async function getMovieReferralAnalytics(env) {
+  const { data, error } = await getSupabase(env).rpc(
+    "get_movie_referral_analytics"
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}

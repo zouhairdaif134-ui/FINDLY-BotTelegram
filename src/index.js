@@ -48,7 +48,7 @@ import {
   updateNotification,
   deleteNotification
 } from "./routes/notifications.js";
-import { getAnalytics } from "./routes/analytics.js";
+import { getAnalytics, getMovieReferralAnalytics } from "./routes/analytics.js";
 import {
   getSettings,
   createSetting,
@@ -1646,6 +1646,32 @@ export default {
                 "event_type"
               )
             )
+          )
+        , request);
+      }
+
+      if (
+        url.pathname ===
+          "/api/analytics/movie-referrals" &&
+        request.method ===
+          "GET"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.analytics
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          , request);
+        }
+
+        return withCors(
+          success(
+            await getMovieReferralAnalytics(env)
           )
         , request);
       }
