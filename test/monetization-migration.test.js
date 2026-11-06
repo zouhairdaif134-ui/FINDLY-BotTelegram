@@ -148,9 +148,9 @@ test("prevents duplicate website provider zones from rendering twice on one page
 });
 
 test("enforces website visitor frequency and idempotency through a service-only RPC", () => {
-  assert.match(migration, /create or replace function public\.claim_monetization_website_ad_delivery/i);
-  assert.match(migration, /p_visitor_key_hash !~ '\^\[0-9a-f\]\{64\}\$'/i);
+  assert.ok(migration.includes("create or replace function public.claim_monetization_website_ad_delivery"));
+  assert.ok(migration.includes("p_visitor_key_hash !~ '^[0-9a-f]{64}$'"));
   assert.match(migration, /visitor_key_hash = p_visitor_key_hash/i);
   assert.match(migration, /pg_advisory_xact_lock/i);
-  assert.match(migration, /grant execute on function public\.claim_monetization_website_ad_delivery\(text,uuid,uuid,uuid,text\) to service_role/i);
+  assert.ok(migration.includes("grant execute on function public.claim_monetization_website_ad_delivery(text,uuid,uuid,uuid,text) to service_role"));
 });
