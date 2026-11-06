@@ -7,7 +7,7 @@ const PROVIDERS = new Map([
   ["direct", "direct"]
 ]);
 const FORMATS = {
-  website: new Set(["banner", "native", "popup", "video"]),
+  website: new Set(["banner", "native", "popup"]),
   telegram: new Set(["telegram_text", "telegram_card"])
 };
 const WEBSITE_POSITIONS = new Set(["top", "bottom", "between_cards", "within_content"]);
