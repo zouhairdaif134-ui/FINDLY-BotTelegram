@@ -1,4 +1,5 @@
 import { getSupabase } from "../lib/supabase.js";
+import { buildTelegramUserProfile } from "../lib/telegram-user.js";
 import {
   sendMessage,
   answerCallback
@@ -235,8 +236,8 @@ async function saveTelegramUser(
 
   const supabase = getSupabase(env);
 
-  const telegramUserId =
-    String(telegramUser.id);
+  const profile = buildTelegramUserProfile(telegramUser);
+  const telegramUserId = profile.telegram_user_id;
 
   console.log("Telegram user save started:", {
     botSlug: bot?.slug || null,
@@ -280,21 +281,9 @@ async function saveTelegramUser(
       await supabase
         .from("telegram_users")
         .update({
-          username:
-            telegramUser.username ||
-            null,
-          first_name:
-            telegramUser.first_name ||
-            null,
-          last_name:
-            telegramUser.last_name ||
-            null,
-          language_code:
-            telegramUser.language_code ||
-            null,
+          ...profile,
           is_active: true,
-          last_seen_at:
-            new Date().toISOString()
+          last_seen_at: new Date().toISOString()
         })
         .eq(
           "id",
@@ -315,25 +304,10 @@ async function saveTelegramUser(
       await supabase
         .from("telegram_users")
         .insert({
-          telegram_user_id:
-            telegramUserId,
-          username:
-            telegramUser.username ||
-            null,
-          first_name:
-            telegramUser.first_name ||
-            null,
-          last_name:
-            telegramUser.last_name ||
-            null,
-          language_code:
-            telegramUser.language_code ||
-            null,
+          ...profile,
           is_active: true,
-          first_seen_at:
-            new Date().toISOString(),
-          last_seen_at:
-            new Date().toISOString()
+          first_seen_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString()
         })
         .select(
           "id, telegram_user_id"
