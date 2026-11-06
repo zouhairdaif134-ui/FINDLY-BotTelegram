@@ -70,7 +70,7 @@ export function buildTitleCaption(title) {
     title.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : null
   ].filter(Boolean).join("  ·  ");
   const genres = Array.isArray(title.genres) ? title.genres.filter(Boolean).join("، ") : "";
-  const genreText = genres ? "🎭 " + Array.from(genres).slice(0, 180).join("") : "";
+  const genreText = genres ? "🎭 التصنيف: " + Array.from(genres).slice(0, 180).join("") : "";
   const notice = title.metadata_status === "authorized_media_available"
     ? "المحتوى مسجل كمتاح بترخيص، لكن التسليم داخل Telegram لم يتم تفعيله بعد."
     : "المشاهدة داخل FINDLY غير متاحة حالياً. لا نعرض روابط غير موثوقة أو محتوى غير مرخّص.";
