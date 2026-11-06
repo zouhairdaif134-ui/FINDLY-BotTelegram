@@ -1290,9 +1290,12 @@ grant execute on function public.admin_audit_record_event(uuid,text,text,uuid,js
 grant execute on function public.admin_audit_record_failure(uuid,text,text,uuid,jsonb) to service_role;
 grant execute on function public.admin_audit_list(integer,integer,uuid,text,text,text,timestamptz,timestamptz) to service_role;
  then raise exception 'Invalid TMDB id'; end if;
-  if p_media_type not in ('movie','series') then raise exception 'Invalid media type'; end if;
-  if jsonb_typeof(p_movie) <> 'object' or jsonb_typeof(coalesce(p_genres,'[]'::jsonb)) <> 'array' then
+  if p_media_type is null or p_media_type not in ('movie','series') then raise exception 'Invalid media type'; end if;
+  if p_movie is null or jsonb_typeof(p_movie) <> 'object' or jsonb_typeof(coalesce(p_genres,'[]'::jsonb)) <> 'array' then
     raise exception 'Invalid movie import payload';
+  end if;
+  if nullif(p_movie->>'title','') is null or nullif(p_movie->>'normalized_title','') is null then
+    raise exception 'Movie title and normalized title are required';
   end if;
 
   select title_id into v_title_id
