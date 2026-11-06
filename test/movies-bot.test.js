@@ -95,3 +95,68 @@ test("sendPhoto falls back to Telegram URL fetching when multipart upload is rej
     assert.equal(calls.length, 3);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+
+import { buildTitleCaption, sendTitleCard } from "../src/lib/movies-bot.js";
+
+test("buildTitleCaption escapes metadata and keeps the rendered caption within Telegram's 1024-character limit", () => {
+  const caption = buildTitleCaption({
+    title: "A&B <The Film>",
+    release_year: 2026,
+    media_type: "movie",
+    rating: 7.7,
+    genres: ["Drama & Mystery"],
+    overview: "😀 & <tag> ".repeat(300),
+    metadata_status: "draft"
+  });
+  assert.match(caption, /A&amp;B &lt;The Film&gt;/);
+  assert.match(caption, /Drama &amp; Mystery/);
+  const rendered = caption
+    .replace(/<b>/g, "")
+    .replace(/<\/b>/g, "")
+    .replace(/<i>/g, "")
+    .replace(/<\/i>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+  assert.equal(rendered.length, 1024, "caption should use the available Telegram caption space without exceeding it");
+  assert.ok(rendered.includes("…"), "long overview should be truncated with an ellipsis");
+});
+
+test("buildTitleCaption provides a clean fallback synopsis when overview is missing", () => {
+  const caption = buildTitleCaption({
+    title: "Untitled",
+    media_type: "movie",
+    genres: [],
+    overview: "",
+    metadata_status: "draft"
+  });
+  assert.match(caption, /لا يتوفر ملخص لهذا العنوان حالياً/);
+});
+
+
+test("sendTitleCard sends a readable text card with its buttons when the poster is missing", async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options = {}) => {
+    request = { url: String(url), options };
+    return Response.json({ ok: true, result: { message_id: 101 } });
+  };
+  try {
+    const result = await sendTitleCard(
+      { TELEGRAM_MOVIES_BOT_TOKEN: "test-token" },
+      "movies",
+      "12345",
+      null,
+      "<b>🎬 Untitled</b>",
+      { parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "Back", callback_data: "movies:home" }]] } }
+    );
+    assert.equal(result.message_id, 101);
+    assert.ok(request.url.endsWith("/sendMessage"));
+    const payload = JSON.parse(request.options.body);
+    assert.equal(payload.text, "<b>🎬 Untitled</b>");
+    assert.equal(payload.reply_markup.inline_keyboard[0][0].callback_data, "movies:home");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

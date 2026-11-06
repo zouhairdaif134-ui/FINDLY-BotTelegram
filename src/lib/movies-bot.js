@@ -62,17 +62,37 @@ function escapeHtml(value) {
 
 
 export function buildTitleCaption(title) {
-  const heading = "<b>" + escapeHtml(title.title) + "</b>" + (title.release_year ? " · " + title.release_year : "") + " · FINDLY Movies";
-  const meta = [title.media_type === "series" ? "مسلسل" : "فيلم", title.runtime_minutes ? title.runtime_minutes + " دقيقة" : null, title.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : null].filter(Boolean).join(" · ");
+  const titleText = Array.from(String(title.title || "بدون عنوان")).slice(0, 240).join("");
+  const headingText = "🎬 " + titleText + (title.release_year ? " · " + title.release_year : "") + " · FINDLY Movies";
+  const metaText = [
+    title.media_type === "series" ? "📺 مسلسل" : "🎞️ فيلم",
+    title.runtime_minutes ? "⏱️ " + title.runtime_minutes + " دقيقة" : null,
+    title.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : null
+  ].filter(Boolean).join("  ·  ");
   const genres = Array.isArray(title.genres) ? title.genres.filter(Boolean).join("، ") : "";
-  const genreLine = genres ? "🎭 التصنيف: " + escapeHtml(genres) + "\n" : "";
-  const notice = title.metadata_status === "authorized_media_available" ? "المحتوى مسجل كمتاح بترخيص، لكن مسار التسليم داخل Telegram لم يتم تفعيله بعد." : "المشاهدة داخل FINDLY غير متاحة حالياً. لن نعرض رابطاً غير موثوق أو محتوى غير مرخّص.";
-  const prefix = heading + "\n" + meta + "\n" + (genreLine || "\n");
-  const suffix = "\n\n" + notice;
-  const limit = Math.max(0, 1024 - prefix.replace(/<[^>]*>/g, "").length - suffix.length);
+  const genreText = genres ? "🎭 التصنيف: " + Array.from(genres).slice(0, 180).join("") : "";
+  const notice = title.metadata_status === "authorized_media_available"
+    ? "المحتوى مسجل كمتاح بترخيص، لكن التسليم داخل Telegram لم يتم تفعيله بعد."
+    : "المشاهدة داخل FINDLY غير متاحة حالياً. لا نعرض روابط غير موثوقة أو محتوى غير مرخّص.";
+  const prefixText = headingText + "\n" + metaText + (genreText ? "\n" + genreText : "") + "\n──────────────\n";
+  const suffixText = "\n\nℹ️ " + notice;
+  const limit = Math.max(0, 1024 - prefixText.length - suffixText.length);
   const overview = String(title.overview || "لا يتوفر ملخص لهذا العنوان حالياً.");
-  const shortOverview = overview.length > limit ? overview.slice(0, Math.max(0, limit - 1)).trimEnd() + "…" : overview;
-  return prefix + escapeHtml(shortOverview) + suffix;
+  let shortOverview = "";
+  let used = 0;
+  for (const character of overview) {
+    if (used + character.length > limit) break;
+    shortOverview += character;
+    used += character.length;
+  }
+  if (used < overview.length) {
+    while (shortOverview.length + 1 > limit) shortOverview = Array.from(shortOverview).slice(0, -1).join("");
+    if (limit > 0) shortOverview += "…";
+  }
+  return "<b>" + escapeHtml(headingText) + "</b>\n" +
+    escapeHtml(metaText) + (genreText ? "\n" + escapeHtml(genreText) : "") +
+    "\n──────────────\n" + escapeHtml(shortOverview) +
+    "\n\n<i>" + escapeHtml("ℹ️ " + notice) + "</i>";
 }
 
 async function getMoviesBot(env) {
@@ -222,6 +242,13 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "") {
   });
 }
 
+export async function sendTitleCard(env, botSlug, chatId, posterPath, caption, options = {}) {
+  if (posterPath) {
+    return sendPhoto(env, botSlug, chatId, posterPath, { caption, ...options });
+  }
+  return sendMessage(env, botSlug, chatId, caption, options);
+}
+
 async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   if (!UUID_RE.test(titleId || "")) {
     await sendMessage(env, bot.slug, chatId, "المعرف ديال العنوان غير صالح.");
@@ -287,10 +314,8 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   }
   keyboard.push([{ text: "⬅️ رجوع للقائمة", callback_data: "movies:home" }]);
 
-  if (!title.poster_path) throw new Error("Movie poster is missing for title: " + title.id);
   const caption = buildTitleCaption(title);
-  await sendPhoto(env, bot.slug, chatId, title.poster_path, {
-    caption,
+  await sendTitleCard(env, bot.slug, chatId, title.poster_path, caption, {
     parse_mode: "HTML",
     reply_markup: { inline_keyboard: keyboard }
   });
