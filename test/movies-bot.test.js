@@ -117,7 +117,7 @@ test("buildTitleCaption escapes metadata and keeps the rendered caption within T
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
-  assert.ok(rendered.length <= 1024, "rendered Telegram caption must not exceed 1024 UTF-16 code units");
+  assert.equal(rendered.length, 1024, "caption should use the available Telegram caption space without exceeding it");
   assert.ok(rendered.includes("…"), "long overview should be truncated with an ellipsis");
 });
 
