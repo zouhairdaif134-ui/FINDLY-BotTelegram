@@ -84,3 +84,9 @@ test("summarizes net revenue by currency, source and provenance without treating
   assert.match(migration, /group by currency, revenue_source, provenance/i);
   assert.match(migration, /grant execute on function public\.get_monetization_revenue_summary\(timestamptz\) to service_role/i);
 });
+
+test("stores accountable provider-zone verification rather than trusting an enabled flag", () => {
+  assert.match(migration, /add column if not exists verified_by uuid references public\\.admin_profiles/i);
+  assert.match(migration, /add column if not exists verification_method text/i);
+  assert.match(migration, /verification_method in \\('owner_test_confirmation','provider_api'\\)/i);
+});
