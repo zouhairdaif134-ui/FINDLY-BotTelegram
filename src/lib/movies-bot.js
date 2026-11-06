@@ -61,7 +61,7 @@ function escapeHtml(value) {
 }
 
 
-export export function buildTitleCaption(title) {
+export function buildTitleCaption(title) {
   const titleText = Array.from(String(title.title || "بدون عنوان")).slice(0, 240).join("");
   const headingText = "🎬 " + titleText + (title.release_year ? " · " + title.release_year : "") + " · FINDLY Movies";
   const metaText = [
@@ -242,6 +242,13 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "") {
   });
 }
 
+export async function sendTitleCard(env, botSlug, chatId, posterPath, caption, options = {}) {
+  if (posterPath) {
+    return sendPhoto(env, botSlug, chatId, posterPath, { caption, ...options });
+  }
+  return sendMessage(env, botSlug, chatId, caption, options);
+}
+
 async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   if (!UUID_RE.test(titleId || "")) {
     await sendMessage(env, bot.slug, chatId, "المعرف ديال العنوان غير صالح.");
@@ -307,10 +314,8 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   }
   keyboard.push([{ text: "⬅️ رجوع للقائمة", callback_data: "movies:home" }]);
 
-  if (!title.poster_path) throw new Error("Movie poster is missing for title: " + title.id);
   const caption = buildTitleCaption(title);
-  await sendPhoto(env, bot.slug, chatId, title.poster_path, {
-    caption,
+  await sendTitleCard(env, bot.slug, chatId, title.poster_path, caption, {
     parse_mode: "HTML",
     reply_markup: { inline_keyboard: keyboard }
   });
