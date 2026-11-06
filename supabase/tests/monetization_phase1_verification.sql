@@ -5,6 +5,7 @@ do $$
 declare
   v_owner_role_id uuid;
   v_non_owner_grants integer;
+  v_format_constraint text;
 begin
   if to_regclass('public.ad_provider_zones') is null
      or to_regclass('public.ad_placements') is null
@@ -86,6 +87,28 @@ begin
       and is_enabled = true
   ) then
     raise exception 'Website and Telegram default frequency policies are required';
+  end if;
+
+  if exists (
+    select 1 from public.ad_providers
+    where slug in ('monetag','adsterra') and is_active = true
+  ) then
+    raise exception 'Publisher networks must remain OFF by default';
+  end if;
+
+  if exists (
+    select 1 from public.ad_campaigns
+    where campaign_type = 'direct' and status in ('active','scheduled')
+  ) then
+    raise exception 'Legacy direct-advertiser campaigns must be paused in Phase 1';
+  end if;
+
+  select pg_get_constraintdef(oid) into v_format_constraint
+  from pg_constraint
+  where conrelid = 'public.ad_campaigns'::regclass
+    and conname = 'ad_campaigns_format_check';
+  if v_format_constraint is null or v_format_constraint ilike '%video%' then
+    raise exception 'Video campaigns must remain unavailable until player support is verified';
   end if;
 
   select id into v_owner_role_id from public.roles where name = 'owner' limit 1;
