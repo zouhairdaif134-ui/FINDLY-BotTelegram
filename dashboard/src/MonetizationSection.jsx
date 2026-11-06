@@ -245,7 +245,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
     if (campaignForm.telegram_file_id.trim()) creative.telegram_file_id = campaignForm.telegram_file_id.trim();
     if (campaignForm.cta_label.trim()) creative.cta_label = campaignForm.cta_label.trim();
     const body = {
-      bot_id: campaignForm.bot_id, provider_id: campaignForm.provider_id,
+      bot_id: campaignForm.channel === "telegram" ? campaignForm.bot_id : null, provider_id: campaignForm.provider_id,
       name: campaignForm.name, channel: campaignForm.channel, format: campaignForm.format,
       target_url: campaignForm.target_url || null, creative,
       starts_at: campaignForm.starts_at ? new Date(campaignForm.starts_at).toISOString() : null,
@@ -528,7 +528,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                 <div className="monetization-panel-title"><div><h3>Ad Campaigns</h3><p>External campaigns only. Direct advertiser sales stay locked until Phase 2.</p></div><span className="state-locked">Direct campaigns · Locked</span></div>
                 <form className="monetization-form" onSubmit={saveCampaign}>
                   <label>Campaign name<input value={campaignForm.name} onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })} required /></label>
-                  <label>Bot<select value={campaignForm.bot_id} onChange={(e) => setCampaignForm({ ...campaignForm, bot_id: e.target.value })} required><option value="">Choose bot</option>{bots.map((bot) => <option key={bot.id} value={bot.id}>{bot.name} · {bot.slug}</option>)}</select></label>
+                  {campaignForm.channel === "telegram" && <label>Bot<select value={campaignForm.bot_id} onChange={(e) => setCampaignForm({ ...campaignForm, bot_id: e.target.value })} required><option value="">Choose bot</option>{bots.map((bot) => <option key={bot.id} value={bot.id}>{bot.name} · {bot.slug}</option>)}</select></label>}
                   <label>Provider<select value={campaignForm.provider_id} onChange={(e) => setCampaignForm({ ...campaignForm, provider_id: e.target.value })} required><option value="">Choose provider</option>{providers.filter((p) => p.provider_type === "external").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
                   <label>Channel<select value={campaignForm.channel} onChange={(e) => setCampaignForm({ ...campaignForm, channel: e.target.value, format: e.target.value === "website" ? "banner" : "telegram_text" })}><option value="website">Website</option><option value="telegram">Telegram</option></select></label>
                   <label>Format<select value={campaignForm.format} onChange={(e) => setCampaignForm({ ...campaignForm, format: e.target.value })}>{(campaignForm.channel === "website" ? WEBSITE_FORMATS : TELEGRAM_FORMATS).map((f) => <option key={f}>{f}</option>)}</select></label>
@@ -548,7 +548,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
                   <label>Budget reference<input type="number" min="0" step="0.01" value={campaignForm.budget} onChange={(e) => setCampaignForm({ ...campaignForm, budget: e.target.value })} /></label>
                   <label>Currency<select value={campaignForm.currency} onChange={(e) => setCampaignForm({ ...campaignForm, currency: e.target.value })}><option>MAD</option><option>USD</option><option>EUR</option></select></label>
                   <label>Priority<input type="number" min="0" max="10000" value={campaignForm.priority} onChange={(e) => setCampaignForm({ ...campaignForm, priority: e.target.value })} /></label>
-                  <button className="monetization-primary" disabled={saving || !providers.length || !bots.length}>{campaignEditId ? "Update draft campaign" : "Create draft campaign"}</button>
+                  <button className="monetization-primary" disabled={saving || !providers.length || (campaignForm.channel === "telegram" && !bots.length)}>{campaignEditId ? "Update draft campaign" : "Create draft campaign"}</button>
                   {campaignEditId && <button type="button" className="monetization-secondary" onClick={() => setCampaignEditId("")}>Cancel edit</button>}
                 </form>
                 <div className="monetization-table-wrap"><table><thead><tr><th>Campaign</th><th>Channel / format</th><th>Provider</th><th>Schedule</th><th>Delivery · 30d</th><th>Status</th><th>Actions</th></tr></thead><tbody>{externalCampaigns.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.channel} / {item.format}</td><td>{providers.find((p) => p.id === item.provider_id)?.name || "—"}</td><td>{dateLabel(item.starts_at)} → {dateLabel(item.ends_at)}</td><td>{item.delivery_30d?.attempted || 0} attempted / {item.delivery_30d?.sent || 0} sent / {item.delivery_30d?.failed || 0} failed</td><td>{item.status}</td><td className="monetization-actions">
