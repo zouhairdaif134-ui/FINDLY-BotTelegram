@@ -36,6 +36,7 @@ import {
   getUsers,
   updateUser
 } from "./routes/users.js";
+import { getAdmins, getAdminRoles, inviteAdmin, updateAdmin } from "./routes/admins.js";
 
 import {
   getFavorites,
@@ -115,6 +116,9 @@ const PERMISSIONS = {
     "users.view",
   usersManage:
     "users.manage",
+
+  adminsManage:
+    "admins.manage",
 
   favorites:
     "users.view",
@@ -1404,6 +1408,35 @@ export default {
             )
           )
         , request);
+      }
+
+      /*
+       * =========================
+       * ADMINISTRATORS
+       * =========================
+       */
+      if (url.pathname === "/api/admins/roles" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.adminsManage);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await getAdminRoles(env)), request);
+      }
+
+      if (url.pathname === "/api/admins" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.adminsManage);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await getAdmins(env)), request);
+      }
+
+      if (url.pathname === "/api/admins/invite" && request.method === "POST") {
+        const auth = await requirePermission(env, request, PERMISSIONS.adminsManage);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await inviteAdmin(env, await readJson(request))), request);
+      }
+
+      if (url.pathname.startsWith("/api/admins/") && request.method === "PUT") {
+        const auth = await requirePermission(env, request, PERMISSIONS.adminsManage);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await updateAdmin(env, getId(url), await readJson(request), auth.userId)), request);
       }
 
       /*

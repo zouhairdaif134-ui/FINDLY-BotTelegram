@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabase.js";
 import NotificationsSection from "./NotificationsSection.jsx";
 import AnalyticsSection from "./AnalyticsSection.jsx";
+import AdminsSection from "./AdminsSection.jsx";
 import { buildMovieShareContent } from "../../src/lib/movie-sharing.js";
 
 const PRODUCTION_API_URL =
@@ -1948,20 +1949,20 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
           <AnalyticsSection fetchApi={fetchApi} />
         )}
 
+        {activeSection === "Admins" && (
+          <AdminsSection
+            fetchApi={fetchApi}
+            currentUserId={session?.user?.id}
+          />
+        )}
+
         {[
           "Monetization",
           "AI",
-          "Admins",
           "Activity Log",
           "Settings"
-        ].includes(
-          activeSection
-        ) && (
-          <ComingSoonSection
-            section={
-              activeSection
-            }
-          />
+        ].includes(activeSection) && (
+          <ComingSoonSection section={activeSection} />
         )}
       </main>
 
