@@ -354,3 +354,11 @@ where r.name = 'owner'
     'monetization.users.manage'
   )
 on conflict (role_id, permission_id) do nothing;
+
+
+-- The foundation migration seeded provider rows as active. No verified zones
+-- or live campaigns exist yet, so explicitly turn both networks OFF for Phase 1.
+update public.ad_providers
+set is_active = false,
+    updated_at = now()
+where slug in ('monetag','adsterra');
