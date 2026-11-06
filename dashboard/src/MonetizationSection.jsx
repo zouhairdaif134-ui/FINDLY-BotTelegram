@@ -277,6 +277,7 @@ export default function MonetizationSection({ fetchApi, bots = [], currentUserId
 
   async function changeCampaignStatus(item, status) {
     if (status === "active" && !window.confirm("تأكيد تشغيل الحملة؟ لن تعمل إلا إذا كان Provider وZone وPlacement مفعّلين ومتحققاً منهم.")) return;
+    if (status === "cancelled" && !window.confirm("تأكيد إلغاء الحملة؟ لا يمكن إعادة تفعيل حملة ملغاة.")) return;
     await runMutation("/api/monetization/campaigns/" + item.id + "/status", "POST", { status }, "تم تحديث حالة الحملة.");
   }
 
