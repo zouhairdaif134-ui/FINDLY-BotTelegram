@@ -321,3 +321,36 @@ alter table public.ad_provider_zones
     ),
   add constraint ad_provider_zones_active_requires_verified_check
     check (is_active = false or is_verified = true);
+
+
+-- Granular access: Owner receives all Monetization permissions. Manager and
+-- Content Manager receive none by default; the Owner may grant selected codes.
+insert into public.permissions (code, description)
+values
+  ('monetization.view', 'View Monetization overview and reports'),
+  ('monetization.providers.manage', 'Manage advertising providers and zones'),
+  ('monetization.providers.verify', 'Confirm provider-zone verification after testing'),
+  ('monetization.placements.manage', 'Manage website and Telegram ad placements'),
+  ('monetization.campaigns.manage', 'Manage and control advertising campaigns'),
+  ('monetization.transactions.view', 'View monetization transactions and revenue reports'),
+  ('monetization.transactions.manage', 'Record and reverse monetization revenue events'),
+  ('monetization.users.manage', 'Manage excluded admin and test accounts for MAU')
+on conflict (code) do update
+set description = excluded.description;
+
+insert into public.role_permissions (role_id, permission_id)
+select r.id, p.id
+from public.roles r
+cross join public.permissions p
+where r.name = 'owner'
+  and p.code in (
+    'monetization.view',
+    'monetization.providers.manage',
+    'monetization.providers.verify',
+    'monetization.placements.manage',
+    'monetization.campaigns.manage',
+    'monetization.transactions.view',
+    'monetization.transactions.manage',
+    'monetization.users.manage'
+  )
+on conflict (role_id, permission_id) do nothing;
