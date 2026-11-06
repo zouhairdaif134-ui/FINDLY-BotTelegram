@@ -328,7 +328,7 @@ export default {
         const isPoster = movieShareMatch[2] === "poster";
         const { data: movie, error: movieError } = await getSupabase(env)
           .from("movie_titles")
-          .select("id,media_type,title,overview,release_year,rating,poster_path,status")
+          .select("id,media_type,title,overview,release_year,runtime_minutes,rating,poster_path,status")
           .eq("id", movieId)
           .eq("status", "active")
           .maybeSingle();
@@ -386,6 +386,13 @@ export default {
         if (!bot?.telegram_username) {
           return new Response("FINDLY Movies bot is unavailable", { status: 503 });
         }
+        const { data: genreLinks, error: genreError } = await getSupabase(env)
+          .from("movie_title_genres")
+          .select("movie_genres(name)")
+          .eq("title_id", movie.id);
+        if (genreError) throw genreError;
+        movie.genres = (genreLinks || []).map((link) => link.movie_genres?.name).filter(Boolean);
+
         const html = renderMovieSharePage(movie, bot.telegram_username, source, url.origin);
         return new Response(html, {
           status: 200,
