@@ -309,7 +309,7 @@ export function validateCampaignInput(input) {
     throw new Error("budget must be a non-negative amount with at most two decimals");
   }
   return {
-    bot_id: requireUuid(value.bot_id, "bot_id"),
+    bot_id: channel === "telegram" ? requireUuid(value.bot_id, "bot_id") : null,
     provider_id: requireUuid(value.provider_id, "provider_id"),
     name: requireText(value.name, "campaign name", 120),
     campaign_type: "external",
@@ -761,13 +761,15 @@ export async function saveAdCampaign(env, input) {
   throwIfError(providerError);
   if (!provider) throw new Error("provider was not found");
   if (provider.provider_type !== "external") throw new Error("direct advertiser campaigns are locked until Phase 2");
-  const { data: bot, error: botError } = await supabase
-    .from("bots")
-    .select("id,is_active")
-    .eq("id", payload.bot_id)
-    .maybeSingle();
-  throwIfError(botError);
-  if (!bot || !bot.is_active) throw new Error("campaign bot must exist and be active");
+  if (payload.bot_id) {
+    const { data: bot, error: botError } = await supabase
+      .from("bots")
+      .select("id,is_active")
+      .eq("id", payload.bot_id)
+      .maybeSingle();
+    throwIfError(botError);
+    if (!bot || !bot.is_active) throw new Error("campaign bot must exist and be active");
+  }
   let query = supabase.from("ad_campaigns");
   if (input.id) {
     const id = requireUuid(input.id, "campaign id");
