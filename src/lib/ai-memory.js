@@ -64,7 +64,7 @@ export async function getAIMemoryState(supabase, userId, botId) {
   if (!userId || !botId) return null;
   const { data, error } = await supabase
     .from("ai_user_memory_preferences")
-    .select("consent_status,session_enabled,preferences,pending_preference,consented_at")
+    .select("consent_status,session_enabled,preferences,pending_preference,pending_action,pending_action_token,consented_at")
     .eq("user_id", userId)
     .eq("bot_id", botId)
     .maybeSingle();
@@ -82,6 +82,8 @@ export async function ensureAIMemoryState(supabase, userId, botId) {
       session_enabled: true,
       preferences: [],
       pending_preference: null,
+      pending_action: null,
+      pending_action_token: null,
       consented_at: null
     }, { onConflict: "user_id,bot_id", ignoreDuplicates: true });
   if (error) throw error;
@@ -93,29 +95,106 @@ export async function setPendingAIMemoryPreference(supabase, userId, botId, pref
   if (!normalized) throw new Error("Preference is empty");
   const state = await getAIMemoryState(supabase, userId, botId);
   if (state?.consent_status !== "granted") throw new Error("Persistent memory consent is required");
+  const token = crypto.randomUUID();
   const { error } = await supabase
     .from("ai_user_memory_preferences")
-    .update({ pending_preference: normalized })
+    .update({
+      pending_preference: normalized,
+      pending_action: "save",
+      pending_action_token: token
+    })
     .eq("user_id", userId)
     .eq("bot_id", botId)
     .eq("consent_status", "granted");
   if (error) throw error;
-  return normalized;
+  return token;
 }
 
-export async function confirmPendingAIMemoryPreference(supabase, userId, botId) {
-  const state = await getAIMemoryState(supabase, userId, botId);
-  if (state?.consent_status !== "granted" || !state.pending_preference) {
-    throw new Error("No confirmed memory preference is pending");
-  }
-  const preferences = await saveAIMemoryPreference(supabase, userId, botId, state.pending_preference);
+export async function setPendingAIMemoryClear(supabase, userId, botId) {
+  const token = crypto.randomUUID();
   const { error } = await supabase
     .from("ai_user_memory_preferences")
-    .update({ pending_preference: null })
+    .update({
+      pending_preference: null,
+      pending_action: "clear",
+      pending_action_token: token
+    })
     .eq("user_id", userId)
     .eq("bot_id", botId);
   if (error) throw error;
-  return preferences;
+  return token;
+}
+
+export async function confirmPendingAIMemoryPreference(supabase, userId, botId, token) {
+  const state = await getAIMemoryState(supabase, userId, botId);
+  if (
+    state?.consent_status !== "granted" ||
+    state.pending_action !== "save" ||
+    !state.pending_preference ||
+    state.pending_action_token !== token
+  ) {
+    throw new Error("No matching preference confirmation is pending");
+  }
+  const preferences = Array.isArray(state.preferences) ? state.preferences : [];
+  const normalized = normalizeAIMemoryPreference(state.pending_preference);
+  const duplicate = preferences.some((item) => normalizeAIMemoryPreference(item).toLowerCase() === normalized.toLowerCase());
+  const next = duplicate ? preferences : [...preferences, normalized].slice(-MAX_PREFERENCES);
+  const { data, error } = await supabase
+    .from("ai_user_memory_preferences")
+    .update({
+      preferences: next,
+      pending_preference: null,
+      pending_action: null,
+      pending_action_token: null
+    })
+    .eq("user_id", userId)
+    .eq("bot_id", botId)
+    .eq("consent_status", "granted")
+    .eq("pending_action", "save")
+    .eq("pending_action_token", token)
+    .select("preferences")
+    .single();
+  if (error) throw error;
+  return data.preferences;
+}
+
+export async function confirmPendingAIMemoryClear(supabase, userId, botId, token) {
+  const { data, error } = await supabase
+    .from("ai_user_memory_preferences")
+    .update({
+      preferences: [],
+      pending_preference: null,
+      pending_action: null,
+      pending_action_token: null
+    })
+    .eq("user_id", userId)
+    .eq("bot_id", botId)
+    .eq("pending_action", "clear")
+    .eq("pending_action_token", token)
+    .select("id")
+    .single();
+  if (error) throw new Error("No matching memory-clear confirmation is pending");
+  const { error: sessionError } = await supabase
+    .from("ai_user_session_messages")
+    .delete()
+    .eq("user_id", userId)
+    .eq("bot_id", botId);
+  if (sessionError) throw sessionError;
+  return Boolean(data?.id);
+}
+
+export async function cancelPendingAIMemoryAction(supabase, userId, botId, token) {
+  const { error } = await supabase
+    .from("ai_user_memory_preferences")
+    .update({
+      pending_preference: null,
+      pending_action: null,
+      pending_action_token: null
+    })
+    .eq("user_id", userId)
+    .eq("bot_id", botId)
+    .eq("pending_action_token", token);
+  if (error) throw error;
 }
 
 export async function setAIMemoryConsent(supabase, userId, botId, status) {
@@ -124,7 +203,7 @@ export async function setAIMemoryConsent(supabase, userId, botId, status) {
   const payload = {
     consent_status: status,
     consented_at: status === "granted" ? new Date().toISOString() : null,
-    ...(status === "denied" ? { preferences: [], pending_preference: null } : {})
+    ...(status === "denied" ? { preferences: [], pending_preference: null, pending_action: null, pending_action_token: null } : {})
   };
   const query = existing
     ? supabase.from("ai_user_memory_preferences").update(payload).eq("user_id", userId).eq("bot_id", botId)
@@ -134,10 +213,12 @@ export async function setAIMemoryConsent(supabase, userId, botId, status) {
         session_enabled: true,
         preferences: [],
         pending_preference: null,
+        pending_action: null,
+        pending_action_token: null,
         ...payload
       });
   const { data, error } = await query
-    .select("consent_status,session_enabled,preferences,pending_preference,consented_at")
+    .select("consent_status,session_enabled,preferences,pending_preference,pending_action,pending_action_token,consented_at")
     .single();
   if (error) throw error;
   return data;
@@ -157,10 +238,12 @@ export async function setAIMemorySessionEnabled(supabase, userId, botId, enabled
         session_enabled: Boolean(enabled),
         preferences: [],
         pending_preference: null,
+        pending_action: null,
+        pending_action_token: null,
         consented_at: null
       });
   const { data, error } = await query
-    .select("consent_status,session_enabled,preferences,pending_preference,consented_at")
+    .select("consent_status,session_enabled,preferences,pending_preference,pending_action,pending_action_token,consented_at")
     .single();
   if (error) throw error;
   return data;
@@ -230,26 +313,6 @@ export async function appendAISessionMessage(supabase, userId, botId, role, cont
   }
 }
 
-export async function saveAIMemoryPreference(supabase, userId, botId, preference) {
-  const normalized = normalizeAIMemoryPreference(preference);
-  if (!normalized) throw new Error("Preference is empty");
-  const state = await getAIMemoryState(supabase, userId, botId);
-  if (state?.consent_status !== "granted") throw new Error("Persistent memory consent is required");
-  const preferences = Array.isArray(state.preferences) ? state.preferences : [];
-  const duplicate = preferences.some((item) => normalizeAIMemoryPreference(item).toLowerCase() === normalized.toLowerCase());
-  const next = duplicate ? preferences : [...preferences, normalized].slice(-MAX_PREFERENCES);
-  const { data, error } = await supabase
-    .from("ai_user_memory_preferences")
-    .update({ preferences: next })
-    .eq("user_id", userId)
-    .eq("bot_id", botId)
-    .eq("consent_status", "granted")
-    .select("preferences")
-    .single();
-  if (error) throw error;
-  return data.preferences;
-}
-
 export async function clearAIMemory(supabase, userId, botId, revokeConsent = false) {
   const { error: sessionError } = await supabase
     .from("ai_user_session_messages")
@@ -269,6 +332,8 @@ export async function clearAIMemory(supabase, userId, botId, revokeConsent = fal
         session_enabled: false,
         preferences: [],
         pending_preference: null,
+        pending_action: null,
+        pending_action_token: null,
         consented_at: null
       }, { onConflict: "user_id,bot_id" })
       .select("consent_status,session_enabled,preferences")
@@ -280,6 +345,8 @@ export async function clearAIMemory(supabase, userId, botId, revokeConsent = fal
   const update = {
     preferences: [],
     pending_preference: null,
+    pending_action: null,
+    pending_action_token: null,
     ...(revokeConsent ? { consent_status: "denied", consented_at: null, session_enabled: false } : {})
   };
   const { data, error } = await supabase
