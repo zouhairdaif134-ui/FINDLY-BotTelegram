@@ -1300,7 +1300,7 @@ export default {
         return withCors(success(await enqueueMovieQueue(env, await readJson(request), auth)), request);
       }
 
-      const movieQueueAction = url.pathname.match(/^\\/api\\/movies\\/queue\\/([0-9a-f-]{36})\\/(retry|resolve|reject)$/i);
+      const movieQueueAction = url.pathname.match(/^\/api\/movies\/queue\/([0-9a-f-]{36})\/(retry|resolve|reject)$/i);
       if (movieQueueAction && request.method === "POST") {
         const action = movieQueueAction[2];
         const permission = action === "retry" ? PERMISSIONS.contentUpdate : PERMISSIONS.contentCreate;
@@ -1342,9 +1342,10 @@ export default {
       if (url.pathname.startsWith("/api/movies/") && request.method === "PUT") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentUpdate);
         if (auth.response) return withCors(auth.response, request);
-        const updatedMovie = await updateMovieCatalogItem(env, getId(url), await readJson(request), auth);
-        if (updatedMovie?.status === "active") {
-          await markMovieQueuePublished(env, updatedMovie.id);
+        const movieUpdateBody = await readJson(request);
+        const updatedMovie = await updateMovieCatalogItem(env, getId(url), movieUpdateBody, auth);
+        if (movieUpdateBody.status === "active") {
+          await markMovieQueuePublished(env, getId(url));
         }
         return withCors(success(updatedMovie), request);
       }
