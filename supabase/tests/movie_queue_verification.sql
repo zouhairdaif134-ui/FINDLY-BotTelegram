@@ -9,6 +9,8 @@ declare
   v_review_id uuid;
   v_review_claim_count integer;
   v_duplicate_rejected boolean := false;
+  v_claim_lease_token uuid;
+  v_stale_update_count integer;
   v_slot timestamptz := date_trunc('hour', now());
 begin
   delete from public.movie_queue_slots;
@@ -105,6 +107,18 @@ begin
 
   if (select count(*) from public.movie_queue_items where status = 'processing' and attempt_count = 1) <> 2 then
     raise exception 'claimed items must enter processing with one attempt';
+  end if;
+  select lease_token into v_claim_lease_token
+  from public.movie_queue_items where id = v_first_id;
+  if v_claim_lease_token is null then
+    raise exception 'claimed queue items must receive a fencing token';
+  end if;
+  update public.movie_queue_items
+    set status = 'failed'
+    where id = v_first_id and lease_token = gen_random_uuid();
+  get diagnostics v_stale_update_count = row_count;
+  if v_stale_update_count <> 0 then
+    raise exception 'stale lease token must not update a claimed queue item';
   end if;
 
   insert into public.movie_queue_items(submitted_title, normalized_title, media_type, status)
