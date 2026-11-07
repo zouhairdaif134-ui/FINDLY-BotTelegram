@@ -300,7 +300,7 @@ async function showMoviesFilterYearPrompt(env, bot, chatId, filters = {}) {
   const promptText = YEAR_PROMPT + "|filters:" + normalized.mediaType + ":" +
     (normalized.genreSlug || "none") + ":" + normalized.sort;
   await sendMessage(env, bot.slug, chatId,
-    "<b>" + YEAR_PROMPT + "</b>\\nجاوب على هاد الرسالة بسنة الإصدار، مثال: 2024.\\n<tg-spoiler>" + promptText.slice(YEAR_PROMPT.length) + "</tg-spoiler>",
+    "<b>" + YEAR_PROMPT + "</b>\nجاوب على هاد الرسالة بسنة الإصدار، مثال: 2024.\n<tg-spoiler>" + promptText.slice(YEAR_PROMPT.length) + "</tg-spoiler>",
     { reply_markup: { force_reply: { force_reply: true, selective: true, input_field_placeholder: "مثلاً 2024" } } }
   );
 }
@@ -637,12 +637,12 @@ export async function handleMoviesText(env, bot, chatId, message, telegramUserId
   const raw = normalizeMovieSearch(message?.text);
   if (!raw || raw.startsWith("/")) return false;
   if (isMoviesYearReply(message)) {
-    if (!/^\\d{4}$/.test(raw) || Number(raw) < 1888 || Number(raw) > 2200) {
+    if (!/^\d{4}$/.test(raw) || Number(raw) < 1888 || Number(raw) > 2200) {
       await sendMessage(env, bot.slug, chatId, "دخل سنة صحيحة بين 1888 و2200، مثال: 2024.");
       return true;
     }
       const promptText = String(message.reply_to_message?.text || "");
-    const state = promptText.match(/\\|filters:(all|movie|series):(none|[a-z0-9-]{1,20}):(added|old|top|az|release)(?=<\\/tg-spoiler>)/);
+    const state = promptText.match(/\|filters:(all|movie|series):(none|[a-z0-9-]{1,20}):(added|old|top|az|release)(?=<\/tg-spoiler>)/);
     if (state) {
       await sendList(env, bot, chatId, "filter", 0, "", "", {
         mediaType: state[1], genreSlug: state[2] === "none" ? "" : state[2],
