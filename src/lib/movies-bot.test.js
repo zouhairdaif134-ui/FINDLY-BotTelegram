@@ -23,6 +23,25 @@ test("parses only valid Movies callbacks", () => {
   assert.deepEqual(parseMoviesCallback("movies:new:-1"), { action: "new", page: 0 });
 });
 
+test("parses Library and Categories navigation callbacks", () => {
+  assert.deepEqual(parseMoviesCallback("movies:library:0"), { action: "library", page: 0 });
+  assert.deepEqual(parseMoviesCallback("movies:categories"), { action: "categories", page: 0 });
+  assert.deepEqual(parseMoviesCallback("movies:genre:science-fiction:2"), {
+    action: "genre", genreSlug: "science-fiction", page: 2
+  });
+  assert.deepEqual(parseMoviesCallback("movies:old:1"), { action: "old", page: 1 });
+  assert.deepEqual(parseMoviesCallback("movies:az:0"), { action: "az", page: 0 });
+  assert.deepEqual(parseMoviesCallback("movies:year:2024:0"), {
+    action: "year", year: 2024, page: 0
+  });
+  assert.equal(parseMoviesCallback("movies:genre:bad_slug:0"), null);
+});
+
+test("uses twenty titles per Telegram library page", async () => {
+  const { MOVIE_PAGE_SIZE } = await import("./movies-bot.js");
+  assert.equal(MOVIE_PAGE_SIZE, 20);
+});
+
 test("recognizes only replies to the Movies search prompt", () => {
   assert.equal(isMoviesSearchReply({ reply_to_message: { text: "🔎 بحث FINDLY Movies\n..." } }), true);
   assert.equal(isMoviesSearchReply({ reply_to_message: { text: "unrelated" } }), false);
