@@ -155,15 +155,21 @@ test("enqueues a mixed batch with two Supabase requests and reports existing and
     }
   };
 
-  const result = await movieQueue.enqueueMovieQueueBatch(supabase, [
+  const batch = [
     { title: "Inception", media_type: "movie" },
     { title: "Breaking Bad", media_type: "series" },
     { title: "The Matrix", media_type: "movie" },
-    { title: "inception!", media_type: "movie" }
-  ], { userId: "admin-1" });
+    { title: "inception!", media_type: "movie" },
+    ...Array.from({ length: 96 }, (_, index) => ({
+      title: `Unique Title ${index + 1}`,
+      media_type: index % 2 === 0 ? "movie" : "series"
+    }))
+  ];
+  const result = await movieQueue.enqueueMovieQueueBatch(supabase, batch, { userId: "admin-1" });
 
   assert.deepEqual(calls, ["lookup", "insert"]);
-  assert.deepEqual(result.inserted.map((item) => item.submitted_title), ["Inception", "Breaking Bad"]);
+  assert.equal(result.inserted.length, 98);
+  assert.deepEqual(result.inserted.slice(0, 2).map((item) => item.submitted_title), ["Inception", "Breaking Bad"]);
   assert.deepEqual(result.duplicates.map((item) => ({
     title: item.title,
     existing_title: item.existing_title,
@@ -172,5 +178,5 @@ test("enqueues a mixed batch with two Supabase requests and reports existing and
     { title: "The Matrix", existing_title: "The Matrix", status: "pending" },
     { title: "inception!", existing_title: "Inception", status: "duplicate_in_batch" }
   ]);
-  assert.equal(result.total_requested, 4);
+  assert.equal(result.total_requested, 100);
 });
