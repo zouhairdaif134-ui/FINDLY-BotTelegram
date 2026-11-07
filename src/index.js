@@ -1303,7 +1303,7 @@ export default {
       const movieQueueAction = url.pathname.match(/^\/api\/movies\/queue\/([0-9a-f-]{36})\/(retry|resolve|reject)$/i);
       if (movieQueueAction && request.method === "POST") {
         const action = movieQueueAction[2];
-        const permission = action === "retry" ? PERMISSIONS.contentUpdate : PERMISSIONS.contentCreate;
+        const permission = ["retry", "reject"].includes(action) ? PERMISSIONS.contentUpdate : PERMISSIONS.contentCreate;
         const auth = await requirePermission(env, request, permission);
         if (auth.response) return withCors(auth.response, request);
         const itemId = movieQueueAction[1];
