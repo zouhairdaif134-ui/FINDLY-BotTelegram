@@ -540,3 +540,27 @@
   .movies-pagination-controls { width: 100%; }
   .movies-page-jump { margin-inline-start: 0; }
 }
+
+
+.movies-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.movies-header-actions .secondary-button {
+  min-height: 40px;
+  padding: 9px 13px;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .movies-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .movies-header-actions .secondary-button {
+    flex: 1 1 auto;
+    white-space: normal;
+  }
+}

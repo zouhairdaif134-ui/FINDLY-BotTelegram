@@ -278,12 +278,116 @@ async function tmdbRequest(env, path, params = {}) {
   return payload;
 }
 
+export function hasArabicSynopsis(value) {
+  return typeof value === "string" && /[\u0600-\u06FF]/.test(value);
+}
+
+function extractTranslationText(payload) {
+  const message = payload?.choices?.[0]?.message || payload?.message || payload;
+  const value = typeof payload?.response === "string"
+    ? payload.response
+    : typeof message?.content === "string"
+      ? message.content
+      : typeof payload?.content === "string" ? payload.content : "";
+  return value.trim().replace(/^\`\`\`(?:text)?\s*/i, "").replace(/\`\`\`$/, "").trim();
+}
+
+export async function translateSynopsisToArabic(env, sourceText) {
+  const source = String(sourceText || "").trim().slice(0, 7000);
+  if (!source) throw new Error("A source synopsis is required for translation");
+  if (typeof env?.AI?.run !== "function") {
+    const error = new Error("Cloudflare Workers AI binding is not available for synopsis translation");
+    error.code = "SYNOPSIS_TRANSLATION_UNAVAILABLE";
+    throw error;
+  }
+  const model = typeof env.MOVIE_TRANSLATION_MODEL === "string" && env.MOVIE_TRANSLATION_MODEL.trim()
+    ? env.MOVIE_TRANSLATION_MODEL.trim()
+    : "@cf/qwen/qwen3.8-27b";
+  const payload = await env.AI.run(model, {
+    messages: [
+      {
+        role: "system",
+        content: "أنت مترجم سينمائي محترف. ترجم الملخص التالي إلى العربية الفصحى المعاصرة ترجمة دقيقة وطبيعية. حافظ على المعنى والأسماء والمصطلحات، ولا تضف أي أحداث أو معلومات من عندك، ولا تحذف التفاصيل. أخرج الترجمة فقط دون عنوان أو مقدمة أو ملاحظات."
+      },
+      { role: "user", content: source }
+    ],
+    temperature: 0.1,
+    max_tokens: 900
+  }, { rejectIfBusy: true });
+  const translated = extractTranslationText(payload);
+  if (!hasArabicSynopsis(translated)) {
+    const error = new Error("Workers AI did not return a valid Arabic synopsis");
+    error.code = "SYNOPSIS_TRANSLATION_INVALID";
+    throw error;
+  }
+  return translated.slice(0, 7000);
+}
+
+export async function resolveArabicSynopsis(env, localizedOverview, sourceOverview) {
+  const localized = String(localizedOverview || "").trim();
+  const source = String(sourceOverview || "").trim();
+  if (hasArabicSynopsis(localized)) {
+    return {
+      overview: localized,
+      original_overview: source || localized,
+      overview_language: "ar-SA",
+      overview_source: "tmdb_ar"
+    };
+  }
+  if (hasArabicSynopsis(source)) {
+    return {
+      overview: source,
+      original_overview: source,
+      overview_language: "ar-SA",
+      overview_source: "existing_arabic"
+    };
+  }
+  if (!source) {
+    return {
+      overview: null,
+      original_overview: null,
+      overview_language: "unavailable",
+      overview_source: "unavailable"
+    };
+  }
+  const translated = await translateSynopsisToArabic(env, source);
+  return {
+    overview: translated,
+    original_overview: source,
+    overview_language: "ar-SA",
+    overview_source: "ai_translation"
+  };
+}
+
+async function saveMovieSynopsis(env, actor, movieId, synopsis) {
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase.rpc("admin_audit_update_movie_synopsis", {
+    p_actor_id: actor?.userId,
+    p_movie_id: movieId,
+    p_overview: synopsis.overview,
+    p_original_overview: synopsis.original_overview,
+    p_overview_language: synopsis.overview_language,
+    p_overview_source: synopsis.overview_source
+  });
+  if (error) {
+    await recordAdminFailure(env, actor, {
+      action: "movie.synopsis_localize",
+      entityType: "movie",
+      entityId: movieId,
+      failureCode: error.code || "MOVIE_SYNOPSIS_UPDATE_FAILED",
+      failureType: error.name || "Error"
+    });
+    throw error;
+  }
+  return data?.record || data;
+}
+
 export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1) {
   const query = String(term || "").trim().slice(0, 100);
   if (!query) throw new Error("Search term is required");
   if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
   const data = await tmdbRequest(env, mediaType === "series" ? "/search/tv" : "/search/movie", {
-    query, page: Math.min(5, Math.max(1, Number(page) || 1)), include_adult: false
+    query, page: Math.min(5, Math.max(1, Number(page) || 1)), include_adult: false, language: "ar-SA"
   });
   return (data.results || []).map((item) => ({
     tmdb_id: item.id,
@@ -300,6 +404,50 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
     popularity: item.popularity || 0
   }));
 }
+ 
+
+export async function processMovieSynopsisBackfill(env, actor, requestedLimit = 3) {
+  assertTmdbAccessAllowed(env);
+  const limit = Math.min(3, Math.max(1, Number(requestedLimit) || 3));
+  const supabase = getSupabase(env);
+  const { data: pending, error: pendingError } = await supabase
+    .from("movie_titles")
+    .select("id,title,media_type,overview,original_overview")
+    .eq("overview_language", "pending")
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (pendingError) throw pendingError;
+
+  let processed = 0;
+  for (const item of pending || []) {
+    const sourceOverview = item.original_overview || item.overview || "";
+    let localizedOverview = "";
+    const { data: externalId, error: externalError } = await supabase
+      .from("movie_external_ids")
+      .select("external_id")
+      .eq("title_id", item.id)
+      .eq("provider", "tmdb")
+      .maybeSingle();
+    if (externalError) throw externalError;
+
+    if (externalId?.external_id) {
+      const endpoint = (item.media_type === "series" ? "/tv/" : "/movie/") + externalId.external_id;
+      const localizedDetails = await tmdbRequest(env, endpoint, { language: "ar-SA" });
+      localizedOverview = localizedDetails.overview || "";
+    }
+
+    const synopsis = await resolveArabicSynopsis(env, localizedOverview, sourceOverview);
+    await saveMovieSynopsis(env, actor, item.id, synopsis);
+    processed += 1;
+  }
+
+  const { count, error: countError } = await supabase
+    .from("movie_titles")
+    .select("id", { count: "exact", head: true })
+    .eq("overview_language", "pending");
+  if (countError) throw countError;
+  return { processed, remaining: Number(count || 0), batch_size: limit };
+}
 
 
 export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", actor) {
@@ -307,8 +455,27 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", ac
   if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
   const isSeries = mediaType === "series";
   const details = await tmdbRequest(env, (isSeries ? "/tv/" : "/movie/") + tmdbId, {
-    append_to_response: "external_ids"
+    append_to_response: "external_ids",
+    language: "en-US"
   });
+  const arabicDetails = await tmdbRequest(env, (isSeries ? "/tv/" : "/movie/") + tmdbId, {
+    language: "ar-SA"
+  });
+  let synopsis;
+  try {
+    synopsis = await resolveArabicSynopsis(env, arabicDetails.overview, details.overview);
+  } catch (translationError) {
+    console.error("FINDLY synopsis translation deferred:", {
+      tmdb_id: String(tmdbId),
+      code: translationError?.code || translationError?.name || "TRANSLATION_FAILED"
+    });
+    synopsis = {
+      overview: null,
+      original_overview: details.overview || null,
+      overview_language: "pending",
+      overview_source: "pending"
+    };
+  }
   const title = isSeries ? details.name : details.title;
   const originalTitle = isSeries ? details.original_name : details.original_title;
   const releaseDate = isSeries ? details.first_air_date : details.release_date;
@@ -328,7 +495,7 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", ac
     title,
     original_title: originalTitle || null,
     normalized_title: normalized,
-    overview: details.overview || null,
+    overview: synopsis.overview,
     release_date: releaseDate || null,
     release_year: releaseYear,
     runtime_minutes: isSeries ? null : details.runtime || null,
@@ -346,6 +513,7 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", ac
     operation: existingId?.title_id ? "update" : "create",
     payload: movie
   });
+  await saveMovieSynopsis(env, actor, saved.id, synopsis);
 
   try {
     if (!existingId?.title_id) {
