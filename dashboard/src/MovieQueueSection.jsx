@@ -9,7 +9,11 @@ const labels = {
   already_in_catalog: "موجود مسبقاً فالمكتبة",
   failed: "فشل",
   rejected: "مرفوض",
-  published: "منشور"
+  published: "منشور",
+  active: "منشور فالبوت",
+  draft: "مسودة موجودة",
+  inactive: "غير نشط",
+  duplicate_in_batch: "مكرر داخل نفس اللائحة"
 };
 
 export default function MovieQueueSection({ fetchApi }) {
@@ -119,7 +123,7 @@ export default function MovieQueueSection({ fetchApi }) {
       {tmdbMode === "commercial" && <div className="auth-success" role="status">مصدر البيانات مفعّل بترخيص تجاري.</div>}
       {error && <div className="auth-error" role="alert">{error}</div>}
       {notice && <div className="auth-success" role="status">{notice}</div>}
-      {duplicateItems.length > 0 && <div className="auth-error" role="status"><strong>العناوين الموجودة مسبقاً:</strong><ul>{duplicateItems.map((item, index) => <li key={item.existing_id || index}>{item.title} — موجود باسم: {item.existing_title || item.title} ({item.media_type === "series" ? "مسلسل" : "فيلم"}) — الحالة: {labels[item.status] || item.status}</li>)}</ul></div>}
+      {duplicateItems.length > 0 && <div className="auth-error" role="status"><strong>العناوين الموجودة مسبقاً:</strong><ul>{duplicateItems.map((item, index) => <li key={item.existing_id || index}>{item.title} — موجود باسم: {item.existing_title || item.title} ({item.media_type === "series" ? "مسلسل" : "فيلم"}) — الحالة: {labels[item.status] || item.status}{item.existing_url && <> — <a href={item.existing_url} target="_blank" rel="noreferrer">فتح المحتوى المنشور</a></>}</li>)}</ul></div>}
 
       <div className="movies-card movies-catalog-card">
         <div className="movies-catalog-toolbar">

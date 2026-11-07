@@ -117,7 +117,7 @@ test("rejects unprefixed or invalid mixed queue lines instead of guessing their 
 });
 
 
-test("enqueues a mixed batch with two Supabase requests and reports existing and in-batch duplicates", async () => {
+test("enqueues a mixed batch with batched catalog and queue lookups and reports duplicates", async () => {
   const calls = [];
   const existingRows = [{
     id: "existing-1",
@@ -128,14 +128,13 @@ test("enqueues a mixed batch with two Supabase requests and reports existing and
   }];
   const supabase = {
     from(table) {
-      assert.equal(table, "movie_queue_items");
-      const state = { filters: [], insertRows: null };
+      const state = { table, filters: [], insertRows: null };
       const builder = {
         select() { return builder; },
         in(column, values) { state.filters.push({ column, values }); return builder; },
         insert(rows) { state.insertRows = rows; return builder; },
         then(resolve, reject) {
-          calls.push(state.insertRows ? "insert" : "lookup");
+          calls.push(state);
           if (state.insertRows) {
             return Promise.resolve({
               data: state.insertRows.map((row, index) => ({
@@ -148,7 +147,7 @@ test("enqueues a mixed batch with two Supabase requests and reports existing and
               error: null
             }).then(resolve, reject);
           }
-          return Promise.resolve({ data: existingRows, error: null }).then(resolve, reject);
+          return Promise.resolve({ data: state.table === "movie_titles" ? [] : existingRows, error: null }).then(resolve, reject);
         }
       };
       return builder;
@@ -167,7 +166,7 @@ test("enqueues a mixed batch with two Supabase requests and reports existing and
   ];
   const result = await movieQueue.enqueueMovieQueueBatch(supabase, batch, { userId: "admin-1" });
 
-  assert.deepEqual(calls, ["lookup", "insert"]);
+  assert.deepEqual(calls.map((call) => call.table), ["movie_titles", "movie_queue_items", "movie_queue_items"]);
   assert.equal(result.inserted.length, 98);
   assert.deepEqual(result.inserted.slice(0, 2).map((item) => item.submitted_title), ["Inception", "Breaking Bad"]);
   assert.deepEqual(result.duplicates.map((item) => ({
@@ -179,4 +178,63 @@ test("enqueues a mixed batch with two Supabase requests and reports existing and
     { title: "inception!", existing_title: "Inception", status: "duplicate_in_batch" }
   ]);
   assert.equal(result.total_requested, 100);
+});
+
+
+test("blocks titles already present in the catalog or any historical queue state", async () => {
+  const calls = [];
+  const catalogRows = [{
+    id: "catalog-active-1",
+    title: "Inception",
+    normalized_title: "inception",
+    media_type: "movie",
+    status: "active",
+    release_year: 2010
+  }];
+  const queueRows = [{
+    id: "queue-published-1",
+    submitted_title: "Breaking Bad",
+    normalized_title: "breaking bad",
+    media_type: "series",
+    status: "published",
+    catalog_title_id: "catalog-series-1"
+  }];
+  const supabase = {
+    from(table) {
+      const state = { table, insertRows: null, filters: [] };
+      const builder = {
+        select() { return builder; },
+        in(column, values) { state.filters.push({ column, values }); return builder; },
+        insert(rows) { state.insertRows = rows; return builder; },
+        then(resolve, reject) {
+          calls.push(state);
+          const data = state.insertRows
+            ? state.insertRows.map((row, index) => ({ id: "new-" + index, ...row, status: "pending" }))
+            : state.table === "movie_titles" ? catalogRows : queueRows;
+          return Promise.resolve({ data, error: null }).then(resolve, reject);
+        }
+      };
+      return builder;
+    }
+  };
+
+  const result = await movieQueue.enqueueMovieQueueBatch(supabase, [
+    { title: "Inception", media_type: "movie" },
+    { title: "Breaking Bad", media_type: "series" },
+    { title: "New Movie", media_type: "movie" }
+  ], { userId: "admin-1" }, "https://api.example.test");
+
+  assert.deepEqual(calls.map((call) => call.table), ["movie_titles", "movie_queue_items", "movie_queue_items"]);
+  assert.deepEqual(result.inserted.map((item) => item.submitted_title), ["New Movie"]);
+  assert.equal(result.duplicates[0].existing_url, "https://api.example.test/share/movie/catalog-active-1");
+  assert.equal(result.duplicates[1].existing_url, "https://api.example.test/share/movie/catalog-series-1");
+  assert.deepEqual(result.duplicates.map((item) => ({
+    title: item.title,
+    existing_title: item.existing_title,
+    status: item.status,
+    existing_type: item.existing_type
+  })), [
+    { title: "Inception", existing_title: "Inception", status: "active", existing_type: "catalog" },
+    { title: "Breaking Bad", existing_title: "Breaking Bad", status: "published", existing_type: "queue" }
+  ]);
 });

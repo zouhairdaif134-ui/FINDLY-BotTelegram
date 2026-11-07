@@ -1308,7 +1308,7 @@ export default {
       if (url.pathname === "/api/movies/queue" && request.method === "POST") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentCreate);
         if (auth.response) return withCors(auth.response, request);
-        return withCors(success(await enqueueMovieQueue(env, await readJson(request), auth)), request);
+        return withCors(success(await enqueueMovieQueue(env, await readJson(request), auth, url.origin)), request);
       }
 
       const movieQueueAction = url.pathname.match(/^\/api\/movies\/queue\/([0-9a-f-]{36})\/(retry|resolve|reject)$/i);
