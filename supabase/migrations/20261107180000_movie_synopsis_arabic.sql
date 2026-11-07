@@ -53,7 +53,7 @@ create or replace function public.set_movie_synopsis_defaults()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, public
-as $
+as $trigger$
 begin
   if new.overview_language is null then
     new.overview_language := 'pending';
@@ -63,7 +63,7 @@ begin
   end if;
   return new;
 end;
-$;
+$trigger$;
 
 drop trigger if exists movie_synopsis_defaults on public.movie_titles;
 create trigger movie_synopsis_defaults
