@@ -62,7 +62,7 @@ export async function enqueueMovieQueue(env, body, actor) {
   const duplicates = [];
   for (const title of titles) {
     const normalized = normalizeMovieQueueTitle(title);
-    if (!normalized) continue;
+    if (!normalized) throw new Error("Each title must contain at least one letter or number");
     const { data: existing, error: lookupError } = await supabase
       .from("movie_queue_items")
       .select("id,submitted_title,status")
@@ -85,6 +85,20 @@ export async function enqueueMovieQueue(env, body, actor) {
       })
       .select("id,submitted_title,media_type,status,created_at")
       .single();
+    if (error?.code === "23505") {
+      const { data: raced, error: racedLookupError } = await supabase
+        .from("movie_queue_items")
+        .select("id,status")
+        .eq("normalized_title", normalized)
+        .eq("media_type", mediaType)
+        .in("status", ACTIVE_DUPLICATE_STATES)
+        .limit(1);
+      if (racedLookupError) throw racedLookupError;
+      if (raced?.length) {
+        duplicates.push({ title, existing_id: raced[0].id, status: raced[0].status });
+        continue;
+      }
+    }
     if (error) throw error;
     inserted.push(data);
   }
@@ -112,15 +126,16 @@ export async function retryMovieQueueItem(env, id) {
   return data;
 }
 
-async function getSystemActor(env) {
+async function getQueueSubmitterActor(env, submitterId) {
+  if (!submitterId) throw new Error("Queue item has no submitting administrator for audit attribution");
   const { data, error } = await getSupabase(env)
     .from("admin_profiles")
     .select("id")
+    .eq("id", submitterId)
     .eq("is_active", true)
-    .limit(1)
     .maybeSingle();
   if (error) throw error;
-  if (!data?.id) throw new Error("No active administrator is available for the scheduled import audit");
+  if (!data?.id) throw new Error("The administrator who submitted this queue item is no longer active");
   return { userId: data.id };
 }
 
@@ -157,32 +172,52 @@ async function saveAlreadyInCatalog(supabase, itemId, catalogTitleId, tmdbId, no
 
 export async function resolveMovieQueueItem(env, id, body, actor) {
   const supabase = getSupabase(env);
-  const { data: item, error } = await supabase
-    .from("movie_queue_items")
-    .select("id,status,media_type,tmdb_candidates")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw error;
-  if (!item || item.status !== "needs_review") throw new Error("Queue item is not waiting for match review");
-  const tmdbId = String(body?.tmdb_id || "");
-  const candidate = (item.tmdb_candidates || []).find((entry) => String(entry.tmdb_id) === tmdbId);
-  if (!candidate) throw new Error("Selected TMDB result is not in this queue item's candidate list");
-  const existingTitleId = await findExistingCatalogTitle(supabase, tmdbId);
-  if (existingTitleId) {
-    await saveAlreadyInCatalog(supabase, id, existingTitleId, tmdbId, new Date().toISOString());
-    return { queue_item_id: id, catalog_title_id: existingTitleId, status: "already_in_catalog" };
-  }
-  const imported = await importTmdbCatalogItem(env, tmdbId, item.media_type, actor);
-  await saveQueueState(supabase, id, {
-    status: "ready_for_review",
-    tmdb_id: Number(tmdbId),
-    catalog_title_id: imported.id,
-    tmdb_candidates: [],
-    processed_at: new Date().toISOString(),
-    last_error_code: null,
-    last_error_message: null
+  const leaseExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const { data: claimed, error: claimError } = await supabase.rpc("claim_movie_queue_resolution", {
+    p_queue_item_id: id,
+    p_lease_expires_at: leaseExpiresAt
   });
-  return { queue_item_id: id, catalog_title_id: imported.id, status: "ready_for_review" };
+  if (claimError) throw claimError;
+  const item = Array.isArray(claimed) ? claimed[0] : claimed;
+  if (!item) throw new Error("Queue item is no longer waiting for match review");
+
+  try {
+    const tmdbId = String(body?.tmdb_id || "");
+    const candidate = (item.tmdb_candidates || []).find((entry) => String(entry.tmdb_id) === tmdbId);
+    if (!candidate) throw new Error("Selected TMDB result is not in this queue item's candidate list");
+
+    const existingTitleId = await findExistingCatalogTitle(supabase, tmdbId);
+    if (existingTitleId) {
+      await saveAlreadyInCatalog(supabase, id, existingTitleId, tmdbId, new Date().toISOString());
+      return { queue_item_id: id, catalog_title_id: existingTitleId, status: "already_in_catalog" };
+    }
+
+    const imported = await importTmdbCatalogItem(env, tmdbId, item.media_type, actor);
+    await saveQueueState(supabase, id, {
+      status: "ready_for_review",
+      tmdb_id: Number(tmdbId),
+      catalog_title_id: imported.id,
+      tmdb_candidates: [],
+      processed_at: new Date().toISOString(),
+      last_error_code: null,
+      last_error_message: null
+    });
+    return { queue_item_id: id, catalog_title_id: imported.id, status: "ready_for_review" };
+  } catch (error) {
+    const { error: releaseError } = await supabase
+      .from("movie_queue_items")
+      .update({ status: "needs_review", lease_expires_at: null })
+      .eq("id", id)
+      .eq("status", "processing")
+      .eq("lease_expires_at", leaseExpiresAt);
+    if (releaseError) {
+      console.error("FINDLY movie queue match claim could not be released:", {
+        item_id: id,
+        code: releaseError.code || null
+      });
+    }
+    throw error;
+  }
 }
 
 export async function rejectMovieQueueItem(env, id) {
@@ -252,7 +287,7 @@ export async function processMovieQueueHourly(env, now = new Date()) {
       return { processed: true, item_id: item.id, status: "already_in_catalog" };
     }
 
-    const actor = await getSystemActor(env);
+    const actor = await getQueueSubmitterActor(env, item.created_by);
     const imported = await importTmdbCatalogItem(env, selected.tmdb_id, item.media_type, actor);
     await saveQueueState(supabase, item.id, {
       status: "ready_for_review",
