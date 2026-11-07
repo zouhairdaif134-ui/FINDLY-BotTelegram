@@ -413,16 +413,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   if (title.media_type === "series") {
     keyboard.push([{ text: "📚 المواسم والحلقات", callback_data: "movies:seasons:" + title.id }]);
   }
-  if (bot.slug === "findly") {
-    const moviesBot = await getMoviesBot(env);
-    const username = moviesBot?.telegram_username?.replace(/^@/, "");
-    if (username) {
-      keyboard.push([{
-        text: "▶️ فتح في FINDLY Movies",
-        url: "https://t.me/" + username + "?start=movie_" + title.id
-      }]);
-    }
-  }
+
   keyboard.push([{ text: "⬅️ رجوع للقائمة", callback_data: "movies:home" }]);
 
   const caption = buildTitleCaption(title);
