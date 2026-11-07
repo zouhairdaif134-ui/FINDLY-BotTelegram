@@ -22,6 +22,10 @@ create table if not exists public.movie_queue_items (
   processed_at timestamptz
 );
 
+create unique index if not exists movie_queue_active_title_unique_idx
+  on public.movie_queue_items(media_type, normalized_title)
+  where status in ('pending','processing','needs_review','ready_for_review','already_in_catalog');
+
 create index if not exists movie_queue_status_due_idx
   on public.movie_queue_items(status, next_attempt_at, created_at);
 create index if not exists movie_queue_created_idx
@@ -91,6 +95,27 @@ $$;
 
 revoke all on function public.claim_next_movie_queue_item(timestamptz, timestamptz) from public, anon, authenticated;
 grant execute on function public.claim_next_movie_queue_item(timestamptz, timestamptz) to service_role;
+
+create or replace function public.claim_movie_queue_resolution(
+  p_queue_item_id uuid,
+  p_lease_expires_at timestamptz
+)
+returns setof public.movie_queue_items
+language sql
+security invoker
+set search_path = public
+as $
+  update public.movie_queue_items
+  set status = 'processing',
+      lease_expires_at = p_lease_expires_at,
+      updated_at = now()
+  where id = p_queue_item_id
+    and status = 'needs_review'
+  returning *;
+$;
+
+revoke all on function public.claim_movie_queue_resolution(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function public.claim_movie_queue_resolution(uuid, timestamptz) to service_role;
 
 create or replace function public.set_movie_queue_updated_at()
 returns trigger
