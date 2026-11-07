@@ -20,12 +20,18 @@ export default function MovieQueueSection({ fetchApi }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [tmdbProcessingEnabled, setTmdbProcessingEnabled] = useState(false);
 
   async function refresh() {
     setLoading(true);
     setError("");
     try {
-      setItems(await fetchApi("/api/movies/queue"));
+      const [queueItems, queueStatus] = await Promise.all([
+        fetchApi("/api/movies/queue"),
+        fetchApi("/api/movies/queue/status")
+      ]);
+      setItems(queueItems);
+      setTmdbProcessingEnabled(queueStatus.tmdb_processing_enabled === true);
     } catch (err) {
       setError(err.message || "تعذر تحميل لائحة الأفلام");
     } finally {
@@ -75,7 +81,7 @@ export default function MovieQueueSection({ fetchApi }) {
       <header className="panel-header">
         <div>
           <h2>طابور الأفلام</h2>
-          <p>أضف لائحة العناوين. FINDLY يعالج فيلماً واحداً في كل ساعة ويحضّره كمسودة فقط.</p>
+          <p>أضف لائحة العناوين. بعد تفعيل مصدر البيانات بترخيص تجاري، FINDLY يعالج فيلماً واحداً في كل ساعة ويحضّره كمسودة فقط.</p>
         </div>
         <button className="secondary-button" type="button" onClick={refresh} disabled={loading}>تحديث</button>
       </header>
@@ -102,6 +108,7 @@ export default function MovieQueueSection({ fetchApi }) {
         </div>
       </form>
 
+      {!tmdbProcessingEnabled && <div className="auth-error" role="status">المعالجة التلقائية متوقفة حالياً حتى تأكيد الترخيص التجاري لمصدر بيانات الأفلام.</div>}
       {error && <div className="auth-error" role="alert">{error}</div>}
       {notice && <div className="auth-success" role="status">{notice}</div>}
 
