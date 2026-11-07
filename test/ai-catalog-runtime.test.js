@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateAIReply } from "../src/lib/ai.js";
+import { generateAIReply, classifyAIError } from "../src/lib/ai.js";
 
 function createCatalogDb() {
   const calls = [];
@@ -306,4 +306,59 @@ test("normalizes nested chat-completion tool calls from the native Workers AI bi
   assert.equal(reply, "لقيت Dune (2021).");
   assert.equal(calls.length, 2);
   assert.ok(db.calls.some((call) => call.table === "movie_titles"));
+});
+
+
+test("Workers AI binding rejects capacity-queued requests and classifies busy responses", async () => {
+  let runOptions;
+  const env = {
+    AI: {
+      async run(_model, _options, options) {
+        runOptions = options;
+        const error = new Error("Capacity temporarily exceeded, please try again.");
+        error.status = 429;
+        error.code = 3040;
+        throw error;
+      }
+    }
+  };
+
+  await assert.rejects(
+    generateAIReply(env, { id: "bot-id" }, "سلام", { config }),
+    (error) => classifyAIError(error).category === "rate_limited"
+  );
+  assert.deepEqual(runOptions, { rejectIfBusy: true });
+});
+
+test("Workers AI binding times out instead of leaving the request pending", async () => {
+  const env = {
+    AI: {
+      run() {
+        return new Promise(() => {});
+      }
+    }
+  };
+  const shortConfig = { ...config, timeoutMs: 15 };
+  await assert.rejects(
+    generateAIReply(env, { id: "bot-id" }, "سلام", { config: shortConfig }),
+    (error) => error?.name === "TimeoutError"
+  );
+});
+
+test("Moroccan Darija policy includes natural phrasing examples and rejects malformed wording", async () => {
+  let messages;
+  const env = {
+    AI: {
+      async run(_model, options) {
+        messages = options.messages;
+        return { response: "مرحبا، شنو بغيتي تعرف؟" };
+      }
+    }
+  };
+  await generateAIReply(env, { id: "bot-id" }, "سلام", { config });
+  const systemPrompt = messages[0].content;
+  assert.match(systemPrompt, /Natural Moroccan Darija examples/i);
+  assert.match(systemPrompt, /ما لقيتش/);
+  assert.match(systemPrompt, /واش بغيتي/);
+  assert.match(systemPrompt, /كاعيش/);
 });
