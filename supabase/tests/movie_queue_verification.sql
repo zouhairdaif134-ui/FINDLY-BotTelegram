@@ -26,6 +26,9 @@ begin
   if not has_function_privilege('service_role', 'public.claim_next_movie_queue_item(timestamptz,timestamptz)', 'execute') then
     raise exception 'service_role must execute the atomic claim function';
   end if;
+  if (select prosecdef from pg_proc where oid = 'public.claim_next_movie_queue_item(timestamptz,timestamptz)'::regprocedure) then
+    raise exception 'atomic claim function must remain SECURITY INVOKER';
+  end if;
   if has_function_privilege('anon', 'public.claim_next_movie_queue_item(timestamptz,timestamptz)', 'execute') then
     raise exception 'anon must not execute the atomic claim function';
   end if;
