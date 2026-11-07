@@ -4,6 +4,10 @@ import { searchTmdbCatalog, importTmdbCatalogItem, assertTmdbCommercialUseAllowe
 const ACTIVE_DUPLICATE_STATES = ["pending", "processing", "resolving", "needs_review", "ready_for_review", "already_in_catalog"];
 const MAX_BATCH_SIZE = 100;
 
+export function isMovieQueueProcessingEnabled(env) {
+  return env?.TMDB_COMMERCIAL_LICENSE_APPROVED === "true";
+}
+
 export function normalizeMovieQueueTitle(value) {
   return String(value || "")
     .trim()
@@ -242,7 +246,7 @@ export async function rejectMovieQueueItem(env, id) {
 }
 
 export async function processMovieQueueHourly(env, now = new Date()) {
-  if (env.TMDB_COMMERCIAL_LICENSE_APPROVED !== "true") {
+  if (!isMovieQueueProcessingEnabled(env)) {
     return { processed: false, skipped: true, reason: "TMDB_COMMERCIAL_LICENSE_REQUIRED" };
   }
   const supabase = getSupabase(env);
