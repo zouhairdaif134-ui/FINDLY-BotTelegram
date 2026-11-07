@@ -4,7 +4,7 @@ import { searchTmdbCatalog, importTmdbCatalogItem } from "../routes/content.js";
 const ACTIVE_DUPLICATE_STATES = ["pending", "processing", "needs_review", "ready_for_review"];
 const MAX_BATCH_SIZE = 100;
 
-function normalizeTitle(value) {
+export function normalizeMovieQueueTitle(value) {
   return String(value || "")
     .trim()
     .toLocaleLowerCase()
@@ -16,7 +16,7 @@ function normalizeTitle(value) {
 
 function safeError(error) {
   return {
-    code: String(error?.code || "MOVIE_QUEUE_PROCESSING_FAILED").slice(0, 80),
+    code: String(error?.code || error?.name || "MOVIE_QUEUE_PROCESSING_FAILED").slice(0, 80),
     message: String(error?.message || "Unknown processing error").slice(0, 500)
   };
 }
@@ -51,7 +51,7 @@ export async function enqueueMovieQueue(env, body, actor) {
   const inserted = [];
   const duplicates = [];
   for (const title of titles) {
-    const normalized = normalizeTitle(title);
+    const normalized = normalizeMovieQueueTitle(title);
     if (!normalized) continue;
     const { data: existing, error: lookupError } = await supabase
       .from("movie_queue_items")
@@ -87,6 +87,7 @@ export async function retryMovieQueueItem(env, id) {
     .from("movie_queue_items")
     .update({
       status: "pending",
+      attempt_count: 0,
       next_attempt_at: new Date().toISOString(),
       lease_expires_at: null,
       last_error_code: null,
@@ -195,7 +196,16 @@ export async function processMovieQueueHourly(env, now = new Date()) {
       });
       return { processed: true, item_id: item.id, status: "failed" };
     }
-    if (results.length > 1) {
+    const exactMatches = results.filter((candidate) =>
+      normalizeMovieQueueTitle(candidate.title) === normalizeMovieQueueTitle(item.submitted_title)
+    );
+    const selected = exactMatches.length === 1
+      ? exactMatches[0]
+      : results.length === 1
+        ? results[0]
+        : null;
+
+    if (!selected) {
       await saveQueueState(supabase, item.id, {
         status: "needs_review",
         tmdb_candidates: results.slice(0, 10),
@@ -206,10 +216,10 @@ export async function processMovieQueueHourly(env, now = new Date()) {
     }
 
     const actor = await getSystemActor(env);
-    const imported = await importTmdbCatalogItem(env, results[0].tmdb_id, item.media_type, actor);
+    const imported = await importTmdbCatalogItem(env, selected.tmdb_id, item.media_type, actor);
     await saveQueueState(supabase, item.id, {
       status: "ready_for_review",
-      tmdb_id: results[0].tmdb_id,
+      tmdb_id: selected.tmdb_id,
       catalog_title_id: imported.id,
       tmdb_candidates: [],
       processed_at: nowIso,
