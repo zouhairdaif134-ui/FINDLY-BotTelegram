@@ -288,6 +288,6 @@ export async function markMovieQueuePublished(env, catalogTitleId) {
     .from("movie_queue_items")
     .update({ status: "published" })
     .eq("catalog_title_id", catalogTitleId)
-    .eq("status", "ready_for_review");
+    .in("status", ["ready_for_review", "already_in_catalog"]);
   if (error) throw error;
 }
