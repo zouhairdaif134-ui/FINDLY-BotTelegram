@@ -1,7 +1,7 @@
 import { getSupabase } from "./supabase.js";
 import { searchTmdbCatalog, importTmdbCatalogItem } from "../routes/content.js";
 
-const ACTIVE_DUPLICATE_STATES = ["pending", "processing", "needs_review", "ready_for_review"];
+const ACTIVE_DUPLICATE_STATES = ["pending", "processing", "needs_review", "ready_for_review", "already_in_catalog"];
 const MAX_BATCH_SIZE = 100;
 
 export function normalizeMovieQueueTitle(value) {
@@ -28,7 +28,7 @@ export async function listMovieQueue(env, status = null) {
     .select("id,submitted_title,normalized_title,media_type,status,tmdb_id,tmdb_candidates,catalog_title_id,attempt_count,next_attempt_at,last_error_code,last_error_message,created_at,updated_at,processed_at")
     .order("created_at", { ascending: false })
     .limit(300);
-  if (status && ["pending", "processing", "needs_review", "ready_for_review", "failed", "rejected", "published"].includes(status)) {
+  if (status && ["pending", "processing", "needs_review", "ready_for_review", "already_in_catalog", "failed", "rejected", "published"].includes(status)) {
     query = query.eq("status", status);
   }
   const { data, error } = await query;
@@ -122,6 +122,29 @@ async function saveQueueState(supabase, id, patch) {
   if (error) throw error;
 }
 
+async function findExistingCatalogTitle(supabase, tmdbId) {
+  const { data, error } = await supabase
+    .from("movie_external_ids")
+    .select("title_id")
+    .eq("provider", "tmdb")
+    .eq("external_id", String(tmdbId))
+    .maybeSingle();
+  if (error) throw error;
+  return data?.title_id || null;
+}
+
+async function saveAlreadyInCatalog(supabase, itemId, catalogTitleId, tmdbId, nowIso) {
+  await saveQueueState(supabase, itemId, {
+    status: "already_in_catalog",
+    tmdb_id: Number(tmdbId),
+    catalog_title_id: catalogTitleId,
+    tmdb_candidates: [],
+    processed_at: nowIso,
+    last_error_code: null,
+    last_error_message: null
+  });
+}
+
 export async function resolveMovieQueueItem(env, id, body, actor) {
   const supabase = getSupabase(env);
   const { data: item, error } = await supabase
@@ -134,6 +157,11 @@ export async function resolveMovieQueueItem(env, id, body, actor) {
   const tmdbId = String(body?.tmdb_id || "");
   const candidate = (item.tmdb_candidates || []).find((entry) => String(entry.tmdb_id) === tmdbId);
   if (!candidate) throw new Error("Selected TMDB result is not in this queue item's candidate list");
+  const existingTitleId = await findExistingCatalogTitle(supabase, tmdbId);
+  if (existingTitleId) {
+    await saveAlreadyInCatalog(supabase, id, existingTitleId, tmdbId, new Date().toISOString());
+    return { queue_item_id: id, catalog_title_id: existingTitleId, status: "already_in_catalog" };
+  }
   const imported = await importTmdbCatalogItem(env, tmdbId, item.media_type, actor);
   await saveQueueState(supabase, id, {
     status: "ready_for_review",
@@ -213,6 +241,12 @@ export async function processMovieQueueHourly(env, now = new Date()) {
         last_error_message: null
       });
       return { processed: true, item_id: item.id, status: "needs_review" };
+    }
+
+    const existingTitleId = await findExistingCatalogTitle(supabase, selected.tmdb_id);
+    if (existingTitleId) {
+      await saveAlreadyInCatalog(supabase, item.id, existingTitleId, selected.tmdb_id, nowIso);
+      return { processed: true, item_id: item.id, status: "already_in_catalog" };
     }
 
     const actor = await getSystemActor(env);
