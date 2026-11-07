@@ -46,3 +46,15 @@ test("enforces service-role-only memory access with RLS", () => {
 test("uses a pinned search path for the timestamp trigger function", () => {
   assert.match(migration, /create or replace function public\.set_ai_memory_updated_at\(\)[\s\S]*set search_path = ''/i);
 });
+
+test("indexes the bot foreign key without changing the per-user history index", () => {
+  const followupPath = new URL(
+    "../supabase/migrations/20261107000200_ai_memory_bot_fk_index.sql",
+    import.meta.url
+  );
+  const followup = existsSync(followupPath)
+    ? readFileSync(followupPath, "utf8")
+    : "";
+  assert.match(followup, /create index if not exists ai_user_session_messages_bot_idx/i);
+  assert.match(followup, /on public\.ai_user_session_messages \(bot_id\)/i);
+});
