@@ -5,7 +5,7 @@ create table if not exists public.movie_queue_items (
   normalized_title text not null,
   media_type text not null check (media_type in ('movie', 'series')),
   status text not null default 'pending' check (status in (
-    'pending','processing','needs_review','ready_for_review','failed','rejected','published'
+    'pending','processing','needs_review','ready_for_review','already_in_catalog','failed','rejected','published'
   )),
   tmdb_id bigint,
   tmdb_candidates jsonb not null default '[]'::jsonb,
