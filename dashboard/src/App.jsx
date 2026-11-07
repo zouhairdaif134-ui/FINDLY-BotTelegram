@@ -12,13 +12,15 @@ import { buildMovieShareContent } from "../../src/lib/movie-sharing.js";
 const PRODUCTION_API_URL =
   "https://findly-v3-api.berrchidcity99.workers.dev";
 const PREVIEW_API_URL =
-  "https://feat-ai-advanced-phase1-findly-v3-api.berrchidcity99.workers.dev";
+  "https://feat-hourly-movie-queue-findly-v3-api.berrchidcity99.workers.dev";
 const isPagesPreview =
   typeof window !== "undefined" &&
   (window.location.hostname ===
     "feat-findly-movies-runtime-h.findly-bottelegram.pages.dev" ||
     window.location.hostname ===
     "feat-ai-advanced-phase1.findly-bottelegram.pages.dev" ||
+    window.location.hostname ===
+    "feat-hourly-movie-queue.findly-bottelegram.pages.dev" ||
     /^[a-f0-9]{8}\.findly-bottelegram\.pages\.dev$/.test(
       window.location.hostname
     ));
