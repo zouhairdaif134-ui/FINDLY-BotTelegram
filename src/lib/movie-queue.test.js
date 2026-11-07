@@ -117,7 +117,7 @@ test("rejects unprefixed or invalid mixed queue lines instead of guessing their 
 });
 
 
-test("enqueues a mixed batch with two Supabase requests and reports existing and in-batch duplicates", async () => {
+test("enqueues a mixed batch with batched catalog and queue lookups and reports duplicates", async () => {
   const calls = [];
   const existingRows = [{
     id: "existing-1",
