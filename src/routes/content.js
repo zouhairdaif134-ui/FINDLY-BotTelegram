@@ -240,17 +240,22 @@ function tmdbImage(path, size = "w500") {
   return path ? "https://image.tmdb.org/t/p/" + size + path : null;
 }
 
-export function assertTmdbCommercialUseAllowed(env) {
-  if (env.TMDB_COMMERCIAL_LICENSE_APPROVED !== "true") {
-    const error = new Error("TMDB commercial use is disabled until the required commercial license is confirmed");
-    error.code = "TMDB_COMMERCIAL_LICENSE_REQUIRED";
+export function isTmdbAccessEnabled(env) {
+  return env?.TMDB_COMMERCIAL_LICENSE_APPROVED === "true" ||
+    env?.TMDB_NONCOMMERCIAL_DEVELOPMENT === "true";
+}
+
+export function assertTmdbAccessAllowed(env) {
+  if (!isTmdbAccessEnabled(env)) {
+    const error = new Error("TMDB access is disabled. Enable non-commercial development mode only for genuinely non-commercial testing, or provide confirmed commercial approval.");
+    error.code = "TMDB_ACCESS_DISABLED";
     error.status = 403;
     throw error;
   }
 }
 
 async function tmdbRequest(env, path, params = {}) {
-  assertTmdbCommercialUseAllowed(env);
+  assertTmdbAccessAllowed(env);
   if (!env.TMDB_API_KEY) {
     const error = new Error("TMDB_API_KEY is not configured on the Worker");
     error.code = "TMDB_NOT_CONFIGURED";
