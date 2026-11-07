@@ -59,7 +59,7 @@ export async function listMovieQueue(env, status = null) {
   let query = supabase
     .from("movie_queue_items")
     .select("id,submitted_title,normalized_title,media_type,status,tmdb_id,tmdb_candidates,catalog_title_id,attempt_count,next_attempt_at,last_error_code,last_error_message,created_at,updated_at,processed_at")
-    .order("created_at", { ascending: true }).order("id", { ascending: true })
+    .order("created_at", { ascending: true }).order("queue_order", { ascending: true })
     .limit(300);
   if (status && ["pending", "processing", "resolving", "needs_review", "ready_for_review", "already_in_catalog", "failed", "rejected", "published"].includes(status)) {
     query = query.eq("status", status);
