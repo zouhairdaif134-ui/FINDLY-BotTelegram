@@ -6,8 +6,14 @@ declare
   v_next_hour_count integer;
   v_first_id uuid;
   v_second_id uuid;
+  v_review_id uuid;
+  v_review_claim_count integer;
+  v_duplicate_rejected boolean := false;
   v_slot timestamptz := date_trunc('hour', now());
 begin
+  delete from public.movie_queue_slots;
+  delete from public.movie_queue_items;
+
   if not (select relrowsecurity from pg_class where oid = 'public.movie_queue_items'::regclass) then
     raise exception 'movie_queue_items must have RLS enabled';
   end if;
@@ -32,6 +38,29 @@ begin
   if has_function_privilege('anon', 'public.claim_next_movie_queue_item(timestamptz,timestamptz)', 'execute') then
     raise exception 'anon must not execute the atomic claim function';
   end if;
+  if not has_function_privilege('service_role', 'public.claim_movie_queue_resolution(uuid,timestamptz)', 'execute') then
+    raise exception 'service_role must execute the atomic match-resolution claim function';
+  end if;
+  if has_function_privilege('authenticated', 'public.claim_movie_queue_resolution(uuid,timestamptz)', 'execute') then
+    raise exception 'authenticated must not execute the atomic match-resolution claim function';
+  end if;
+
+  begin
+    insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
+    values ('Duplicate Queue Test', 'duplicate queue test', 'movie');
+    insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
+    values ('Duplicate Queue Test Copy', 'duplicate queue test', 'movie');
+  exception when unique_violation then
+    v_duplicate_rejected := true;
+  end;
+  if not v_duplicate_rejected then
+    raise exception 'active duplicate titles must be rejected by the unique index';
+  end if;
+  update public.movie_queue_items
+    set status = 'failed'
+    where normalized_title = 'duplicate queue test';
+  insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
+  values ('Duplicate Queue Test Retry', 'duplicate queue test', 'movie');
 
   insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
   values ('Queue Test One', 'queue test one', 'movie')
@@ -62,6 +91,20 @@ begin
 
   if (select count(*) from public.movie_queue_items where status = 'processing' and attempt_count = 1) <> 2 then
     raise exception 'claimed items must enter processing with one attempt';
+  end if;
+
+  insert into public.movie_queue_items(submitted_title, normalized_title, media_type, status)
+  values ('Resolution Review Test', 'resolution review test', 'movie', 'needs_review')
+  returning id into v_review_id;
+  select count(*) into v_review_claim_count
+  from public.claim_movie_queue_resolution(v_review_id, now() + interval '10 minutes');
+  if v_review_claim_count <> 1 then
+    raise exception 'first manual resolver must claim the needs_review item';
+  end if;
+  select count(*) into v_review_claim_count
+  from public.claim_movie_queue_resolution(v_review_id, now() + interval '10 minutes');
+  if v_review_claim_count <> 0 then
+    raise exception 'second manual resolver must not claim an already-processing item';
   end if;
 end;
 $$;
