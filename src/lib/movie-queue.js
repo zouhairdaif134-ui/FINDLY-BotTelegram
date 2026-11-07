@@ -69,30 +69,45 @@ export async function listMovieQueue(env, status = null) {
   return data || [];
 }
 
-async function findActiveQueueItems(supabase, entries) {
+async function findExistingCatalogItems(supabase, entries) {
   const normalizedTitles = [...new Set(entries.map((entry) => entry.normalized_title))];
   const mediaTypes = [...new Set(entries.map((entry) => entry.media_type))];
   const { data, error } = await supabase
-    .from("movie_queue_items")
-    .select("id,submitted_title,normalized_title,status,media_type")
+    .from("movie_titles")
+    .select("id,title,normalized_title,status,media_type,release_year")
     .in("normalized_title", normalizedTitles)
-    .in("media_type", mediaTypes)
-    .in("status", ACTIVE_DUPLICATE_STATES);
+    .in("media_type", mediaTypes);
   if (error) throw error;
   return data || [];
 }
 
-function queueDuplicate(entry, existing, status = existing.status) {
+async function findAllQueueItems(supabase, entries) {
+  const normalizedTitles = [...new Set(entries.map((entry) => entry.normalized_title))];
+  const mediaTypes = [...new Set(entries.map((entry) => entry.media_type))];
+  const { data, error } = await supabase
+    .from("movie_queue_items")
+    .select("id,submitted_title,normalized_title,status,media_type,catalog_title_id")
+    .in("normalized_title", normalizedTitles)
+    .in("media_type", mediaTypes);
+  if (error) throw error;
+  return data || [];
+}
+
+function queueDuplicate(entry, existing, status = existing.status, existingType = "queue", shareOrigin = null) {
+  const isCatalog = existingType === "catalog";
+  const isPublished = isCatalog && existing.status === "active";
   return {
     title: entry.title,
-    existing_title: existing.submitted_title,
+    existing_title: isCatalog ? existing.title : existing.submitted_title,
     existing_id: existing.id || null,
+    existing_type: existingType,
+    existing_url: isPublished && shareOrigin ? `${shareOrigin}/share/movie/${existing.id}` : null,
     media_type: entry.media_type,
     status
   };
 }
 
-export async function enqueueMovieQueueBatch(supabase, entries, actor) {
+export async function enqueueMovieQueueBatch(supabase, entries, actor, shareOrigin = null) {
   if (!Array.isArray(entries) || !entries.length) {
     throw new Error("Enter at least one movie or series title");
   }
@@ -132,17 +147,30 @@ export async function enqueueMovieQueueBatch(supabase, entries, actor) {
     firstEntries.push(normalizedEntry);
   }
 
-  const existingRows = await findActiveQueueItems(supabase, firstEntries);
-  const existingByKey = new Map(existingRows.map((row) => [
+  const [catalogRows, queueRows] = await Promise.all([
+    findExistingCatalogItems(supabase, firstEntries),
+    findAllQueueItems(supabase, firstEntries)
+  ]);
+  const catalogByKey = new Map(catalogRows.map((row) => [
+    `${row.media_type}:${row.normalized_title}`,
+    row
+  ]));
+  const queueByKey = new Map(queueRows.map((row) => [
     `${row.media_type}:${row.normalized_title}`,
     row
   ]));
 
   const rowsToInsert = [];
   for (const entry of firstEntries) {
-    const existing = existingByKey.get(`${entry.media_type}:${entry.normalized_title}`);
+    const key = `${entry.media_type}:${entry.normalized_title}`;
+    const catalogMatch = catalogByKey.get(key);
+    const queueMatch = queueByKey.get(key);
+    const existing = catalogMatch || queueMatch;
     if (existing) {
-      duplicates.push({ ...queueDuplicate(entry, existing), _input_order: entry.input_order });
+      duplicates.push({
+        ...queueDuplicate(entry, existing, existing.status, catalogMatch ? "catalog" : "queue", shareOrigin),
+        _input_order: entry.input_order
+      });
     } else {
       rowsToInsert.push({
         submitted_title: entry.title,
@@ -173,20 +201,26 @@ export async function enqueueMovieQueueBatch(supabase, entries, actor) {
   if (error?.code === "23505") {
     // A concurrent admin may have inserted one of these titles after our lookup.
     // Re-read the conflicting keys, report them, and retry the remaining rows once.
-    const racedRows = await findActiveQueueItems(supabase, firstEntries);
-    const racedByKey = new Map(racedRows.map((row) => [
-      `${row.media_type}:${row.normalized_title}`,
-      row
-    ]));
+    const [racedCatalogRows, racedQueueRows] = await Promise.all([
+      findExistingCatalogItems(supabase, firstEntries),
+      findAllQueueItems(supabase, firstEntries)
+    ]);
+    const racedByKey = new Map([
+      ...racedQueueRows.map((row) => [`${row.media_type}:${row.normalized_title}`, { ...row, _existing_type: "queue" }]),
+      ...racedCatalogRows.map((row) => [`${row.media_type}:${row.normalized_title}`, { ...row, _existing_type: "catalog" }])
+    ]);
     const retryRows = [];
     for (const row of rowsToInsert) {
       const existing = racedByKey.get(`${row.media_type}:${row.normalized_title}`);
       if (existing) {
         const original = firstByKey.get(`${row.media_type}:${row.normalized_title}`);
-        duplicates.push({ ...queueDuplicate({
-          title: row.submitted_title,
-          media_type: row.media_type
-        }, existing), _input_order: original?.input_order ?? Number.MAX_SAFE_INTEGER });
+        duplicates.push({
+          ...queueDuplicate({
+            title: row.submitted_title,
+            media_type: row.media_type
+          }, existing, existing.status, existing._existing_type, shareOrigin),
+          _input_order: original?.input_order ?? Number.MAX_SAFE_INTEGER
+        });
       } else {
         retryRows.push(row);
       }
@@ -209,7 +243,7 @@ export async function enqueueMovieQueueBatch(supabase, entries, actor) {
   };
 }
 
-export async function enqueueMovieQueue(env, body, actor) {
+export async function enqueueMovieQueue(env, body, actor, shareOrigin = null) {
   const requestedType = body?.media_type || "movie";
   if (!["movie", "series", "mixed"].includes(requestedType)) {
     throw new Error("media_type must be movie, series, or mixed");
@@ -221,7 +255,7 @@ export async function enqueueMovieQueue(env, body, actor) {
       .map((value) => ({ title: String(value || "").trim(), media_type: requestedType }))
       .filter((entry) => entry.title);
 
-  return enqueueMovieQueueBatch(getSupabase(env), entries, actor);
+  return enqueueMovieQueueBatch(getSupabase(env), entries, actor, shareOrigin);
 }
 
 export async function retryMovieQueueItem(env, id) {
