@@ -53,7 +53,7 @@ export function parseMoviesCallback(value) {
     if (!Number.isInteger(year) || year < 1888 || year > 2200 || !Number.isInteger(page) || page < 0) return null;
     return { action, year, page };
   }
-  if (["home", "library", "categories", "yearprompt", "new", "old", "top", "az", "films", "series", "favorites", "search", "help"].includes(action)) {
+  if (["home", "library", "categories", "yearprompt", "added", "new", "old", "top", "az", "films", "series", "favorites", "search", "help"].includes(action)) {
     const page = Number(parts[2] || 0);
     return { action, page: Number.isInteger(page) && page >= 0 ? page : 0 };
   }
@@ -147,7 +147,7 @@ export async function showMoviesHome(env, bot, chatId) {
       { text: "🗂️ التصنيفات", callback_data: "movies:categories" }
     ],
     [
-      { text: "🆕 الأحدث", callback_data: "movies:new:0" },
+      { text: "🆕 المضاف حديثاً", callback_data: "movies:added:0" },
       { text: "⭐ الأعلى تقييماً", callback_data: "movies:top:0" }
     ],
     [
@@ -249,6 +249,7 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
   }
 
   if (action === "top") query = query.order("rating", { ascending: false, nullsFirst: false });
+  else if (action === "added") query = query.order("created_at", { ascending: false });
   else if (action === "old") query = query.order("release_date", { ascending: true, nullsFirst: false });
   else if (action === "az") query = query.order("title", { ascending: true });
   else query = query.order("release_date", { ascending: false, nullsFirst: false });
@@ -306,7 +307,7 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
     { text: "📺 مسلسلات", callback_data: "movies:series:0" }
   ]);
   keyboard.push([
-    { text: "🆕 الأحدث", callback_data: "movies:new:0" },
+    { text: "🆕 المضاف حديثاً", callback_data: "movies:added:0" },
     { text: "🕰️ الأقدم", callback_data: "movies:old:0" },
     { text: "⭐ التقييم", callback_data: "movies:top:0" },
     { text: "A–Z", callback_data: "movies:az:0" }
