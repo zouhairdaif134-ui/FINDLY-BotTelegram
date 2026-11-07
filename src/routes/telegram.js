@@ -1584,12 +1584,15 @@ async function processTelegramUpdate(
     }
   } catch (error) {
     const safeAIError = classifyAIError(error);
+    const durationMs = Math.max(0, Date.now() - aiStartedAt);
     console.error("AI reply failed:", {
       botSlug: bot?.slug || null,
-      category: safeAIError.category
+      category: safeAIError.category,
+      duration_ms: durationMs
     });
     const errorTelemetryRecorded = await recordAIAnalyticsBestEffort(
-      recordAnalytics, env, bot, "ai_error", safeAIError
+      recordAnalytics, env, bot, "ai_error",
+      { ...safeAIError, duration_ms: durationMs }
     );
     if (!errorTelemetryRecorded) {
       console.warn("AI error telemetry could not be recorded:", {

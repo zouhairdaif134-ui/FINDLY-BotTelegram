@@ -641,12 +641,14 @@ export default {
           update_id: update?.update_id ?? null
         });
 
+        let processingError = null;
         const processUpdate =
           handleTelegramUpdate(
             env,
             botSlug,
             update
           ).catch((error) => {
+            processingError = error;
             console.error(
               "Telegram webhook processing failed:",
               {
@@ -657,7 +659,23 @@ export default {
             );
           });
 
-        if (ctx && typeof ctx.waitUntil === "function") {
+        // The Master bot's AI response is user-facing work, not background
+        // analytics. Await it so Cloudflare's 30-second waitUntil window
+        // cannot cancel a slow answer after Telegram has already received 200.
+        // Other bots keep their existing ack-first background processing.
+        if (botSlug === "findly") {
+          await processUpdate;
+          if (processingError) {
+            return withCors(
+              failure(
+                "TELEGRAM_PROCESSING_ERROR",
+                "Telegram update processing failed",
+                500
+              ),
+              request
+            );
+          }
+        } else if (ctx && typeof ctx.waitUntil === "function") {
           ctx.waitUntil(processUpdate);
         } else {
           await processUpdate;
