@@ -105,7 +105,7 @@ export default function MovieQueueSection({ fetchApi }) {
           </label>
           <label className="movies-field movies-field-wide">
             <span>لائحة العناوين</span>
-            <textarea rows={7} maxLength={20000} value={titles} onChange={(event) => setTitles(event.target.value)} placeholder={mediaType === "mixed" ? "MOVIE | Inception\\nTV | Breaking Bad\\nMOVIE | Interstellar\\nTV | Dark" : "Interstellar\\nInception\\nThe Dark Knight"} />\n            {mediaType === "mixed" && <small>في الوضع المختلط، ضروري كل سطر يبدأ بـ MOVIE | أو TV |. الترتيب كيبقى هو نفس ترتيب اللائحة.</small>}
+            <textarea rows={7} maxLength={20000} value={titles} onChange={(event) => setTitles(event.target.value)} placeholder={mediaType === "mixed" ? "MOVIE | Inception\nTV | Breaking Bad\nMOVIE | Interstellar\nTV | Dark" : "Interstellar\nInception\nThe Dark Knight"} />\n            {mediaType === "mixed" && <small>في الوضع المختلط، ضروري كل سطر يبدأ بـ MOVIE | أو TV |. الترتيب كيبقى هو نفس ترتيب اللائحة.</small>}
           </label>
         </div>
         <div className="movies-form-actions">
