@@ -235,3 +235,13 @@ export async function processMovieQueueHourly(env, now = new Date()) {
     return { processed: true, item_id: item.id, status: shouldRetry ? "pending" : "failed", error_code: details.code };
   }
 }
+
+export async function markMovieQueuePublished(env, catalogTitleId) {
+  if (!catalogTitleId) return;
+  const { error } = await getSupabase(env)
+    .from("movie_queue_items")
+    .update({ status: "published" })
+    .eq("catalog_title_id", catalogTitleId)
+    .eq("status", "ready_for_review");
+  if (error) throw error;
+}
