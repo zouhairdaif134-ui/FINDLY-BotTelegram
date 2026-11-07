@@ -54,3 +54,8 @@ test("accepts one exact TMDB title match", () => {
   const only = { tmdb_id: 89, title: "A Single Result" };
   assert.equal(selectTmdbQueueMatch([only], "a single result"), only);
 });
+
+test("matches an exact original TMDB title when the localized title differs", () => {
+  const only = { tmdb_id: 90, title: "The Shawshank Redemption", original_title: "Les Évadés" };
+  assert.equal(selectTmdbQueueMatch([only], "Les Evades"), only);
+});
