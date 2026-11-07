@@ -4391,7 +4391,7 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
         <label className="movies-field"><span>السنة</span><select value={yearFilter} onChange={(e) => resetPage(setYearFilter, e.target.value)}><option value="all">جميع السنوات</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
         <label className="movies-field"><span>التصنيف</span><select value={genreFilter} onChange={(e) => resetPage(setGenreFilter, e.target.value)}><option value="all">جميع التصنيفات</option>{genreNames.map((genre) => <option key={genre} value={genre}>{genre}</option>)}</select></label>
         {!isPublished && <label className="movies-field"><span>حالة النشر</span><select value={statusFilter} onChange={(e) => resetPage(setStatusFilter, e.target.value)}><option value="all">جميع الحالات</option><option value="draft">مسودة</option><option value="active">منشور</option><option value="inactive">متوقف</option></select></label>}
-        <label className="movies-field"><span>الترتيب</span><select value={sortOrder} onChange={(e) => resetPage(setSortOrder, e.target.value)}><option value="newest">الأحدث</option><option value="oldest">الأقدم</option><option value="title">الاسم A–Z</option><option value="rating">التقييم الأعلى</option></select></label>
+        <label className="movies-field"><span>الترتيب</span><select value={sortOrder} onChange={(e) => resetPage(setSortOrder, e.target.value)}><option value="newest">المضاف حديثاً</option><option value="oldest">الأقدم إضافة</option><option value="title">الاسم A–Z</option><option value="rating">التقييم الأعلى</option></select></label>
       </div>}
 
       {isGenres && <div className="movies-genre-grid">
