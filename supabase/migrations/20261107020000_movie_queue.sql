@@ -13,6 +13,7 @@ create table if not exists public.movie_queue_items (
   attempt_count integer not null default 0 check (attempt_count >= 0),
   next_attempt_at timestamptz not null default now(),
   lease_expires_at timestamptz,
+  lease_token uuid,
   last_slot_start timestamptz,
   last_error_code text,
   last_error_message text,
@@ -78,6 +79,7 @@ begin
   set status = 'processing',
       attempt_count = attempt_count + 1,
       lease_expires_at = p_lease_expires_at,
+      lease_token = gen_random_uuid(),
       last_slot_start = p_slot_start,
       last_error_code = null,
       last_error_message = null,
@@ -108,6 +110,7 @@ as $$
   update public.movie_queue_items
   set status = 'resolving',
       lease_expires_at = p_lease_expires_at,
+      lease_token = gen_random_uuid(),
       updated_at = now()
   where id = p_queue_item_id
     and status = 'needs_review'
