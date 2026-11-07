@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeMovieQueueTitle, selectTmdbQueueMatch, isMovieQueueProcessingEnabled, parseMovieQueueLines } from "./movie-queue.js";
 import { assertTmdbAccessAllowed } from "../routes/content.js";
+import * as movieQueue from "./movie-queue.js";
 
 test("normalizes whitespace, case, and punctuation consistently", () => {
   assert.equal(
@@ -113,4 +114,63 @@ test("rejects unprefixed or invalid mixed queue lines instead of guessing their 
     () => parseMovieQueueLines("Inception\nTV | Dark"),
     /Each line must start with MOVIE \| or TV \|/
   );
+});
+
+
+test("enqueues a mixed batch with two Supabase requests and reports existing and in-batch duplicates", async () => {
+  const calls = [];
+  const existingRows = [{
+    id: "existing-1",
+    submitted_title: "The Matrix",
+    normalized_title: "the matrix",
+    media_type: "movie",
+    status: "pending"
+  }];
+  const supabase = {
+    from(table) {
+      assert.equal(table, "movie_queue_items");
+      const state = { filters: [], insertRows: null };
+      const builder = {
+        select() { return builder; },
+        in(column, values) { state.filters.push({ column, values }); return builder; },
+        insert(rows) { state.insertRows = rows; return builder; },
+        then(resolve, reject) {
+          calls.push(state.insertRows ? "insert" : "lookup");
+          if (state.insertRows) {
+            return Promise.resolve({
+              data: state.insertRows.map((row, index) => ({
+                id: `new-${index}`,
+                submitted_title: row.submitted_title,
+                media_type: row.media_type,
+                status: "pending",
+                created_at: "2026-11-07T00:00:00.000Z"
+              })),
+              error: null
+            }).then(resolve, reject);
+          }
+          return Promise.resolve({ data: existingRows, error: null }).then(resolve, reject);
+        }
+      };
+      return builder;
+    }
+  };
+
+  const result = await movieQueue.enqueueMovieQueueBatch(supabase, [
+    { title: "Inception", media_type: "movie" },
+    { title: "Breaking Bad", media_type: "series" },
+    { title: "The Matrix", media_type: "movie" },
+    { title: "inception!", media_type: "movie" }
+  ], { userId: "admin-1" });
+
+  assert.deepEqual(calls, ["lookup", "insert"]);
+  assert.deepEqual(result.inserted.map((item) => item.submitted_title), ["Inception", "Breaking Bad"]);
+  assert.deepEqual(result.duplicates.map((item) => ({
+    title: item.title,
+    existing_title: item.existing_title,
+    status: item.status
+  })), [
+    { title: "The Matrix", existing_title: "The Matrix", status: "pending" },
+    { title: "inception!", existing_title: "Inception", status: "duplicate_in_batch" }
+  ]);
+  assert.equal(result.total_requested, 4);
 });
