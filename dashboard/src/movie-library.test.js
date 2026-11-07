@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { filterAndSortMovies, paginateMovies } from "./movie-library.js";
 
 const movies = [
-  { id: "1", title: "Dune: Part Two", media_type: "movie", release_year: 2024, rating: 8.5, status: "active", genres: ["Science Fiction"], updated_at: "2026-01-02" },
-  { id: "2", title: "Dark", media_type: "series", release_year: 2017, rating: 8.7, status: "draft", genres: ["Mystery"], updated_at: "2026-01-03" },
-  { id: "3", title: "Arrival", media_type: "movie", release_year: 2016, rating: 7.9, status: "inactive", genres: ["Science Fiction"], updated_at: "2026-01-01" }
+  { id: "1", title: "Dune: Part Two", media_type: "movie", release_year: 2024, rating: 8.5, status: "active", genres: ["Science Fiction"], created_at: "2026-01-02", updated_at: "2026-01-02" },
+  { id: "2", title: "Dark", media_type: "series", release_year: 2017, rating: 8.7, status: "draft", genres: ["Mystery"], created_at: "2026-01-03", updated_at: "2026-01-03" },
+  { id: "3", title: "Arrival", media_type: "movie", release_year: 2016, rating: 7.9, status: "inactive", genres: ["Science Fiction"], created_at: "2026-01-01", updated_at: "2026-01-01" }
 ];
 
 test("filters library by title, type, year, genre and publication status", () => {
@@ -17,6 +17,7 @@ test("filters library by title, type, year, genre and publication status", () =>
 });
 
 test("sorts library by rating, title, newest and oldest", () => {
+  assert.deepEqual(filterAndSortMovies(movies, { sort: "newest" }).map((item) => item.id), ["2", "1", "3"]);
   assert.deepEqual(filterAndSortMovies(movies, { sort: "rating" }).map((item) => item.id), ["2", "1", "3"]);
   assert.deepEqual(filterAndSortMovies(movies, { sort: "title" }).map((item) => item.title), ["Arrival", "Dark", "Dune: Part Two"]);
   assert.deepEqual(filterAndSortMovies(movies, { sort: "oldest" }).map((item) => item.id), ["3", "1", "2"]);
