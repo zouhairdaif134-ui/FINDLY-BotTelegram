@@ -57,6 +57,19 @@ begin
     raise exception 'active duplicate titles must be rejected by the unique index';
   end if;
   update public.movie_queue_items
+    set status = 'resolving'
+    where normalized_title = 'duplicate queue test';
+  v_duplicate_rejected := false;
+  begin
+    insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
+    values ('Duplicate While Resolving', 'duplicate queue test', 'movie');
+  exception when unique_violation then
+    v_duplicate_rejected := true;
+  end;
+  if not v_duplicate_rejected then
+    raise exception 'resolving titles must remain protected by active-title uniqueness';
+  end if;
+  update public.movie_queue_items
     set status = 'failed'
     where normalized_title = 'duplicate queue test';
   insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
