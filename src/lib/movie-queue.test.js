@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeMovieQueueTitle, selectTmdbQueueMatch } from "./movie-queue.js";
+import { assertTmdbCommercialUseAllowed } from "../routes/content.js";
 
 test("normalizes whitespace, case, and punctuation consistently", () => {
   assert.equal(
@@ -62,4 +63,18 @@ test("matches an exact original TMDB title when the localized title differs", ()
 
 test("rejects punctuation-only titles at enqueue normalization boundary", () => {
   assert.equal(normalizeMovieQueueTitle("!!! — ???"), "");
+});
+
+test("blocks TMDB access until commercial use is explicitly approved", () => {
+  assert.throws(
+    () => assertTmdbCommercialUseAllowed({ TMDB_API_KEY: "configured" }),
+    (error) => error.code === "TMDB_COMMERCIAL_LICENSE_REQUIRED" && error.status === 403
+  );
+});
+
+test("allows TMDB access only after the commercial approval flag is explicit", () => {
+  assert.doesNotThrow(() => assertTmdbCommercialUseAllowed({
+    TMDB_API_KEY: "configured",
+    TMDB_COMMERCIAL_LICENSE_APPROVED: "true"
+  }));
 });
