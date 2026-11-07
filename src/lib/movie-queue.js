@@ -19,8 +19,7 @@ export function selectTmdbQueueMatch(results, submittedTitle) {
   const exactMatches = candidates.filter((candidate) =>
     normalizeMovieQueueTitle(candidate?.title) === normalizeMovieQueueTitle(submittedTitle)
   );
-  if (exactMatches.length === 1) return exactMatches[0];
-  return candidates.length === 1 ? candidates[0] : null;
+  return exactMatches.length === 1 ? exactMatches[0] : null;
 }
 
 function safeError(error) {
