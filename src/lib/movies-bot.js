@@ -303,7 +303,8 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
   const previousCallback = page > 0 ? pageCallback(page - 1) : "";
   const nextCallback = page + 1 < pageCount ? pageCallback(page + 1) : "";
   if (previousCallback && previousCallback.length <= 64) navigation.push({ text: "⬅️ السابق", callback_data: previousCallback });
-  navigation.push({ text: "📄 " + (page + 1) + " / " + pageCount, callback_data: pageCallback(page).slice(0, 64) });
+  const currentPageCallback = pageCallback(page);
+  navigation.push({ text: "📄 " + (page + 1) + " / " + pageCount, callback_data: currentPageCallback.length <= 64 ? currentPageCallback : "movies:library:0" });
   if (nextCallback && nextCallback.length <= 64) navigation.push({ text: "التالي ➡️", callback_data: nextCallback });
   if (navigation.length) keyboard.push(navigation);
 
