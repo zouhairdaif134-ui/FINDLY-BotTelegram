@@ -41,7 +41,7 @@ create or replace function public.claim_next_movie_queue_item(
 )
 returns setof public.movie_queue_items
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
