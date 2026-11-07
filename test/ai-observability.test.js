@@ -23,3 +23,22 @@ test("classifyAIError returns safe categories without exposing provider or user 
     category: "internal_error"
   });
 });
+
+
+test("AI telemetry failures never escape into the Telegram reply path", async () => {
+  const { recordAIAnalyticsBestEffort } = await import("../src/lib/ai.js");
+  const calls = [];
+  const failed = await recordAIAnalyticsBestEffort(async (...args) => {
+    calls.push(args);
+    throw new Error("database unavailable");
+  }, { marker: "env" }, { id: "bot-id" }, "ai_error", { category: "provider_unavailable" });
+  assert.equal(failed, false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][2], null);
+  assert.equal(calls[0][3], "ai_error");
+
+  const succeeded = await recordAIAnalyticsBestEffort(async (...args) => {
+    calls.push(args);
+  }, { marker: "env" }, { id: "bot-id" }, "ai_message", { duration_ms: 12 });
+  assert.equal(succeeded, true);
+});
