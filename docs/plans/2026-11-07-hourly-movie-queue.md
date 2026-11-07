@@ -78,10 +78,10 @@
 - Existing API routes remain under `/api/movies/queue`; existing dashboard navigation remains `Movie Queue`.
 - Existing scheduled handler continues invoking `processMovieQueueHourly` without changing other scheduled work.
 
-- [ ] Verify all queue endpoints require the expected existing content permissions.
-- [ ] Verify the five-minute Cron is unchanged and the dashboard clearly states that queue completion is not publication.
-- [ ] Run `npm test`, SQL migration verification, and the Worker dry-run used by CI.
-- [ ] Open a draft pull request only after the checks are green; production migration and deployment remain a separate, licensed rollout.
+- [x] Verify all queue endpoints require the expected existing content permissions.
+- [x] Verify the five-minute Cron is unchanged and the dashboard clearly states that queue completion is not publication.
+- [x] Run `npm test`, SQL migration verification, dashboard build, and the Worker dry-run used by CI; both GitHub Actions workflows passed on commit `3481e17`.
+- [x] Keep the existing draft pull request #24 updated after the checks passed; production migration and deployment remain a separate, licensed rollout.
 
 ## Unresolved external decision
 
