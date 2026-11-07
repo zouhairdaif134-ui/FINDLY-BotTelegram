@@ -14,7 +14,8 @@ const labels = {
 
 export default function MovieQueueSection({ fetchApi }) {
   const [titles, setTitles] = useState("");
-  const [mediaType, setMediaType] = useState("movie");\n  const [duplicateItems, setDuplicateItems] = useState([]);
+  const [mediaType, setMediaType] = useState("movie");
+  const [duplicateItems, setDuplicateItems] = useState([]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -53,7 +54,8 @@ export default function MovieQueueSection({ fetchApi }) {
         method: "POST",
         body: JSON.stringify({ titles_text: titles, media_type: mediaType })
       });
-      setDuplicateItems(result.duplicates || []);\n      setNotice(`تزادو ${result.inserted?.length || 0} عنوان. المكرر: ${result.duplicates?.length || 0}.`);
+      setDuplicateItems(result.duplicates || []);
+      setNotice(`تزادو ${result.inserted?.length || 0} عنوان. المكرر: ${result.duplicates?.length || 0}.`);
       setTitles("");
       await refresh();
     } catch (err) {
@@ -97,12 +99,13 @@ export default function MovieQueueSection({ fetchApi }) {
             <span>النوع</span>
             <select className="toolbar-select" value={mediaType} onChange={(event) => setMediaType(event.target.value)}>
               <option value="movie">أفلام</option>
-              <option value="series">مسلسلات</option>\n              <option value="mixed">مختلط (MOVIE / TV)</option>
+              <option value="series">مسلسلات</option>
+              <option value="mixed">مختلط (MOVIE / TV)</option>
             </select>
           </label>
           <label className="movies-field movies-field-wide">
             <span>لائحة العناوين</span>
-            <textarea rows={7} maxLength={20000} value={titles} onChange={(event) => setTitles(event.target.value)} placeholder={"Interstellar\nInception\nThe Dark Knight"} />
+            <textarea rows={7} maxLength={20000} value={titles} onChange={(event) => setTitles(event.target.value)} placeholder={mediaType === "mixed" ? "MOVIE | Inception\\nTV | Breaking Bad\\nMOVIE | Interstellar\\nTV | Dark" : "Interstellar\\nInception\\nThe Dark Knight"} />\n            {mediaType === "mixed" && <small>في الوضع المختلط، ضروري كل سطر يبدأ بـ MOVIE | أو TV |. الترتيب كيبقى هو نفس ترتيب اللائحة.</small>}
           </label>
         </div>
         <div className="movies-form-actions">
@@ -114,7 +117,8 @@ export default function MovieQueueSection({ fetchApi }) {
       {tmdbMode === "noncommercial_development" && <div className="auth-success" role="status">وضع التطوير غير التجاري مفعّل. استخدم بيانات TMDB للاختبار غير التجاري فقط؛ لا تستخدم هذا الوضع عند تشغيل خدمة تجارية.</div>}
       {tmdbMode === "commercial" && <div className="auth-success" role="status">مصدر البيانات مفعّل بترخيص تجاري.</div>}
       {error && <div className="auth-error" role="alert">{error}</div>}
-      {notice && <div className="auth-success" role="status">{notice}</div>}\n      {duplicateItems.length > 0 && <div className="auth-error" role="status"><strong>العناوين الموجودة مسبقاً:</strong><ul>{duplicateItems.map((item, index) => <li key={item.existing_id || index}>{item.title} — موجود باسم: {item.existing_title || item.title} ({item.media_type === "series" ? "مسلسل" : "فيلم"}) — الحالة: {labels[item.status] || item.status}</li>)}</ul></div>}
+      {notice && <div className="auth-success" role="status">{notice}</div>}
+      {duplicateItems.length > 0 && <div className="auth-error" role="status"><strong>العناوين الموجودة مسبقاً:</strong><ul>{duplicateItems.map((item, index) => <li key={item.existing_id || index}>{item.title} — موجود باسم: {item.existing_title || item.title} ({item.media_type === "series" ? "مسلسل" : "فيلم"}) — الحالة: {labels[item.status] || item.status}</li>)}</ul></div>}
 
       <div className="movies-card movies-catalog-card">
         <div className="movies-catalog-toolbar">
