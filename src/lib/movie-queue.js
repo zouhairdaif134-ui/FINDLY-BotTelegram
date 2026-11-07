@@ -14,6 +14,15 @@ export function normalizeMovieQueueTitle(value) {
     .trim();
 }
 
+export function selectTmdbQueueMatch(results, submittedTitle) {
+  const candidates = Array.isArray(results) ? results : [];
+  const exactMatches = candidates.filter((candidate) =>
+    normalizeMovieQueueTitle(candidate?.title) === normalizeMovieQueueTitle(submittedTitle)
+  );
+  if (exactMatches.length === 1) return exactMatches[0];
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 function safeError(error) {
   return {
     code: String(error?.code || error?.name || "MOVIE_QUEUE_PROCESSING_FAILED").slice(0, 80),
@@ -224,14 +233,7 @@ export async function processMovieQueueHourly(env, now = new Date()) {
       });
       return { processed: true, item_id: item.id, status: "failed" };
     }
-    const exactMatches = results.filter((candidate) =>
-      normalizeMovieQueueTitle(candidate.title) === normalizeMovieQueueTitle(item.submitted_title)
-    );
-    const selected = exactMatches.length === 1
-      ? exactMatches[0]
-      : results.length === 1
-        ? results[0]
-        : null;
+    const selected = selectTmdbQueueMatch(results, item.submitted_title);
 
     if (!selected) {
       await saveQueueState(supabase, item.id, {
