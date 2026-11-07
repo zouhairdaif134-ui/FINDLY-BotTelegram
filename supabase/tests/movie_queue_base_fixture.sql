@@ -4,7 +4,9 @@ create table if not exists auth.users (
   id uuid primary key
 );
 create table if not exists public.movie_titles (
-  id uuid primary key default gen_random_uuid()
+  id uuid primary key default gen_random_uuid(),
+  media_type text,
+  normalized_title text
 );
 
 -- Supabase roles used by grants and privilege assertions in the disposable test DB.
