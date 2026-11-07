@@ -104,7 +104,7 @@ returns setof public.movie_queue_items
 language sql
 security invoker
 set search_path = public
-as $
+as $$
   update public.movie_queue_items
   set status = 'processing',
       lease_expires_at = p_lease_expires_at,
@@ -112,7 +112,7 @@ as $
   where id = p_queue_item_id
     and status = 'needs_review'
   returning *;
-$;
+$$;
 
 revoke all on function public.claim_movie_queue_resolution(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function public.claim_movie_queue_resolution(uuid, timestamptz) to service_role;
