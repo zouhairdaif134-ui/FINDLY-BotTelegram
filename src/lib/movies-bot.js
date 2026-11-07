@@ -653,11 +653,17 @@ export async function handleMoviesText(env, bot, chatId, message, telegramUserId
       return true;
     }
     const promptText = String(message.reply_to_message?.text || "");
-    const state = promptText.match(/\\|filters:(all|movie|series):(none|[a-z0-9-]{1,20}):(added|old|top|az|release)$/);
+    const markerIndex = promptText.lastIndexOf("|filters:");
+    const stateParts = markerIndex >= 0 ? promptText.slice(markerIndex + 9).split(":") : [];
+    const state = stateParts.length === 3 &&
+      ["all", "movie", "series"].includes(stateParts[0]) &&
+      (stateParts[1] === "none" || /^[a-z0-9-]{1,20}$/.test(stateParts[1])) &&
+      ["added", "old", "top", "az", "release"].includes(stateParts[2])
+      ? stateParts : null;
     if (state) {
       await sendList(env, bot, chatId, "filter", 0, "", "", {
-        mediaType: state[1], genreSlug: state[2] === "none" ? "" : state[2],
-        year: Number(raw), sort: state[3]
+        mediaType: state[0], genreSlug: state[1] === "none" ? "" : state[1],
+        year: Number(raw), sort: state[2]
       });
     } else {
       await sendList(env, bot, chatId, "year", 0, raw);
