@@ -339,10 +339,16 @@ test("Workers AI binding times out instead of leaving the request pending", asyn
     }
   };
   const shortConfig = { ...config, timeoutMs: 15 };
-  await assert.rejects(
-    generateAIReply(env, { id: "bot-id" }, "سلام", { config: shortConfig }),
-    (error) => error?.name === "TimeoutError"
-  );
+  // Keep Node's event loop alive while AbortSignal.timeout's unref'd timer fires.
+  const keepAlive = setTimeout(() => {}, 100);
+  try {
+    await assert.rejects(
+      generateAIReply(env, { id: "bot-id" }, "سلام", { config: shortConfig }),
+      (error) => error?.name === "TimeoutError"
+    );
+  } finally {
+    clearTimeout(keepAlive);
+  }
 });
 
 test("Moroccan Darija policy includes natural phrasing examples and rejects malformed wording", async () => {
