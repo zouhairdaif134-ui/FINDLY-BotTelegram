@@ -202,6 +202,9 @@ test("passes catalog tools to Workers AI and executes only returned catalog tool
   );
   assert.equal(reply, "لقيت Dune (2021).");
   assert.equal(calls.length, 2);
+  assert.equal(calls[1].options.messages[0].role, "system");
+  assert.equal(calls[1].options.messages.filter((message) => message.role === "system").length, 1);
+  assert.match(calls[1].options.messages[0].content, /Use only the returned FINDLY catalog records/);
   assert.ok(db.calls.some((call) => call.table === "movie_titles"));
 });
 
