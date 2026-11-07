@@ -131,11 +131,12 @@ async function getInternalUserId(env, telegramUserId) {
 }
 
 function titleButton(title) {
+  const safeTitle = Array.from(String(title.title || "بدون عنوان")).slice(0, 55).join("");
   const year = title.release_year ? " (" + title.release_year + ")" : "";
   const kind = title.media_type === "series" ? "مسلسل" : "فيلم";
   return {
     text: (title.rating ? "⭐ " + Number(title.rating).toFixed(1) + " · " : "") +
-      kind + " · " + title.title + year,
+      kind + " · " + safeTitle + year,
     callback_data: "movies:title:" + title.id
   };
 }
@@ -320,7 +321,7 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
 
   const body = data?.length
     ? (data || []).map((item, index) =>
-        (from + index + 1) + ". <b>" + escapeHtml(item.title) + "</b>" +
+        (from + index + 1) + ". <b>" + escapeHtml(Array.from(String(item.title || "")).slice(0, 120).join("")) + "</b>" +
         (item.release_year ? " · " + item.release_year : "") +
         " · " + (item.media_type === "series" ? "مسلسل" : "فيلم") +
         (item.rating != null ? " · ⭐ " + Number(item.rating).toFixed(1) : "")
