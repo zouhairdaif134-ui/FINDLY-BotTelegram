@@ -1,6 +1,6 @@
 const SORTERS = {
-  newest: (a, b) => String(b.release_date || b.updated_at || "").localeCompare(String(a.release_date || a.updated_at || "")),
-  oldest: (a, b) => String(a.release_date || a.updated_at || "").localeCompare(String(b.release_date || b.updated_at || "")),
+  newest: (a, b) => String(b.created_at || b.updated_at || "").localeCompare(String(a.created_at || a.updated_at || "")),
+  oldest: (a, b) => String(a.created_at || a.updated_at || "").localeCompare(String(b.created_at || b.updated_at || "")),
   rating: (a, b) => (Number(b.rating) || -1) - (Number(a.rating) || -1),
   title: (a, b) => String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" })
 };
