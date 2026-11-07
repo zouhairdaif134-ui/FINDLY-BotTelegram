@@ -292,6 +292,15 @@ async function sendMoviesFilterGenres(env, bot, chatId, filters = {}) {
   await sendMessage(env, bot.slug, chatId, "<b>🏷️ اختار التصنيف</b>", { reply_markup: { inline_keyboard: keyboard } });
 }
 
+async function showMoviesFilterYearPrompt(env, bot, chatId, filters = {}) {
+  const normalized = normalizeMovieFilters(filters);
+  const promptText = YEAR_PROMPT + "|filters:" + normalized.mediaType + ":" +
+    (normalized.genreSlug || "none") + ":" + normalized.sort;
+  await sendMessage(env, bot.slug, chatId,
+    "<b>" + YEAR_PROMPT + "</b>\\nجاوب على هاد الرسالة بسنة الإصدار، مثال: 2024.",
+    { reply_markup: { force_reply: { force_reply: true, selective: true, input_field_placeholder: "مثلاً 2024" } } }
+  );
+}
 async function showMoviesYearPrompt(env, bot, chatId) {
   await sendMessage(
     env,
@@ -366,7 +375,8 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
             : action === "az" ? "ترتيب حسب الاسم"
               : action === "top" ? "الأعلى تقييماً"
                 : action === "films" ? "الأفلام"
-                  : action === "series" ? "المسلسلات" : "المكتبة";
+                  : action === "series" ? "المسلسلات"
+                    : action === "filter" ? "نتائج الفلترة" : "المكتبة";
 
   const keyboard = [];
   const titleButtons = (data || []).map(titleButton);
@@ -628,7 +638,16 @@ export async function handleMoviesText(env, bot, chatId, message, telegramUserId
       await sendMessage(env, bot.slug, chatId, "دخل سنة صحيحة بين 1888 و2200، مثال: 2024.");
       return true;
     }
-    await sendList(env, bot, chatId, "year", 0, raw);
+    const promptText = String(message.reply_to_message?.text || "");
+    const state = promptText.match(/\\|filters:(all|movie|series):(none|[a-z0-9-]{1,20}):(added|old|top|az|release)$/);
+    if (state) {
+      await sendList(env, bot, chatId, "filter", 0, "", "", {
+        mediaType: state[1], genreSlug: state[2] === "none" ? "" : state[2],
+        year: Number(raw), sort: state[3]
+      });
+    } else {
+      await sendList(env, bot, chatId, "year", 0, raw);
+    }
     return true;
   }
   if (bot.slug !== "movies" && !isMoviesSearchReply(message)) return false;
@@ -658,6 +677,10 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
       "المشاهدة داخل Telegram لا تتفعل إلا للمحتوى المرخّص والمجهز للتسليم."
     );
   }
+  else if (parsed.action === "filters") await sendMoviesFilterMenu(env, bot, chatId);
+  else if (parsed.action === "filtergenres") await sendMoviesFilterGenres(env, bot, chatId, parsed);
+  else if (parsed.action === "filteryearprompt") await showMoviesFilterYearPrompt(env, bot, chatId, parsed);
+  else if (parsed.action === "filter") await sendList(env, bot, chatId, "filter", parsed.page, "", "", parsed);
   else if (parsed.action === "search") await showMoviesSearchPrompt(env, bot, chatId);
   else if (parsed.action === "favorites") await sendFavorites(env, bot, chatId, telegramUserId);
   else if (parsed.action === "title") await sendTitle(env, bot, chatId, parsed.id, telegramUserId);
