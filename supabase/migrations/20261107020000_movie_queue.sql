@@ -24,7 +24,7 @@ create table if not exists public.movie_queue_items (
 
 create unique index if not exists movie_queue_active_title_unique_idx
   on public.movie_queue_items(media_type, normalized_title)
-  where status in ('pending','processing','needs_review','ready_for_review','already_in_catalog');
+  where status in ('pending','processing','resolving','needs_review','ready_for_review','already_in_catalog');
 
 create index if not exists movie_queue_status_due_idx
   on public.movie_queue_items(status, next_attempt_at, created_at);
