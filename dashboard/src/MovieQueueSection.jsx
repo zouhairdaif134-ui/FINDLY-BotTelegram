@@ -5,6 +5,7 @@ const labels = {
   processing: "قيد المعالجة",
   needs_review: "اختيار النتيجة",
   ready_for_review: "مسودة جاهزة للمراجعة",
+  already_in_catalog: "موجود مسبقاً فالمكتبة",
   failed: "فشل",
   rejected: "مرفوض",
   published: "منشور"
@@ -128,7 +129,7 @@ export default function MovieQueueSection({ fetchApi }) {
                       {item.status === "failed" && <button className="secondary-button" type="button" onClick={() => action(item.id, "retry")}>إعادة المحاولة</button>}
                       {["needs_review", "ready_for_review", "failed"].includes(item.status) && <button className="secondary-button" type="button" onClick={() => action(item.id, "reject")}>رفض</button>}
                       {item.status === "ready_for_review" && <small>راجع المسودة في قسم Movies</small>}
-                      {["pending", "processing", "rejected", "published"].includes(item.status) && <small>—</small>}
+                      {["pending", "processing", "already_in_catalog", "rejected", "published"].includes(item.status) && <small>—</small>}
                     </div>
                   </td>
                 </tr>
