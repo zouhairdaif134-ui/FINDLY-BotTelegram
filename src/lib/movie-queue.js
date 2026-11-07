@@ -1,7 +1,7 @@
 import { getSupabase } from "./supabase.js";
 import { searchTmdbCatalog, importTmdbCatalogItem } from "../routes/content.js";
 
-const ACTIVE_DUPLICATE_STATES = ["pending", "processing", "needs_review", "ready_for_review", "already_in_catalog"];
+const ACTIVE_DUPLICATE_STATES = ["pending", "processing", "resolving", "needs_review", "ready_for_review", "already_in_catalog"];
 const MAX_BATCH_SIZE = 100;
 
 export function normalizeMovieQueueTitle(value) {
@@ -38,7 +38,7 @@ export async function listMovieQueue(env, status = null) {
     .select("id,submitted_title,normalized_title,media_type,status,tmdb_id,tmdb_candidates,catalog_title_id,attempt_count,next_attempt_at,last_error_code,last_error_message,created_at,updated_at,processed_at")
     .order("created_at", { ascending: false })
     .limit(300);
-  if (status && ["pending", "processing", "needs_review", "ready_for_review", "already_in_catalog", "failed", "rejected", "published"].includes(status)) {
+  if (status && ["pending", "processing", "resolving", "needs_review", "ready_for_review", "already_in_catalog", "failed", "rejected", "published"].includes(status)) {
     query = query.eq("status", status);
   }
   const { data, error } = await query;
@@ -208,7 +208,7 @@ export async function resolveMovieQueueItem(env, id, body, actor) {
       .from("movie_queue_items")
       .update({ status: "needs_review", lease_expires_at: null })
       .eq("id", id)
-      .eq("status", "processing")
+      .eq("status", "resolving")
       .eq("lease_expires_at", leaseExpiresAt);
     if (releaseError) {
       console.error("FINDLY movie queue match claim could not be released:", {
@@ -249,6 +249,13 @@ export async function processMovieQueueHourly(env, now = new Date()) {
     .eq("status", "processing")
     .lt("lease_expires_at", nowIso);
   if (leaseError) throw leaseError;
+
+  const { error: resolutionLeaseError } = await supabase
+    .from("movie_queue_items")
+    .update({ status: "needs_review", lease_expires_at: null })
+    .eq("status", "resolving")
+    .lt("lease_expires_at", nowIso);
+  if (resolutionLeaseError) throw resolutionLeaseError;
 
   const { data: claimed, error: claimError } = await supabase.rpc("claim_next_movie_queue_item", {
     p_slot_start: slotStart,
