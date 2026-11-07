@@ -128,14 +128,13 @@ test("enqueues a mixed batch with two Supabase requests and reports existing and
   }];
   const supabase = {
     from(table) {
-      assert.equal(table, "movie_queue_items");
-      const state = { filters: [], insertRows: null };
+      const state = { table, filters: [], insertRows: null };
       const builder = {
         select() { return builder; },
         in(column, values) { state.filters.push({ column, values }); return builder; },
         insert(rows) { state.insertRows = rows; return builder; },
         then(resolve, reject) {
-          calls.push(state.insertRows ? "insert" : "lookup");
+          calls.push(state);
           if (state.insertRows) {
             return Promise.resolve({
               data: state.insertRows.map((row, index) => ({
@@ -148,7 +147,7 @@ test("enqueues a mixed batch with two Supabase requests and reports existing and
               error: null
             }).then(resolve, reject);
           }
-          return Promise.resolve({ data: existingRows, error: null }).then(resolve, reject);
+          return Promise.resolve({ data: state.table === "movie_titles" ? [] : existingRows, error: null }).then(resolve, reject);
         }
       };
       return builder;
@@ -167,7 +166,7 @@ test("enqueues a mixed batch with two Supabase requests and reports existing and
   ];
   const result = await movieQueue.enqueueMovieQueueBatch(supabase, batch, { userId: "admin-1" });
 
-  assert.deepEqual(calls, ["lookup", "insert"]);
+  assert.deepEqual(calls.map((call) => call.table), ["movie_titles", "movie_queue_items", "movie_queue_items"]);
   assert.equal(result.inserted.length, 98);
   assert.deepEqual(result.inserted.slice(0, 2).map((item) => item.submitted_title), ["Inception", "Breaking Bad"]);
   assert.deepEqual(result.duplicates.map((item) => ({
