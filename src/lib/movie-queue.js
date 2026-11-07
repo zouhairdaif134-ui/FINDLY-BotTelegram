@@ -114,6 +114,7 @@ export async function retryMovieQueueItem(env, id) {
       attempt_count: 0,
       next_attempt_at: new Date().toISOString(),
       lease_expires_at: null,
+      lease_token: null,
       last_error_code: null,
       last_error_message: null
     })
@@ -139,12 +140,17 @@ async function getQueueSubmitterActor(env, submitterId) {
   return { userId: data.id };
 }
 
-async function saveQueueState(supabase, id, patch) {
-  const { error } = await supabase
+async function saveQueueState(supabase, id, leaseToken, expectedStatus, patch) {
+  const { data, error } = await supabase
     .from("movie_queue_items")
-    .update({ ...patch, lease_expires_at: null })
-    .eq("id", id);
+    .update({ ...patch, lease_expires_at: null, lease_token: null })
+    .eq("id", id)
+    .eq("status", expectedStatus)
+    .eq("lease_token", leaseToken)
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("Movie queue lease was lost; stale processing cannot update this item");
 }
 
 async function findExistingCatalogTitle(supabase, tmdbId) {
@@ -158,8 +164,8 @@ async function findExistingCatalogTitle(supabase, tmdbId) {
   return data?.title_id || null;
 }
 
-async function saveAlreadyInCatalog(supabase, itemId, catalogTitleId, tmdbId, nowIso) {
-  await saveQueueState(supabase, itemId, {
+async function saveAlreadyInCatalog(supabase, itemId, leaseToken, expectedStatus, catalogTitleId, tmdbId, nowIso) {
+  await saveQueueState(supabase, itemId, leaseToken, expectedStatus, {
     status: "already_in_catalog",
     tmdb_id: Number(tmdbId),
     catalog_title_id: catalogTitleId,
@@ -188,12 +194,12 @@ export async function resolveMovieQueueItem(env, id, body, actor) {
 
     const existingTitleId = await findExistingCatalogTitle(supabase, tmdbId);
     if (existingTitleId) {
-      await saveAlreadyInCatalog(supabase, id, existingTitleId, tmdbId, new Date().toISOString());
+      await saveAlreadyInCatalog(supabase, id, item.lease_token, "resolving", existingTitleId, tmdbId, new Date().toISOString());
       return { queue_item_id: id, catalog_title_id: existingTitleId, status: "already_in_catalog" };
     }
 
     const imported = await importTmdbCatalogItem(env, tmdbId, item.media_type, actor);
-    await saveQueueState(supabase, id, {
+    await saveQueueState(supabase, id, item.lease_token, "resolving", {
       status: "ready_for_review",
       tmdb_id: Number(tmdbId),
       catalog_title_id: imported.id,
@@ -206,10 +212,10 @@ export async function resolveMovieQueueItem(env, id, body, actor) {
   } catch (error) {
     const { error: releaseError } = await supabase
       .from("movie_queue_items")
-      .update({ status: "needs_review", lease_expires_at: null })
+      .update({ status: "needs_review", lease_expires_at: null, lease_token: null })
       .eq("id", id)
       .eq("status", "resolving")
-      .eq("lease_expires_at", leaseExpiresAt);
+      .eq("lease_token", item.lease_token);
     if (releaseError) {
       console.error("FINDLY movie queue match claim could not be released:", {
         item_id: id,
@@ -224,7 +230,7 @@ export async function rejectMovieQueueItem(env, id) {
   const supabase = getSupabase(env);
   const { data, error } = await supabase
     .from("movie_queue_items")
-    .update({ status: "rejected", lease_expires_at: null })
+    .update({ status: "rejected", lease_expires_at: null, lease_token: null })
     .eq("id", id)
     .in("status", ["needs_review", "ready_for_review", "failed"])
     .select("id,status")
@@ -245,14 +251,14 @@ export async function processMovieQueueHourly(env, now = new Date()) {
   // item from being processed in an already-consumed hour.
   const { error: leaseError } = await supabase
     .from("movie_queue_items")
-    .update({ status: "pending", lease_expires_at: null, next_attempt_at: nowIso })
+    .update({ status: "pending", lease_expires_at: null, lease_token: null, next_attempt_at: nowIso })
     .eq("status", "processing")
     .lt("lease_expires_at", nowIso);
   if (leaseError) throw leaseError;
 
   const { error: resolutionLeaseError } = await supabase
     .from("movie_queue_items")
-    .update({ status: "needs_review", lease_expires_at: null })
+    .update({ status: "needs_review", lease_expires_at: null, lease_token: null })
     .eq("status", "resolving")
     .lt("lease_expires_at", nowIso);
   if (resolutionLeaseError) throw resolutionLeaseError;
@@ -268,7 +274,7 @@ export async function processMovieQueueHourly(env, now = new Date()) {
   try {
     const results = await searchTmdbCatalog(env, item.submitted_title, item.media_type, 1);
     if (!results.length) {
-      await saveQueueState(supabase, item.id, {
+      await saveQueueState(supabase, item.id, item.lease_token, "processing", {
         status: "failed",
         last_error_code: "TMDB_NO_MATCH",
         last_error_message: "TMDB returned no matching titles",
@@ -290,7 +296,7 @@ export async function processMovieQueueHourly(env, now = new Date()) {
 
     const existingTitleId = await findExistingCatalogTitle(supabase, selected.tmdb_id);
     if (existingTitleId) {
-      await saveAlreadyInCatalog(supabase, item.id, existingTitleId, selected.tmdb_id, nowIso);
+      await saveAlreadyInCatalog(supabase, item.id, item.lease_token, "processing", existingTitleId, selected.tmdb_id, nowIso);
       return { processed: true, item_id: item.id, status: "already_in_catalog" };
     }
 
