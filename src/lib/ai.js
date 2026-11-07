@@ -317,14 +317,16 @@ export async function generateAIReply(env, bot, userText, memory = {}) {
     });
   }
 
+  const [systemMessage, ...conversationMessages] = messages;
   const followUpMessages = [
-    ...messages,
-    { role: "assistant", content: firstMessage.content || null, tool_calls: assistantToolCalls },
-    ...toolMessages,
     {
-      role: "system",
-      content: "Use only the returned FINDLY catalog records for movie and series facts. If the tool returned no matching records, say so. Do not invent titles, ratings, years, runtimes, genres, or plot details. Clearly distinguish missing catalog data from verified data."
-    }
+      ...systemMessage,
+      content: systemMessage.content +
+        "\n\nUse only the returned FINDLY catalog records for movie and series facts. If the tool returned no matching records, say so. Do not invent titles, ratings, years, runtimes, genres, or plot details. Clearly distinguish missing catalog data from verified data."
+    },
+    ...conversationMessages,
+    { role: "assistant", content: firstMessage.content || null, tool_calls: assistantToolCalls },
+    ...toolMessages
   ];
   const finalMessage = await requestAIProvider(env, config, apiKey, followUpMessages, false);
   return extractAIText(finalMessage) ||
