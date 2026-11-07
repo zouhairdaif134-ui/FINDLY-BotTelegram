@@ -2,7 +2,7 @@ import { getSupabase } from "./supabase.js";
 import { sendMessage, sendPhoto, answerCallback } from "./telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-export const MOVIE_PAGE_SIZE = 20;
+export const MOVIE_PAGE_SIZE = 10;
 const SEARCH_PROMPT = "🔎 بحث FINDLY Movies";
 const YEAR_PROMPT = "📅 سنة إصدار FINDLY";
 
@@ -52,6 +52,40 @@ export function parseMoviesCallback(value) {
     const page = Number(parts[3] || 0);
     if (!Number.isInteger(year) || year < 1888 || year > 2200 || !Number.isInteger(page) || page < 0) return null;
     return { action, year, page };
+  }
+  if (action === "filter") {
+    const mediaType = parts[2] || "all";
+    const genreSlug = parts[3] === "none" ? "" : (parts[3] || "");
+    const yearValue = Number(parts[4] || 0);
+    const sort = parts[5] || "added";
+    const page = Number(parts[6] || 0);
+    if (!["all", "movie", "series"].includes(mediaType)) return null;
+    if (genreSlug && !/^[a-z0-9-]{1,20}$/.test(genreSlug)) return null;
+    if (yearValue !== 0 && (!Number.isInteger(yearValue) || yearValue < 1888 || yearValue > 2200)) return null;
+    if (!["added", "old", "top", "az", "release"].includes(sort)) return null;
+    if (!Number.isInteger(page) || page < 0) return null;
+    return { action, mediaType, genreSlug, year: yearValue || null, sort, page };
+  }
+  if (action === "filters") return { action };
+  if (action === "filteryearprompt") {
+    const mediaType = parts[2] || "all";
+    const genreSlug = parts[3] === "none" ? "" : (parts[3] || "");
+    const yearValue = Number(parts[4] || 0);
+    const sort = parts[5] || "added";
+    if (!["all", "movie", "series"].includes(mediaType) ||
+        (genreSlug && !/^[a-z0-9-]{1,20}$/.test(genreSlug)) ||
+        (yearValue !== 0 && (!Number.isInteger(yearValue) || yearValue < 1888 || yearValue > 2200)) ||
+        !["added", "old", "top", "az", "release"].includes(sort)) return null;
+    return { action, mediaType, genreSlug, year: yearValue || null, sort };
+  }
+  if (action === "filtergenres") {
+    const mediaType = parts[2] || "all";
+    const yearValue = Number(parts[3] || 0);
+    const sort = parts[4] || "added";
+    if (!["all", "movie", "series"].includes(mediaType) ||
+        (yearValue !== 0 && (!Number.isInteger(yearValue) || yearValue < 1888 || yearValue > 2200)) ||
+        !["added", "old", "top", "az", "release"].includes(sort)) return null;
+    return { action, mediaType, year: yearValue || null, sort };
   }
   if (["home", "library", "categories", "yearprompt", "added", "new", "old", "top", "az", "films", "series", "favorites", "search", "help"].includes(action)) {
     const page = Number(parts[2] || 0);
