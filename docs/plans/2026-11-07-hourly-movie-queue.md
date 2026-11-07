@@ -31,9 +31,9 @@
 - Produces: `public.movie_queue_items`, `public.movie_queue_slots`, and `public.claim_next_movie_queue_item(timestamptz,timestamptz)`.
 - The claim function is callable only by `service_role`, and atomically consumes one UTC slot while claiming one due pending row.
 
-- [ ] Add database-level protection against duplicate active queue titles using a partial unique index on `(media_type, normalized_title)` for pending, processing, needs_review, ready_for_review, and already_in_catalog states.
-- [ ] Extend the disposable PostgreSQL fixture with the Supabase roles required by the migration (`anon`, `authenticated`, and `service_role` with BYPASSRLS).
-- [ ] Extend SQL verification to assert the unique index rejects active duplicates and that rejected/failed rows do not reserve active-title uniqueness.
+- [x] Add database-level protection against duplicate active queue titles using a partial unique index on `(media_type, normalized_title)` for pending, processing, needs_review, ready_for_review, and already_in_catalog states.
+- [x] Extend the disposable PostgreSQL fixture with the Supabase roles required by the migration (`anon`, `authenticated`, and `service_role` with BYPASSRLS).
+- [x] Extend SQL verification to assert the unique index rejects active duplicates and that rejected/failed rows do not reserve active-title uniqueness.
 - [ ] Run the queue migration and verification SQL in the repository's disposable PostgreSQL workflow; expected outcome is a clean migration and all assertions passing.
 
 ### Task 2: Make queue insertion and scheduled audit attribution reliable
@@ -46,9 +46,9 @@
 - Consumes: `normalizeMovieQueueTitle`, `searchTmdbCatalog`, `importTmdbCatalogItem`, and `claim_next_movie_queue_item`.
 - Produces: `enqueueMovieQueue(env, body, actor)` with deterministic duplicate reporting, and scheduled imports attributed to the administrator who submitted the queue item.
 
-- [ ] Add focused tests for punctuation-only titles and duplicate normalization.
-- [ ] Reject titles that normalize to an empty key; handle PostgreSQL unique-violation races as duplicates rather than failing the entire batch.
-- [ ] Replace selection of an arbitrary active administrator with the queue item's `created_by` identity for audit attribution; fail safely if no submitting administrator is recorded.
+- [x] Add focused tests for punctuation-only titles and duplicate normalization.
+- [x] Reject titles that normalize to an empty key; handle PostgreSQL unique-violation races as duplicates rather than failing the entire batch.
+- [x] Replace selection of an arbitrary active administrator with the queue item's `created_by` identity for audit attribution; fail safely if no submitting administrator is recorded.
 - [ ] Run `npm test`; expected outcome is all queue unit tests passing.
 
 ### Task 3: Prevent duplicate manual resolution and preserve draft-only behavior
@@ -63,9 +63,9 @@
 - Produces: an atomic queue-item resolution claim that allows only one administrator request to resolve a `needs_review` item at a time.
 - Reuses the existing TMDB import function, which creates catalog records with `status='draft'`.
 
-- [ ] Add an atomic SQL claim operation for manual match resolution, restricted to `service_role`.
-- [ ] Claim the item before importing; restore `needs_review` if the import fails, and return a conflict if another request already claimed it.
-- [ ] Verify imported catalog status remains draft and that queue resolution never sets catalog status to active.
+- [x] Add an atomic SQL claim operation for manual match resolution, restricted to `service_role`.
+- [x] Claim the item before importing; restore `needs_review` if the import fails, and return a conflict if another request already claimed it.
+- [x] Verify imported catalog status remains draft and that queue resolution never sets catalog status to active.
 - [ ] Run focused Node and SQL verification; expected outcome is one successful resolver per item and no publication side effect.
 
 ### Task 4: Verify integration and open review
