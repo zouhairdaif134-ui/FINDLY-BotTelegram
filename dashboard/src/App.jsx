@@ -4238,7 +4238,7 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
   const pagination = paginateMovies(filteredMovies, currentPage, 20);
   const visible = isSharing
     ? movies.filter((item) => item.status === "active")
-    : pagination.items;
+    : isGenres && genreFilter === "all" ? [] : pagination.items;
 
   function resetPage(setter, value) {
     setter(value);
