@@ -68,7 +68,7 @@ test("rejects punctuation-only titles at enqueue normalization boundary", () => 
 test("blocks TMDB access when neither commercial approval nor non-commercial development mode is enabled", () => {
   assert.throws(
     () => assertTmdbAccessAllowed({ TMDB_API_KEY: "configured" }),
-    (error) => error.code === "TMDB_COMMERCIAL_LICENSE_REQUIRED" && error.status === 403
+    (error) => error.code === "TMDB_ACCESS_DISABLED" && error.status === 403
   );
 });
 
