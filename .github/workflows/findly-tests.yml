@@ -72,6 +72,11 @@ jobs:
           set -euo pipefail
           PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
           docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261107020000_movie_queue.sql
+      - name: Apply deterministic FIFO queue ordering migration
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261107170000_movie_queue_fifo_order.sql
       - name: Verify movie queue security and hourly idempotency
         run: |
           set -euo pipefail

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeMovieQueueTitle, selectTmdbQueueMatch, isMovieQueueProcessingEnabled } from "./movie-queue.js";
+import { normalizeMovieQueueTitle, selectTmdbQueueMatch, isMovieQueueProcessingEnabled, parseMovieQueueLines } from "./movie-queue.js";
 import { assertTmdbAccessAllowed } from "../routes/content.js";
 
 test("normalizes whitespace, case, and punctuation consistently", () => {
@@ -93,4 +93,24 @@ test("enables hourly processing only for explicit non-commercial development or 
   assert.equal(isMovieQueueProcessingEnabled({ TMDB_COMMERCIAL_LICENSE_APPROVED: "true" }), true);
   assert.equal(isMovieQueueProcessingEnabled({ TMDB_NONCOMMERCIAL_DEVELOPMENT: "true" }), true);
   assert.equal(isMovieQueueProcessingEnabled({ TMDB_NONCOMMERCIAL_DEVELOPMENT: true }), false);
+});
+
+
+test("parses mixed movie and series prefixes while preserving input order", () => {
+  assert.deepEqual(parseMovieQueueLines(`MOVIE | Inception
+TV | Breaking Bad
+movie | Interstellar
+tv | Dark`), [
+    { title: "Inception", media_type: "movie" },
+    { title: "Breaking Bad", media_type: "series" },
+    { title: "Interstellar", media_type: "movie" },
+    { title: "Dark", media_type: "series" }
+  ]);
+});
+
+test("rejects unprefixed or invalid mixed queue lines instead of guessing their type", () => {
+  assert.throws(
+    () => parseMovieQueueLines("Inception\nTV | Dark"),
+    /Each line must start with MOVIE \| or TV \|/
+  );
 });
