@@ -66,7 +66,18 @@ export function parseMoviesCallback(value) {
     if (!Number.isInteger(page) || page < 0) return null;
     return { action, mediaType, genreSlug, year: yearValue || null, sort, page };
   }
-  if (action === "filters") return { action };
+  if (action === "filters") {
+    if (!parts[2]) return { action };
+    const mediaType = parts[2] || "all";
+    const genreSlug = parts[3] === "none" ? "" : (parts[3] || "");
+    const yearValue = Number(parts[4] || 0);
+    const sort = parts[5] || "added";
+    if (!["all", "movie", "series"].includes(mediaType) ||
+        (genreSlug && !/^[a-z0-9-]{1,20}$/.test(genreSlug)) ||
+        (yearValue !== 0 && (!Number.isInteger(yearValue) || yearValue < 1888 || yearValue > 2200)) ||
+        !["added", "old", "top", "az", "release"].includes(sort)) return null;
+    return { action, mediaType, genreSlug, year: yearValue || null, sort };
+  }
   if (action === "filteryearprompt") {
     const mediaType = parts[2] || "all";
     const genreSlug = parts[3] === "none" ? "" : (parts[3] || "");
@@ -291,7 +302,7 @@ async function sendMoviesFilterGenres(env, bot, chatId, filters = {}) {
     if (!/^[a-z0-9-]{1,20}$/.test(genre.slug || "")) continue;
     keyboard.push([{ text: genre.name, callback_data: "movies:filter:" + normalized.mediaType + ":" + genre.slug + ":" + (normalized.year || 0) + ":" + normalized.sort + ":0" }]);
   }
-  keyboard.push([{ text: "⬅️ رجوع للفلاتر", callback_data: "movies:filters" }]);
+  keyboard.push([{ text: "⬅️ رجوع للفلاتر", callback_data: "movies:filters:" + normalized.mediaType + ":" + (normalized.genreSlug || "none") + ":" + (normalized.year || 0) + ":" + normalized.sort }]);
   await sendMessage(env, bot.slug, chatId, "<b>🏷️ اختار التصنيف</b>", { reply_markup: { inline_keyboard: keyboard } });
 }
 
@@ -416,7 +427,7 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
 
   keyboard.push([
     { text: "🔎 البحث", callback_data: "movies:search" },
-    { text: "⚙️ الفلترة والترتيب", callback_data: "movies:filters" }
+    { text: "⚙️ الفلترة والترتيب", callback_data: action === "filter" ? "movies:filters:" + (filters.mediaType || "all") + ":" + (filters.genreSlug || "none") + ":" + (filters.year || 0) + ":" + (filters.sort || "added") : "movies:filters" }
   ]);
   keyboard.push([{ text: "🏠 القائمة الرئيسية", callback_data: "movies:home" }]);
 
