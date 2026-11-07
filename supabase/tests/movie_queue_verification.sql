@@ -45,9 +45,9 @@ begin
     raise exception 'authenticated must not execute the atomic match-resolution claim function';
   end if;
 
+  insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
+  values ('Duplicate Queue Test', 'duplicate queue test', 'movie');
   begin
-    insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
-    values ('Duplicate Queue Test', 'duplicate queue test', 'movie');
     insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
     values ('Duplicate Queue Test Copy', 'duplicate queue test', 'movie');
   exception when unique_violation then
@@ -61,6 +61,7 @@ begin
     where normalized_title = 'duplicate queue test';
   insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
   values ('Duplicate Queue Test Retry', 'duplicate queue test', 'movie');
+  delete from public.movie_queue_items where normalized_title = 'duplicate queue test';
 
   insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
   values ('Queue Test One', 'queue test one', 'movie')
