@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   normalizeMovieSearch,
   parseMoviesCallback,
-  isMoviesSearchReply
+  isMoviesSearchReply,
+  isMoviesYearReply
 } from "./movies-bot.js";
 import { getTelegramToken, getTelegramWebhookSecret } from "./telegram.js";
 
@@ -46,6 +47,11 @@ test("recognizes only replies to the Movies search prompt", () => {
   assert.equal(isMoviesSearchReply({ reply_to_message: { text: "🔎 بحث FINDLY Movies\n..." } }), true);
   assert.equal(isMoviesSearchReply({ reply_to_message: { text: "unrelated" } }), false);
   assert.equal(isMoviesSearchReply({}), false);
+});
+
+test("recognizes only replies to the movie release-year prompt", () => {
+  assert.equal(isMoviesYearReply({ reply_to_message: { text: "📅 سنة إصدار FINDLY\n..." } }), true);
+  assert.equal(isMoviesYearReply({ reply_to_message: { text: "unrelated" } }), false);
 });
 
 test("Movies token is isolated and never falls back to Master token map", () => {
