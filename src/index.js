@@ -1345,7 +1345,15 @@ export default {
         const movieUpdateBody = await readJson(request);
         const updatedMovie = await updateMovieCatalogItem(env, getId(url), movieUpdateBody, auth);
         if (movieUpdateBody.status === "active") {
-          await markMovieQueuePublished(env, getId(url));
+          try {
+            await markMovieQueuePublished(env, getId(url));
+          } catch (queueSyncError) {
+            console.error("FINDLY movie queue publication sync failed:", {
+              movie_id: getId(url),
+              code: queueSyncError?.code || null,
+              message: queueSyncError?.message || "Unknown error"
+            });
+          }
         }
         return withCors(success(updatedMovie), request);
       }
