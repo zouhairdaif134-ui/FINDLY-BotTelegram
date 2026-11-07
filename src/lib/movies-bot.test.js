@@ -52,6 +52,13 @@ test("parses compact combined library filters and keeps page state", () => {
     action: "filter", mediaType: "all", genreSlug: "", year: null, sort: "added", page: 0
   });
   assert.equal(parseMoviesCallback("movies:filter:movie:bad_slug:2026:top:0"), null);
+  assert.deepEqual(parseMoviesCallback("movies:filters"), { action: "filters" });
+  assert.deepEqual(parseMoviesCallback("movies:filtergenres:movie:action:2026:top"), {
+    action: "filtergenres", mediaType: "movie", genreSlug: "action", year: 2026, sort: "top"
+  });
+  assert.deepEqual(parseMoviesCallback("movies:filteryearprompt:series:drama:2025:az"), {
+    action: "filteryearprompt", mediaType: "series", genreSlug: "drama", year: 2025, sort: "az"
+  });
 });
 
 test("recognizes only replies to the Movies search prompt", () => {
