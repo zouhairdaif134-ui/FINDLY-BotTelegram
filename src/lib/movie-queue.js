@@ -104,7 +104,7 @@ export async function enqueueMovieQueueBatch(supabase, entries, actor) {
   const duplicates = [];
   const firstByKey = new Map();
 
-  for (const entry of entries) {
+  for (const [inputOrder, entry] of entries.entries()) {
     const title = String(entry?.title || "").trim();
     const media_type = entry?.media_type;
     if (!title || title.length > 200) {
@@ -118,14 +118,14 @@ export async function enqueueMovieQueueBatch(supabase, entries, actor) {
       throw new Error("Each title must contain at least one letter or number");
     }
 
-    const normalizedEntry = { title, media_type, normalized_title };
+    const normalizedEntry = { title, media_type, normalized_title, input_order: inputOrder };
     const key = `${media_type}:${normalized_title}`;
     const first = firstByKey.get(key);
     if (first) {
-      duplicates.push(queueDuplicate(normalizedEntry, {
+      duplicates.push({ ...queueDuplicate(normalizedEntry, {
         submitted_title: first.title,
         id: null
-      }, "duplicate_in_batch"));
+      }, "duplicate_in_batch"), _input_order: inputOrder });
       continue;
     }
     firstByKey.set(key, normalizedEntry);
@@ -142,7 +142,7 @@ export async function enqueueMovieQueueBatch(supabase, entries, actor) {
   for (const entry of firstEntries) {
     const existing = existingByKey.get(`${entry.media_type}:${entry.normalized_title}`);
     if (existing) {
-      duplicates.push(queueDuplicate(entry, existing));
+      duplicates.push({ ...queueDuplicate(entry, existing), _input_order: entry.input_order });
     } else {
       rowsToInsert.push({
         submitted_title: entry.title,
@@ -154,7 +154,11 @@ export async function enqueueMovieQueueBatch(supabase, entries, actor) {
   }
 
   if (!rowsToInsert.length) {
-    return { inserted: [], duplicates, total_requested: entries.length };
+    return {
+      inserted: [],
+      duplicates: duplicates.sort((a, b) => a._input_order - b._input_order).map(({ _input_order, ...item }) => item),
+      total_requested: entries.length
+    };
   }
 
   const insertRows = async (rows) => {
@@ -178,10 +182,11 @@ export async function enqueueMovieQueueBatch(supabase, entries, actor) {
     for (const row of rowsToInsert) {
       const existing = racedByKey.get(`${row.media_type}:${row.normalized_title}`);
       if (existing) {
-        duplicates.push(queueDuplicate({
+        const original = firstByKey.get(`${row.media_type}:${row.normalized_title}`);
+        duplicates.push({ ...queueDuplicate({
           title: row.submitted_title,
           media_type: row.media_type
-        }, existing));
+        }, existing), _input_order: original?.input_order ?? Number.MAX_SAFE_INTEGER });
       } else {
         retryRows.push(row);
       }
@@ -197,7 +202,11 @@ export async function enqueueMovieQueueBatch(supabase, entries, actor) {
   }
   if (error) throw error;
 
-  return { inserted, duplicates, total_requested: entries.length };
+  return {
+    inserted,
+    duplicates: duplicates.sort((a, b) => a._input_order - b._input_order).map(({ _input_order, ...item }) => item),
+    total_requested: entries.length
+  };
 }
 
 export async function enqueueMovieQueue(env, body, actor) {
