@@ -2,7 +2,7 @@
 
 ## Project classification
 
-FINDLY Movies is intended to generate revenue from launch. TMDB's published developer FAQ says its free API use is for non-commercial purposes and describes a commercial project as one whose primary purpose is creating revenue for its owner. A commercial license must therefore be obtained before using TMDB data or images in the revenue-generating service.
+FINDLY Movies is currently in a non-commercial development and testing phase, as confirmed by the project owner. TMDB's published developer FAQ limits free API use to non-commercial purposes and requires commercial licensing for revenue-generating use. Reassess the project classification before any monetization or commercial operation.
 
 Official source: https://developer.themoviedb.org/docs/faq
 
