@@ -227,6 +227,7 @@ test("blocks titles already present in the catalog or any historical queue state
   assert.deepEqual(calls.map((call) => call.table), ["movie_titles", "movie_queue_items", "movie_queue_items"]);
   assert.deepEqual(result.inserted.map((item) => item.submitted_title), ["New Movie"]);
   assert.equal(result.duplicates[0].existing_url, "https://api.example.test/share/movie/catalog-active-1");
+  assert.equal(result.duplicates[1].existing_url, "https://api.example.test/share/movie/catalog-series-1");
   assert.deepEqual(result.duplicates.map((item) => ({
     title: item.title,
     existing_title: item.existing_title,
