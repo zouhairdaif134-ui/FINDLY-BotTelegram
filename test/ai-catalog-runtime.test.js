@@ -230,3 +230,75 @@ test("retries a blank Workers AI response without catalog tools instead of falli
   assert.equal(calls[1].options.tools, undefined);
   assert.equal(calls[1].options.messages.at(-1).content, "سلام");
 });
+
+
+test("normalizes OpenAI-compatible chat-completion responses from the native Workers AI binding", async () => {
+  const calls = [];
+  const env = {
+    AI: {
+      async run(model, options) {
+        calls.push({ model, options });
+        return {
+          choices: [{
+            message: {
+              role: "assistant",
+              content: "مرحبا من استجابة chat completion."
+            }
+          }]
+        };
+      }
+    }
+  };
+  const reply = await generateAIReply(
+    env,
+    { id: "bot-id" },
+    "سلام",
+    { config: { ...config, model: "@cf/qwen/qwen3.8-27b" } }
+  );
+  assert.equal(reply, "مرحبا من استجابة chat completion.");
+  assert.equal(calls.length, 1);
+});
+
+test("normalizes nested chat-completion tool calls from the native Workers AI binding", async () => {
+  const calls = [];
+  const env = {
+    AI: {
+      async run(model, options) {
+        calls.push({ model, options });
+        if (calls.length === 1) {
+          return {
+            choices: [{
+              message: {
+                role: "assistant",
+                content: null,
+                tool_calls: [{
+                  id: "call_catalog_nested",
+                  type: "function",
+                  function: {
+                    name: "search_catalog",
+                    arguments: JSON.stringify({ query: "Dune", media_type: "movie" })
+                  }
+                }]
+              }
+            }]
+          };
+        }
+        return {
+          choices: [{
+            message: { role: "assistant", content: "لقيت Dune (2021)." }
+          }]
+        };
+      }
+    }
+  };
+  const db = createCatalogDb();
+  const reply = await generateAIReply(
+    env,
+    { id: "bot-id" },
+    "قلب ليا على Dune",
+    { config: { ...config, model: "@cf/qwen/qwen3.8-27b" }, supabase: db }
+  );
+  assert.equal(reply, "لقيت Dune (2021).");
+  assert.equal(calls.length, 2);
+  assert.ok(db.calls.some((call) => call.table === "movie_titles"));
+});
