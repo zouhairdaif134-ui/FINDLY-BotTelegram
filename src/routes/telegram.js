@@ -11,7 +11,7 @@ import {
   showSharedJob,
   handleJobsCallback
 } from "../lib/jobs-ui.js";
-import { generateAIReply, getAIConfig, classifyAIError } from "../lib/ai.js";
+import { generateAIReply, getAIConfig, classifyAIError, recordAIAnalyticsBestEffort } from "../lib/ai.js";
 import {
   parseAIMemoryCommand, buildAIMemoryConsentKeyboard, buildAIMemoryConfirmationKeyboard,
   getAIMemoryState, ensureAIMemoryState, setAIMemoryConsent, setAIMemorySessionEnabled,
@@ -1550,14 +1550,12 @@ async function processTelegramUpdate(
         );
       }
 
-      await recordAnalytics(
+      await recordAIAnalyticsBestEffort(
+        recordAnalytics,
         env,
         bot,
-        null,
         "ai_message",
-        {
-          duration_ms: Math.max(0, Date.now() - aiStartedAt)
-        }
+        { duration_ms: Math.max(0, Date.now() - aiStartedAt) }
       );
 
       return {
@@ -1571,10 +1569,10 @@ async function processTelegramUpdate(
       botSlug: bot?.slug || null,
       category: safeAIError.category
     });
-    try {
-      await recordAnalytics(env, bot, null, "ai_error", safeAIError);
-    } catch {
-      // Telemetry is best-effort and must never block the ordinary bot fallback.
+    const errorTelemetryRecorded = await recordAIAnalyticsBestEffort(
+      recordAnalytics, env, bot, "ai_error", safeAIError
+    );
+    if (!errorTelemetryRecorded) {
       console.warn("AI error telemetry could not be recorded:", {
         botSlug: bot?.slug || null,
         category: safeAIError.category
