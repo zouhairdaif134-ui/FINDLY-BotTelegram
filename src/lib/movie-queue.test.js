@@ -111,6 +111,6 @@ tv | Dark`), [
 test("rejects unprefixed or invalid mixed queue lines instead of guessing their type", () => {
   assert.throws(
     () => parseMovieQueueLines("Inception\nTV | Dark"),
-    /Each line must start with MOVIE \\| or TV \\|/
+    /Each line must start with MOVIE \| or TV \|/
   );
 });
