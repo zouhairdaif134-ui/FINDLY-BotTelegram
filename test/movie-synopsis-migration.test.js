@@ -17,11 +17,12 @@ test("stores source-language synopses in a private table, not the public movie c
   assert.doesNotMatch(migration, /add column if not exists original_overview/i);
 });
 
-test("preserves legacy source text before hiding non-Arabic public synopses", () => {
+test("preserves legacy source text privately and hides legacy public synopses until localized", () => {
   assert.match(migration, /insert into public\.movie_synopsis_sources/i);
   assert.match(migration, /select id, overview, 'und'/i);
   assert.match(migration, /set overview = null/i);
-  assert.match(migration, /overview !~ '\[؀-ۿ\]'/i);
+  assert.match(migration, /overview_source = 'legacy'/i);
+  assert.doesNotMatch(migration, /overview !~/i);
 });
 
 test("provides an audited synopsis update RPC restricted to service_role", () => {

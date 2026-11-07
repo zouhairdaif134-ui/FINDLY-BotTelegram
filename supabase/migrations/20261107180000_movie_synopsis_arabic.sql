@@ -35,13 +35,12 @@ set overview_language = case
 where overview_language = 'pending'
   and overview_source = 'pending';
 
--- Hide legacy non-Arabic synopses immediately; their source text has already
--- been copied to the private table and will be restored only after localization.
+-- Hide legacy public synopses until the batch localizer classifies each source.
+-- Both Arabic and non-Arabic originals remain safely preserved in the private table.
 update public.movie_titles
 set overview = null
 where overview_language = 'pending'
-  and overview_source = 'legacy'
-  and overview !~ '[؀-ۿ]';
+  and overview_source = 'legacy';
 
 comment on column public.movie_titles.overview_language is
   'Language of the user-facing overview. ar-SA means Modern Standard Arabic; pending means localization is required.';
@@ -125,13 +124,13 @@ begin
     raise exception 'Movie catalog entry not found';
   end if;
 
-  insert into public.movie_synopsis_sources as source (title_id, original_overview, source_language)
+  insert into public.movie_synopsis_sources as src (title_id, original_overview, source_language)
   values (p_movie_id, p_original_overview, p_source_language)
   on conflict (title_id) do update
-    set original_overview = coalesce(source.original_overview, excluded.original_overview),
+    set original_overview = coalesce(src.original_overview, excluded.original_overview),
         source_language = case
-          when source.source_language = 'und' then excluded.source_language
-          else source.source_language
+          when src.source_language = 'und' then excluded.source_language
+          else src.source_language
         end,
         updated_at = now();
 

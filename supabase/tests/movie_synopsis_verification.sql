@@ -35,30 +35,37 @@ begin
   from public.movie_synopsis_sources
   where title_id = '11111111-1111-4111-8111-111111111111';
   if v_source is distinct from 'An English synopsis that must be preserved privately.' then
-    raise exception 'Legacy source synopsis was not preserved';
+    raise exception 'Legacy English source synopsis was not preserved';
   end if;
 
   select overview into v_public_overview
   from public.movie_titles
   where id = '11111111-1111-4111-8111-111111111111';
   if v_public_overview is not null then
-    raise exception 'Legacy English synopsis must be hidden from the public catalog until localized';
+    raise exception 'Legacy English synopsis must be hidden until localized';
+  end if;
+
+  select original_overview into v_source
+  from public.movie_synopsis_sources
+  where title_id = '22222222-2222-4222-8222-222222222222';
+  if v_source is distinct from 'ملخص عربي قديم يجب أن يبقى ظاهراً.' then
+    raise exception 'Legacy Arabic source synopsis was not preserved privately';
   end if;
 
   select overview into v_public_overview
   from public.movie_titles
   where id = '22222222-2222-4222-8222-222222222222';
-  if v_public_overview is distinct from 'ملخص عربي قديم يجب أن يبقى ظاهراً.' then
-    raise exception 'Existing Arabic synopsis should remain visible';
+  if v_public_overview is not null then
+    raise exception 'Legacy Arabic synopsis must wait for the localization batch before public display';
   end if;
 
-  insert into public.movie_titles (id, media_type, normalized_title, overview)
-  values ('33333333-3333-4333-8333-333333333333', 'movie', 'new-title', 'New source synopsis.');
+  insert into public.movie_titles (id, media_type, normalized_title, overview, overview_language, overview_source)
+  values ('33333333-3333-4333-8333-333333333333', 'movie', 'new-title', 'New source synopsis.', null, null);
   select overview_language into v_language
   from public.movie_titles
   where id = '33333333-3333-4333-8333-333333333333';
-  if v_language <> 'pending' then
-    raise exception 'New movie rows must receive pending synopsis defaults';
+  if v_language is distinct from 'pending' then
+    raise exception 'New movie rows must receive pending synopsis defaults even when the audit insert explicitly supplies null';
   end if;
 
   perform public.admin_audit_update_movie_synopsis(
@@ -81,17 +88,34 @@ begin
   select original_overview into v_source
   from public.movie_synopsis_sources
   where title_id = '11111111-1111-4111-8111-111111111111';
-  if v_source <> 'An English synopsis that must be preserved privately.' then
+  if v_source is distinct from 'An English synopsis that must be preserved privately.' then
     raise exception 'Audited update overwrote the private source synopsis';
+  end if;
+
+  perform public.admin_audit_update_movie_synopsis(
+    '99999999-9999-4999-8999-999999999999',
+    '22222222-2222-4222-8222-222222222222',
+    'ملخص عربي قديم يجب أن يبقى ظاهراً.',
+    'ملخص عربي قديم يجب أن يبقى ظاهراً.',
+    'und',
+    'ar-SA',
+    'existing_arabic'
+  );
+
+  select overview, overview_language into v_public_overview, v_language
+  from public.movie_titles
+  where id = '22222222-2222-4222-8222-222222222222';
+  if v_public_overview is distinct from 'ملخص عربي قديم يجب أن يبقى ظاهراً.' or v_language is distinct from 'ar-SA' then
+    raise exception 'Existing Arabic synopsis was not restored by localization';
   end if;
 
   select count(*) into v_log_count
   from public.admin_audit_logs
   where action = 'movie.synopsis_localize'
-    and entity_id = '11111111-1111-4111-8111-111111111111'
+    and entity_id in ('11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222')
     and result = 'success';
-  if v_log_count <> 1 then
-    raise exception 'Synopsis update must create an audit log row';
+  if v_log_count <> 2 then
+    raise exception 'Each synopsis update must create an audit log row';
   end if;
 end;
 $$;
