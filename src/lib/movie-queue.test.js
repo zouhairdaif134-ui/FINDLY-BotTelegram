@@ -45,7 +45,12 @@ test("does not guess when multiple TMDB results are plausible", () => {
   assert.equal(selectTmdbQueueMatch(results, "It"), null);
 });
 
-test("accepts a sole TMDB result when there is no ambiguity", () => {
+test("does not auto-import a sole result when its title differs from the query", () => {
   const only = { tmdb_id: 88, title: "A Single Result" };
-  assert.equal(selectTmdbQueueMatch([only], "Another query"), only);
+  assert.equal(selectTmdbQueueMatch([only], "Another query"), null);
+});
+
+test("accepts one exact TMDB title match", () => {
+  const only = { tmdb_id: 89, title: "A Single Result" };
+  assert.equal(selectTmdbQueueMatch([only], "a single result"), only);
 });
