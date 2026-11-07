@@ -74,9 +74,31 @@ begin
   update public.movie_queue_items
     set status = 'failed'
     where normalized_title = 'duplicate queue test';
-  insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
-  values ('Duplicate Queue Test Retry', 'duplicate queue test', 'movie');
+  v_duplicate_rejected := false;
+  begin
+    insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
+    values ('Duplicate Queue Test Retry', 'duplicate queue test', 'movie');
+  exception when unique_violation then
+    v_duplicate_rejected := true;
+  end;
+  if not v_duplicate_rejected then
+    raise exception 'failed historical queue titles must remain reserved'; 
+  end if;
   delete from public.movie_queue_items where normalized_title = 'duplicate queue test';
+
+  insert into public.movie_titles(media_type, normalized_title)
+  values ('movie', 'catalog duplicate test');
+  v_duplicate_rejected := false;
+  begin
+    insert into public.movie_titles(media_type, normalized_title)
+    values ('movie', 'catalog duplicate test');
+  exception when unique_violation then
+    v_duplicate_rejected := true;
+  end;
+  if not v_duplicate_rejected then
+    raise exception 'catalog titles must be globally unique by media type and normalized title';
+  end if;
+  delete from public.movie_titles where normalized_title = 'catalog duplicate test';
 
   insert into public.movie_queue_items(submitted_title, normalized_title, media_type)
   values ('Queue Test One', 'queue test one', 'movie')
