@@ -6,6 +6,8 @@ const isPagesPreview =
     "feat-findly-movies-runtime-h.findly-bottelegram.pages.dev" ||
     window.location.hostname ===
     "feat-ai-advanced-phase1.findly-bottelegram.pages.dev" ||
+    window.location.hostname ===
+    "feat-hourly-movie-queue.findly-bottelegram.pages.dev" ||
     /^[a-f0-9]{8}\.findly-bottelegram\.pages\.dev$/.test(
       window.location.hostname
     ));

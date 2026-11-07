@@ -1,0 +1,32 @@
+.movie-queue-panel {
+  display: grid;
+  gap: 18px;
+}
+.movie-queue-panel .movies-card {
+  margin: 0;
+}
+.movie-queue-panel .movies-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 420px;
+}
+.movie-queue-panel .movies-row-actions .secondary-button {
+  white-space: normal;
+  text-align: right;
+}
+.movie-queue-panel .movies-table td {
+  vertical-align: top;
+}
+.movie-queue-panel .movies-table td small {
+  display: block;
+  margin-top: 5px;
+  color: #9b4b4b;
+  max-width: 300px;
+}
+.movie-queue-panel .movies-status.status-pending,
+.movie-queue-panel .movies-status.status-processing,
+.movie-queue-panel .movies-status.status-needs_review {
+  background: #eef2f7;
+  color: #334155;
+}

@@ -6,18 +6,21 @@ import AdminsSection from "./AdminsSection.jsx";
 import ActivityLogSection from "./ActivityLogSection.jsx";
 import MonetizationSection from "./MonetizationSection.jsx";
 import AISection from "./AISection.jsx";
+import MovieQueueSection from "./MovieQueueSection.jsx";
 import { buildMovieShareContent } from "../../src/lib/movie-sharing.js";
 
 const PRODUCTION_API_URL =
   "https://findly-v3-api.berrchidcity99.workers.dev";
 const PREVIEW_API_URL =
-  "https://feat-ai-advanced-phase1-findly-v3-api.berrchidcity99.workers.dev";
+  "https://feat-hourly-movie-queue-findly-v3-api.berrchidcity99.workers.dev";
 const isPagesPreview =
   typeof window !== "undefined" &&
   (window.location.hostname ===
     "feat-findly-movies-runtime-h.findly-bottelegram.pages.dev" ||
     window.location.hostname ===
     "feat-ai-advanced-phase1.findly-bottelegram.pages.dev" ||
+    window.location.hostname ===
+    "feat-hourly-movie-queue.findly-bottelegram.pages.dev" ||
     /^[a-f0-9]{8}\.findly-bottelegram\.pages\.dev$/.test(
       window.location.hostname
     ));
@@ -28,7 +31,7 @@ const API_URL =
 const menuGroups = [
   { icon: "🏠", label: "Overview", items: ["Overview"] },
   { icon: "🤖", label: "Bots & Telegram", items: ["Bots", "Telegram"] },
-  { icon: "🎬", label: "Movies & Categories", items: ["Movies", "Categories"] },
+  { icon: "🎬", label: "Movies & Categories", items: ["Movies", "Movie Queue", "Categories"] },
   { icon: "🗂️", label: "Menus & Content", items: ["Menus", "Content"] },
   { icon: "👥", label: "Users & Admins", items: ["Users", "Admins"] },
   { icon: "🔔", label: "Notifications", items: ["Notifications"] },
@@ -1867,6 +1870,8 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
             }
           />
         )}
+        {activeSection === "Movie Queue" && <MovieQueueSection fetchApi={fetchApi} />}
+
         {(activeSection === "Movies" || activeSection === "Publishing & Sharing") && (
           <MoviesSection
             movies={movies}

@@ -86,6 +86,15 @@ import { getSupabase } from "./lib/supabase.js";
 import { cleanupExpiredAISessionMessages } from "./lib/ai-memory.js";
 import { activateDueMonetizationCampaigns } from "./lib/monetization.js";
 import { renderMovieSharePage } from "./lib/movie-sharing.js";
+import {
+  listMovieQueue,
+  enqueueMovieQueue,
+  retryMovieQueueItem,
+  resolveMovieQueueItem,
+  rejectMovieQueueItem,
+  processMovieQueueHourly,
+  markMovieQueuePublished
+} from "./lib/movie-queue.js";
 
 import {
   success,
@@ -142,7 +151,7 @@ const PERMISSIONS = {
 function corsHeaders(request) {
   const origin = request?.headers.get("Origin") || "";
   const isAllowedPreviewOrigin =
-    /^https:\/\/(?:feat-findly-movies-runtime-h|feat-ai-advanced-phase1|feat-cloudflare-workers-ai|[a-f0-9]{8})\.findly-bottelegram\.pages\.dev$/.test(origin);
+    /^https:\/\/(?:feat-findly-movies-runtime-h|feat-ai-advanced-phase1|feat-hourly-movie-queue|feat-cloudflare-workers-ai|[a-f0-9]{8})\.findly-bottelegram\.pages\.dev$/.test(origin);
   const isAllowedOrigin =
     origin === "https://findly-bottelegram.pages.dev" ||
     isAllowedPreviewOrigin;
@@ -274,6 +283,18 @@ export default {
       await cleanupExpiredAISessionMessages(getSupabase(env));
     } catch (error) {
       console.error("FINDLY AI session-memory expiry cleanup failed:", {
+        code: error?.code || null,
+        message: error?.message || "Unknown error"
+      });
+    }
+
+    try {
+      const queueResult = await processMovieQueueHourly(env);
+      if (queueResult?.processed) {
+        console.log("FINDLY hourly movie queue processed:", queueResult);
+      }
+    } catch (error) {
+      console.error("FINDLY hourly movie queue failed:", {
         code: error?.code || null,
         message: error?.message || "Unknown error"
       });
@@ -1267,6 +1288,38 @@ export default {
        * Protected by existing FINDLY content permissions.
        */
 
+      if (url.pathname === "/api/movies/queue/status" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentView);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success({
+          tmdb_processing_enabled: env.TMDB_COMMERCIAL_LICENSE_APPROVED === "true"
+        }), request);
+      }
+
+      if (url.pathname === "/api/movies/queue" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentView);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await listMovieQueue(env, url.searchParams.get("status"))), request);
+      }
+
+      if (url.pathname === "/api/movies/queue" && request.method === "POST") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentCreate);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await enqueueMovieQueue(env, await readJson(request), auth)), request);
+      }
+
+      const movieQueueAction = url.pathname.match(/^\/api\/movies\/queue\/([0-9a-f-]{36})\/(retry|resolve|reject)$/i);
+      if (movieQueueAction && request.method === "POST") {
+        const action = movieQueueAction[2];
+        const permission = ["retry", "reject"].includes(action) ? PERMISSIONS.contentUpdate : PERMISSIONS.contentCreate;
+        const auth = await requirePermission(env, request, permission);
+        if (auth.response) return withCors(auth.response, request);
+        const itemId = movieQueueAction[1];
+        if (action === "retry") return withCors(success(await retryMovieQueueItem(env, itemId)), request);
+        if (action === "reject") return withCors(success(await rejectMovieQueueItem(env, itemId)), request);
+        return withCors(success(await resolveMovieQueueItem(env, itemId, await readJson(request), auth)), request);
+      }
+
       if (url.pathname === "/api/movies/tmdb/search" && request.method === "GET") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentView);
         if (auth.response) return withCors(auth.response, request);
@@ -1297,7 +1350,20 @@ export default {
       if (url.pathname.startsWith("/api/movies/") && request.method === "PUT") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentUpdate);
         if (auth.response) return withCors(auth.response, request);
-        return withCors(success(await updateMovieCatalogItem(env, getId(url), await readJson(request), auth)), request);
+        const movieUpdateBody = await readJson(request);
+        const updatedMovie = await updateMovieCatalogItem(env, getId(url), movieUpdateBody, auth);
+        if (movieUpdateBody.status === "active") {
+          try {
+            await markMovieQueuePublished(env, getId(url));
+          } catch (queueSyncError) {
+            console.error("FINDLY movie queue publication sync failed:", {
+              movie_id: getId(url),
+              code: queueSyncError?.code || null,
+              message: queueSyncError?.message || "Unknown error"
+            });
+          }
+        }
+        return withCors(success(updatedMovie), request);
       }
 
       if (url.pathname.startsWith("/api/movies/") && request.method === "DELETE") {
