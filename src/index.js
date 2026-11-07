@@ -1288,6 +1288,14 @@ export default {
        * Protected by existing FINDLY content permissions.
        */
 
+      if (url.pathname === "/api/movies/queue/status" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentView);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success({
+          tmdb_processing_enabled: env.TMDB_COMMERCIAL_LICENSE_APPROVED === "true"
+        }), request);
+      }
+
       if (url.pathname === "/api/movies/queue" && request.method === "GET") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentView);
         if (auth.response) return withCors(auth.response, request);
