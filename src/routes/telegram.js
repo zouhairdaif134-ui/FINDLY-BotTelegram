@@ -1572,17 +1572,7 @@ async function processTelegramUpdate(
       category: safeAIError.category
     });
     await recordAnalytics(env, bot, null, "ai_error", safeAIError);
-    await sendMessage(
-      env,
-      bot.slug,
-      chatId,
-      "وقع مشكل مؤقت فالمساعد الذكي. حاول من بعد."
-    );
-    return {
-      ok: true,
-      ai: false,
-      error: "ai_unavailable"
-    };
+    // AI is an optional enhancement: continue into the ordinary bot response below.
   }
 
   if (
