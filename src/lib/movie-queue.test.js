@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeMovieQueueTitle, selectTmdbQueueMatch } from "./movie-queue.js";
+import { normalizeMovieQueueTitle, selectTmdbQueueMatch, isMovieQueueProcessingEnabled } from "./movie-queue.js";
 import { assertTmdbCommercialUseAllowed } from "../routes/content.js";
 
 test("normalizes whitespace, case, and punctuation consistently", () => {
@@ -77,4 +77,11 @@ test("allows TMDB access only after the commercial approval flag is explicit", (
     TMDB_API_KEY: "configured",
     TMDB_COMMERCIAL_LICENSE_APPROVED: "true"
   }));
+});
+
+test("keeps hourly processing disabled until commercial approval is explicit", () => {
+  assert.equal(isMovieQueueProcessingEnabled({}), false);
+  assert.equal(isMovieQueueProcessingEnabled({ TMDB_COMMERCIAL_LICENSE_APPROVED: "false" }), false);
+  assert.equal(isMovieQueueProcessingEnabled({ TMDB_COMMERCIAL_LICENSE_APPROVED: true }), false);
+  assert.equal(isMovieQueueProcessingEnabled({ TMDB_COMMERCIAL_LICENSE_APPROVED: "true" }), true);
 });
