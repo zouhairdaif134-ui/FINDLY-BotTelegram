@@ -59,3 +59,7 @@ test("matches an exact original TMDB title when the localized title differs", ()
   const only = { tmdb_id: 90, title: "The Shawshank Redemption", original_title: "Les Évadés" };
   assert.equal(selectTmdbQueueMatch([only], "Les Evades"), only);
 });
+
+test("rejects punctuation-only titles at enqueue normalization boundary", () => {
+  assert.equal(normalizeMovieQueueTitle("!!! — ???"), "");
+});
