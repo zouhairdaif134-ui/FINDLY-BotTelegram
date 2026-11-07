@@ -236,6 +236,62 @@ async function sendMoviesCategories(env, bot, chatId) {
   );
 }
 
+function normalizeMovieFilters(filters = {}) {
+  return {
+    mediaType: ["movie", "series"].includes(filters.mediaType) ? filters.mediaType : "all",
+    genreSlug: /^[a-z0-9-]{1,20}$/.test(filters.genreSlug || "") ? filters.genreSlug : "",
+    year: Number.isInteger(Number(filters.year)) && Number(filters.year) >= 1888 && Number(filters.year) <= 2200 ? Number(filters.year) : null,
+    sort: ["added", "old", "top", "az", "release"].includes(filters.sort) ? filters.sort : "added"
+  };
+}
+
+async function sendMoviesFilterMenu(env, bot, chatId, inputFilters = {}) {
+  const filters = normalizeMovieFilters(inputFilters);
+  const callback = (mediaType, genreSlug, year, sort) =>
+    "movies:filter:" + mediaType + ":" + (genreSlug || "none") + ":" + (year || 0) + ":" + sort + ":0";
+  const keyboard = [
+    [
+      { text: filters.mediaType === "all" ? "• الكل" : "الكل", callback_data: callback("all", filters.genreSlug, filters.year, filters.sort) },
+      { text: filters.mediaType === "movie" ? "• أفلام" : "🎬 أفلام", callback_data: callback("movie", filters.genreSlug, filters.year, filters.sort) },
+      { text: filters.mediaType === "series" ? "• مسلسلات" : "📺 مسلسلات", callback_data: callback("series", filters.genreSlug, filters.year, filters.sort) }
+    ],
+    [{ text: "🏷️ اختيار التصنيف" + (filters.genreSlug ? " · " + filters.genreSlug : ""), callback_data: "movies:filtergenres:" + filters.mediaType + ":" + (filters.year || 0) + ":" + filters.sort }],
+    [{ text: "📅 سنة الإصدار" + (filters.year ? " · " + filters.year : ""), callback_data: "movies:filteryearprompt:" + filters.mediaType + ":" + (filters.genreSlug || "none") + ":" + (filters.year || 0) + ":" + filters.sort }]
+  ];
+  keyboard.push([
+    { text: filters.sort === "added" ? "• الأحدث إضافة" : "الأحدث إضافة", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, "added") },
+    { text: filters.sort === "old" ? "• الأقدم" : "الأقدم", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, "old") }
+  ]);
+  keyboard.push([
+    { text: filters.sort === "top" ? "• الأعلى تقييماً" : "⭐ الأعلى تقييماً", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, "top") },
+    { text: filters.sort === "az" ? "• A-Z" : "A-Z", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, "az") }
+  ]);
+  keyboard.push([{ text: "تطبيق الفلاتر", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, filters.sort) }]);
+  keyboard.push([{ text: "مسح جميع الفلاتر", callback_data: callback("all", "", null, "added") }]);
+  keyboard.push([{ text: "⬅️ رجوع للمكتبة", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, filters.sort) }]);
+  await sendMessage(env, bot.slug, chatId,
+    "<b>⚙️ الفلترة والترتيب</b>\\n\\nاختار النوع والتصنيف والسنة والترتيب. تقدر تجمع أكثر من فلتر.\\n\\n" +
+    "النوع: " + (filters.mediaType === "all" ? "الكل" : filters.mediaType === "movie" ? "أفلام" : "مسلسلات") + "\\n" +
+    "التصنيف: " + (filters.genreSlug || "الكل") + "\\n" +
+    "السنة: " + (filters.year || "كل السنوات") + "\\n" +
+    "الترتيب: " + filters.sort,
+    { reply_markup: { inline_keyboard: keyboard } }
+  );
+}
+
+async function sendMoviesFilterGenres(env, bot, chatId, filters = {}) {
+  const normalized = normalizeMovieFilters(filters);
+  const { data, error } = await getSupabase(env).from("movie_genres").select("name,slug").order("name", { ascending: true }).limit(60);
+  if (error) throw error;
+  const keyboard = [[{ text: "كل التصنيفات", callback_data: "movies:filter:" + normalized.mediaType + ":none:" + (normalized.year || 0) + ":" + normalized.sort + ":0" }]];
+  for (const genre of data || []) {
+    if (!/^[a-z0-9-]{1,20}$/.test(genre.slug || "")) continue;
+    keyboard.push([{ text: genre.name, callback_data: "movies:filter:" + normalized.mediaType + ":" + genre.slug + ":" + (normalized.year || 0) + ":" + normalized.sort + ":0" }]);
+  }
+  keyboard.push([{ text: "⬅️ رجوع للفلاتر", callback_data: "movies:filters" }]);
+  await sendMessage(env, bot.slug, chatId, "<b>🏷️ اختار التصنيف</b>", { reply_markup: { inline_keyboard: keyboard } });
+}
+
 async function showMoviesYearPrompt(env, bot, chatId) {
   await sendMessage(
     env,
@@ -246,7 +302,7 @@ async function showMoviesYearPrompt(env, bot, chatId) {
   );
 }
 
-async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", genreSlug = "") {
+async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", genreSlug = "", filters = {}) {
   const supabase = getSupabase(env);
   let query = supabase
     .from("movie_titles")
@@ -256,11 +312,16 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
   if (action === "films") query = query.eq("media_type", "movie");
   if (action === "series") query = query.eq("media_type", "series");
   if (action === "year") query = query.eq("release_year", Number(searchTerm));
-  if (action === "genre") {
+  if (action === "filter") {
+    if (filters.mediaType && filters.mediaType !== "all") query = query.eq("media_type", filters.mediaType);
+    if (filters.year) query = query.eq("release_year", Number(filters.year));
+  }
+  if (action === "genre" || (action === "filter" && filters.genreSlug)) {
+    const selectedGenreSlug = action === "genre" ? genreSlug : filters.genreSlug;
     const { data: genre, error: genreError } = await supabase
       .from("movie_genres")
       .select("id,name")
-      .eq("slug", genreSlug)
+      .eq("slug", selectedGenreSlug)
       .maybeSingle();
     if (genreError) throw genreError;
     if (!genre) {
@@ -283,10 +344,11 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
     query = query.ilike("normalized_title", "%" + safe + "%");
   }
 
-  if (action === "top") query = query.order("rating", { ascending: false, nullsFirst: false });
-  else if (action === "added") query = query.order("created_at", { ascending: false });
-  else if (action === "old") query = query.order("release_date", { ascending: true, nullsFirst: false });
-  else if (action === "az") query = query.order("title", { ascending: true });
+  const sort = action === "filter" ? filters.sort : action;
+  if (sort === "top") query = query.order("rating", { ascending: false, nullsFirst: false });
+  else if (sort === "added") query = query.order("created_at", { ascending: false });
+  else if (sort === "old") query = query.order("release_date", { ascending: true, nullsFirst: false });
+  else if (sort === "az") query = query.order("title", { ascending: true });
   else query = query.order("release_date", { ascending: false, nullsFirst: false });
 
   const from = page * MOVIE_PAGE_SIZE;
@@ -306,11 +368,14 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
                 : action === "films" ? "الأفلام"
                   : action === "series" ? "المسلسلات" : "المكتبة";
 
-  const keyboard = (data || []).map((item) => [titleButton(item)]);
+  const keyboard = [];
+  const titleButtons = (data || []).map(titleButton);
+  for (let index = 0; index < titleButtons.length; index += 2) keyboard.push(titleButtons.slice(index, index + 2));
   const pageCallback = (nextPage) => {
     if (action === "search") return "movies:search:" + nextPage + ":" + encodeSearchCallback(searchTerm);
     if (action === "genre") return "movies:genre:" + genreSlug + ":" + nextPage;
     if (action === "year") return "movies:year:" + searchTerm + ":" + nextPage;
+    if (action === "filter") return "movies:filter:" + (filters.mediaType || "all") + ":" + (filters.genreSlug || "none") + ":" + (filters.year || 0) + ":" + (filters.sort || "added") + ":" + nextPage;
     return "movies:" + (action === "library" ? "library" : action) + ":" + nextPage;
   };
   const navigation = [];
@@ -337,32 +402,14 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
   }
 
   keyboard.push([
-    { text: "الكل", callback_data: "movies:library:0" },
-    { text: "🎬 أفلام", callback_data: "movies:films:0" },
-    { text: "📺 مسلسلات", callback_data: "movies:series:0" }
-  ]);
-  keyboard.push([
-    { text: "🆕 المضاف حديثاً", callback_data: "movies:added:0" },
-    { text: "🕰️ الأقدم", callback_data: "movies:old:0" },
-    { text: "⭐ التقييم", callback_data: "movies:top:0" },
-    { text: "A–Z", callback_data: "movies:az:0" }
-  ]);
-  keyboard.push([
-    { text: "🗂️ التصنيفات", callback_data: "movies:categories" },
-    { text: "📅 سنة الإصدار", callback_data: "movies:yearprompt" }
+    { text: "🔎 البحث", callback_data: "movies:search" },
+    { text: "⚙️ الفلترة والترتيب", callback_data: "movies:filters" }
   ]);
   keyboard.push([{ text: "🏠 القائمة الرئيسية", callback_data: "movies:home" }]);
 
-  const body = data?.length
-    ? (data || []).map((item, index) =>
-        (from + index + 1) + ". <b>" + escapeHtml(Array.from(String(item.title || "")).slice(0, 120).join("")) + "</b>" +
-        (item.release_year ? " · " + item.release_year : "") +
-        " · " + (item.media_type === "series" ? "مسلسل" : "فيلم") +
-        (item.rating != null ? " · ⭐ " + Number(item.rating).toFixed(1) : "")
-      ).join("\n")
-    : "مازال ما تزاد حتى عنوان منشور فهاد الاختيار.";
+  const body = data?.length ? "اختار عنواناً من الأزرار لعرض التفاصيل." : "مازال ما تزاد حتى عنوان منشور فهاد الاختيار.";
 
-  const rangeStart = total ? from + 1 : 0;
+    const rangeStart = total ? from + 1 : 0;
   const rangeEnd = Math.min(from + (data?.length || 0), total);
   await sendMessage(env, bot.slug, chatId,
     "<b>🎞️ " + heading + "</b>\n" +
