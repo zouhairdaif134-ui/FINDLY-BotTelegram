@@ -115,6 +115,10 @@ Record structured events for enqueue, claim, TMDB lookup, match resolution, draf
 - Review migration SQL and rollback procedure.
 - Deploy to a non-production environment first if one is configured; otherwise require a deliberate production rollout with a verified rollback path.
 
-## 13. Rollout and safety
+## 13. Commercial licensing gate
+
+FINDLY Movies is intended to generate revenue from launch. TMDB's official developer FAQ says its free API is for non-commercial use and directs commercial projects to obtain a commercial license. Therefore all existing TMDB API calls (manual search/import and hourly queue) fail closed unless the Worker variable `TMDB_COMMERCIAL_LICENSE_APPROVED` is exactly `true`. The flag must remain unset until written approval covers the intended commercial use, metadata, images, territories, caching, attribution, and monetization model. See `docs/compliance/TMDB-commercial-use-gate.md`.
+
+## 14. Rollout and safety
 
 The feature must be developed on feat/hourly-movie-queue and proposed through a pull request. Production rollout is a separate step after CI, code review, migration review, and smoke tests. The existing Cron schedule and Telegram bot flows must remain unchanged. No production deployment is part of this design-document commit.
