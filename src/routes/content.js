@@ -408,7 +408,6 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
  
 
 export async function processMovieSynopsisBackfill(env, actor, requestedLimit = 3) {
-  assertTmdbAccessAllowed(env);
   const limit = Math.min(3, Math.max(1, Number(requestedLimit) || 3));
   const supabase = getSupabase(env);
   const { data: pending, error: pendingError } = await supabase
@@ -440,9 +439,16 @@ export async function processMovieSynopsisBackfill(env, actor, requestedLimit = 
 
     if (externalId?.external_id) {
       const endpoint = (item.media_type === "series" ? "/tv/" : "/movie/") + externalId.external_id;
-      const localizedDetails = await tmdbRequest(env, endpoint, { language: "ar-SA" });
-      localizedOverview = localizedDetails.overview || "";
-      sourceLanguage = localizedDetails.original_language || sourceLanguage;
+      try {
+        const localizedDetails = await tmdbRequest(env, endpoint, { language: "ar-SA" });
+        localizedOverview = localizedDetails.overview || "";
+        sourceLanguage = localizedDetails.original_language || sourceLanguage;
+      } catch (localizedRequestError) {
+        console.warn("FINDLY backfill could not fetch TMDB Arabic synopsis; using source translation:", {
+          movie_id: item.id,
+          code: localizedRequestError?.code || localizedRequestError?.name || "TMDB_LOCALIZED_REQUEST_FAILED"
+        });
+      }
     }
 
     const synopsis = await resolveArabicSynopsis(env, localizedOverview, sourceOverview);
@@ -468,9 +474,17 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", ac
     append_to_response: "external_ids",
     language: "en-US"
   });
-  const arabicDetails = await tmdbRequest(env, (isSeries ? "/tv/" : "/movie/") + tmdbId, {
-    language: "ar-SA"
-  });
+  let arabicDetails = {};
+  try {
+    arabicDetails = await tmdbRequest(env, (isSeries ? "/tv/" : "/movie/") + tmdbId, {
+      language: "ar-SA"
+    });
+  } catch (localizedRequestError) {
+    console.warn("FINDLY TMDB Arabic synopsis unavailable; using translation fallback:", {
+      tmdb_id: String(tmdbId),
+      code: localizedRequestError?.code || localizedRequestError?.name || "TMDB_LOCALIZED_REQUEST_FAILED"
+    });
+  }
   let synopsis;
   try {
     synopsis = await resolveArabicSynopsis(env, arabicDetails.overview, details.overview);
