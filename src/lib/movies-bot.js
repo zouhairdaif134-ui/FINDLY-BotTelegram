@@ -1,9 +1,10 @@
 import { getSupabase } from "./supabase.js";
-import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
+import { sendMessage, sendPhoto, answerCallback } from "./telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const PAGE_SIZE = 8;
+export const MOVIE_PAGE_SIZE = 20;
 const SEARCH_PROMPT = "🔎 بحث FINDLY Movies";
+const YEAR_PROMPT = "📅 سنة إصدار FINDLY";
 
 export function normalizeMovieSearch(value) {
   return String(value || "")
@@ -37,10 +38,22 @@ export function parseMoviesCallback(value) {
   if (action === "search" && parts[3]) {
     const page = Number(parts[2]);
     const query = decodeSearchCallback(parts.slice(3).join(":"));
-    if (!query || !Number.isInteger(page) || page < 1) return null;
+    if (!query || !Number.isInteger(page) || page < 0) return null;
     return { action, page, query };
   }
-  if (["home", "new", "top", "films", "series", "favorites", "search", "help"].includes(action)) {
+  if (action === "genre") {
+    const genreSlug = parts[2] || "";
+    const page = Number(parts[3] || 0);
+    if (!/^[a-z0-9-]{1,40}$/.test(genreSlug) || !Number.isInteger(page) || page < 0) return null;
+    return { action, genreSlug, page };
+  }
+  if (action === "year") {
+    const year = Number(parts[2]);
+    const page = Number(parts[3] || 0);
+    if (!Number.isInteger(year) || year < 1888 || year > 2200 || !Number.isInteger(page) || page < 0) return null;
+    return { action, year, page };
+  }
+  if (["home", "library", "categories", "yearprompt", "added", "new", "old", "top", "az", "films", "series", "favorites", "search", "help"].includes(action)) {
     const page = Number(parts[2] || 0);
     return { action, page: Number.isInteger(page) && page >= 0 ? page : 0 };
   }
@@ -95,24 +108,6 @@ export function buildTitleCaption(title) {
     "\n\n<i>" + escapeHtml("ℹ️ " + notice) + "</i>";
 }
 
-async function getMoviesBot(env) {
-  const { data, error } = await getSupabase(env)
-    .from("bots")
-    .select("telegram_username")
-    .eq("slug", "movies")
-    .eq("is_active", true)
-    .maybeSingle();
-  if (error || !data?.telegram_username) return null;
-  try {
-    const identity = await telegramRequest(env, "movies", "getMe");
-    const configuredUsername = data.telegram_username.replace(/^@/, "").toLowerCase();
-    if (!identity?.username || identity.username.toLowerCase() !== configuredUsername) return null;
-    return data;
-  } catch {
-    return null;
-  }
-}
-
 async function getMasterBot(env) {
   const { data, error } = await getSupabase(env)
     .from("bots")
@@ -136,11 +131,12 @@ async function getInternalUserId(env, telegramUserId) {
 }
 
 function titleButton(title) {
+  const safeTitle = Array.from(String(title.title || "بدون عنوان")).slice(0, 55).join("");
   const year = title.release_year ? " (" + title.release_year + ")" : "";
   const kind = title.media_type === "series" ? "مسلسل" : "فيلم";
   return {
     text: (title.rating ? "⭐ " + Number(title.rating).toFixed(1) + " · " : "") +
-      kind + " · " + title.title + year,
+      kind + " · " + safeTitle + year,
     callback_data: "movies:title:" + title.id
   };
 }
@@ -148,12 +144,12 @@ function titleButton(title) {
 export async function showMoviesHome(env, bot, chatId) {
   const keyboard = [
     [
-      { text: "🆕 الإصدارات الجديدة", callback_data: "movies:new:0" },
-      { text: "⭐ الأعلى تقييماً", callback_data: "movies:top:0" }
+      { text: "📚 المكتبة", callback_data: "movies:library:0" },
+      { text: "🗂️ التصنيفات", callback_data: "movies:categories" }
     ],
     [
-      { text: "🎬 الأفلام", callback_data: "movies:films:0" },
-      { text: "📺 المسلسلات", callback_data: "movies:series:0" }
+      { text: "🆕 المضاف حديثاً", callback_data: "movies:added:0" },
+      { text: "⭐ الأعلى تقييماً", callback_data: "movies:top:0" }
     ],
     [
       { text: "🔎 البحث", callback_data: "movies:search" },
@@ -162,11 +158,7 @@ export async function showMoviesHome(env, bot, chatId) {
     [{ text: "ℹ️ المساعدة", callback_data: "movies:help" }]
   ];
 
-  if (bot.slug === "findly") {
-    const moviesBot = await getMoviesBot(env);
-    const username = moviesBot?.telegram_username?.replace(/^@/, "");
-    if (username) keyboard.push([{ text: "▶️ افتح FINDLY Movies", url: "https://t.me/" + username }]);
-  } else {
+  if (bot.slug !== "findly") {
     const master = await getMasterBot(env);
     const username = master?.telegram_username?.replace(/^@/, "");
     if (username) keyboard.push([{ text: "🏠 FINDLY الرئيسي", url: "https://t.me/" + username }]);
@@ -184,62 +176,165 @@ export async function showMoviesHome(env, bot, chatId) {
   );
 }
 
-async function sendList(env, bot, chatId, action, page = 0, searchTerm = "") {
+async function sendMoviesCategories(env, bot, chatId) {
+  const { data, error } = await getSupabase(env)
+    .from("movie_genres")
+    .select("name,slug")
+    .order("name", { ascending: true })
+    .limit(60);
+  if (error) throw error;
+  const keyboard = [];
+  const genres = data || [];
+  for (let index = 0; index < genres.length; index += 2) {
+    keyboard.push(genres.slice(index, index + 2).map((genre) => ({
+      text: genre.name,
+      callback_data: "movies:genre:" + genre.slug + ":0"
+    })));
+  }
+  keyboard.push([{ text: "📚 المكتبة كاملة", callback_data: "movies:library:0" }]);
+  keyboard.push([{ text: "🏠 القائمة الرئيسية", callback_data: "movies:home" }]);
+  await sendMessage(
+    env,
+    bot.slug,
+    chatId,
+    "<b>🗂️ تصنيفات FINDLY</b>\n\nاختار النوع اللي بغيتي، وغادي تشوف الأفلام والمسلسلات المنشورة فيه.",
+    { reply_markup: { inline_keyboard: keyboard } }
+  );
+}
+
+async function showMoviesYearPrompt(env, bot, chatId) {
+  await sendMessage(
+    env,
+    bot.slug,
+    chatId,
+    "<b>" + YEAR_PROMPT + "</b>\nجاوب على هاد الرسالة بسنة الإصدار، مثال: 2024.",
+    { reply_markup: { force_reply: { force_reply: true, selective: true, input_field_placeholder: "مثلاً 2024" } } }
+  );
+}
+
+async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", genreSlug = "") {
   const supabase = getSupabase(env);
   let query = supabase
     .from("movie_titles")
-    .select("id,title,original_title,media_type,release_year,release_date,rating,overview,metadata_status")
+    .select("id,title,original_title,media_type,release_year,release_date,rating,overview,metadata_status", { count: "exact" })
     .eq("status", "active");
 
   if (action === "films") query = query.eq("media_type", "movie");
   if (action === "series") query = query.eq("media_type", "series");
-  if (searchTerm) {
+  if (action === "year") query = query.eq("release_year", Number(searchTerm));
+  if (action === "genre") {
+    const { data: genre, error: genreError } = await supabase
+      .from("movie_genres")
+      .select("id,name")
+      .eq("slug", genreSlug)
+      .maybeSingle();
+    if (genreError) throw genreError;
+    if (!genre) {
+      await sendMessage(env, bot.slug, chatId, "هاد التصنيف ما بقاش متاح.");
+      return;
+    }
+    const { data: links, error: linksError } = await supabase
+      .from("movie_title_genres")
+      .select("title_id")
+      .eq("genre_id", genre.id)
+      .limit(1000);
+    if (linksError) throw linksError;
+    const titleIds = (links || []).map((link) => link.title_id);
+    if (titleIds.length) query = query.in("id", titleIds);
+    else query = query.eq("id", "00000000-0000-0000-0000-000000000000");
+  }
+
+  if (searchTerm && action === "search") {
     const safe = searchTerm.replace(/[%_*]/g, " ").trim();
     query = query.ilike("normalized_title", "%" + safe + "%");
-  } else if (action === "top") {
-    query = query.order("rating", { ascending: false, nullsFirst: false });
-  } else {
-    query = query.order("release_date", { ascending: false, nullsFirst: false });
   }
 
-  const from = page * PAGE_SIZE;
-  const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
-  if (error) throw error;
+  if (action === "top") query = query.order("rating", { ascending: false, nullsFirst: false });
+  else if (action === "added") query = query.order("created_at", { ascending: false });
+  else if (action === "old") query = query.order("release_date", { ascending: true, nullsFirst: false });
+  else if (action === "az") query = query.order("title", { ascending: true });
+  else query = query.order("release_date", { ascending: false, nullsFirst: false });
 
-  const heading = searchTerm
+  const from = page * MOVIE_PAGE_SIZE;
+  const { data, error, count } = await query.range(from, from + MOVIE_PAGE_SIZE - 1);
+  if (error) throw error;
+  const total = count || 0;
+  const pageCount = Math.max(1, Math.ceil(total / MOVIE_PAGE_SIZE));
+
+  const heading = action === "search"
     ? "نتائج البحث عن: " + escapeHtml(searchTerm)
-    : action === "new" ? "الإصدارات الجديدة"
-      : action === "top" ? "الأعلى تقييماً"
-        : action === "films" ? "الأفلام"
-          : action === "series" ? "المسلسلات" : "الكتالوج";
+    : action === "genre" ? "تصنيف: " + escapeHtml(genreSlug.replaceAll("-", " "))
+      : action === "year" ? "إصدارات سنة " + escapeHtml(searchTerm)
+        : action === "new" || action === "library" ? "المكتبة — الأحدث"
+          : action === "old" ? "الأقدم"
+            : action === "az" ? "ترتيب حسب الاسم"
+              : action === "top" ? "الأعلى تقييماً"
+                : action === "films" ? "الأفلام"
+                  : action === "series" ? "المسلسلات" : "المكتبة";
 
   const keyboard = (data || []).map((item) => [titleButton(item)]);
-  let hasNextPage = false;
-  if (data?.length === PAGE_SIZE) {
-    const callbackData = action === "search"
-      ? "movies:search:" + (page + 1) + ":" + encodeSearchCallback(searchTerm)
-      : "movies:" + action + ":" + (page + 1);
-    if (callbackData.length <= 64) {
-      keyboard.push([{ text: "➡️ المزيد", callback_data: callbackData }]);
-      hasNextPage = true;
+  const pageCallback = (nextPage) => {
+    if (action === "search") return "movies:search:" + nextPage + ":" + encodeSearchCallback(searchTerm);
+    if (action === "genre") return "movies:genre:" + genreSlug + ":" + nextPage;
+    if (action === "year") return "movies:year:" + searchTerm + ":" + nextPage;
+    return "movies:" + (action === "library" ? "library" : action) + ":" + nextPage;
+  };
+  const navigation = [];
+  const previousCallback = page > 0 ? pageCallback(page - 1) : "";
+  const nextCallback = page + 1 < pageCount ? pageCallback(page + 1) : "";
+  if (previousCallback && previousCallback.length <= 64) navigation.push({ text: "⬅️ السابق", callback_data: previousCallback });
+  const currentPageCallback = pageCallback(page);
+  navigation.push({ text: "📄 " + (page + 1) + " / " + pageCount, callback_data: currentPageCallback.length <= 64 ? currentPageCallback : "movies:library:0" });
+  if (nextCallback && nextCallback.length <= 64) navigation.push({ text: "التالي ➡️", callback_data: nextCallback });
+  if (navigation.length) keyboard.push(navigation);
+
+  if (pageCount > 1) {
+    const pageButtons = [];
+    for (let pageIndex = 0; pageIndex < Math.min(pageCount, 10); pageIndex += 1) {
+      const callbackData = pageCallback(pageIndex);
+      if (callbackData.length <= 64) {
+        pageButtons.push({
+          text: pageIndex === page ? "• " + (pageIndex + 1) : String(pageIndex + 1),
+          callback_data: callbackData
+        });
+      }
     }
+    if (pageButtons.length) keyboard.push(pageButtons);
   }
+
+  keyboard.push([
+    { text: "الكل", callback_data: "movies:library:0" },
+    { text: "🎬 أفلام", callback_data: "movies:films:0" },
+    { text: "📺 مسلسلات", callback_data: "movies:series:0" }
+  ]);
+  keyboard.push([
+    { text: "🆕 المضاف حديثاً", callback_data: "movies:added:0" },
+    { text: "🕰️ الأقدم", callback_data: "movies:old:0" },
+    { text: "⭐ التقييم", callback_data: "movies:top:0" },
+    { text: "A–Z", callback_data: "movies:az:0" }
+  ]);
+  keyboard.push([
+    { text: "🗂️ التصنيفات", callback_data: "movies:categories" },
+    { text: "📅 سنة الإصدار", callback_data: "movies:yearprompt" }
+  ]);
   keyboard.push([{ text: "🏠 القائمة الرئيسية", callback_data: "movies:home" }]);
 
   const body = data?.length
     ? (data || []).map((item, index) =>
-        (from + index + 1) + ". <b>" + escapeHtml(item.title) + "</b>" +
+        (from + index + 1) + ". <b>" + escapeHtml(Array.from(String(item.title || "")).slice(0, 120).join("")) + "</b>" +
         (item.release_year ? " · " + item.release_year : "") +
-        (item.rating ? " · ⭐ " + Number(item.rating).toFixed(1) : "")
-      ).join("\n") +
-      (searchTerm && data.length === PAGE_SIZE && !hasNextPage
-        ? "\n\nوصلنا حد طول البحث داخل Telegram. زيد دقّق الاسم باش تضيق النتائج."
-        : "")
-    : "مازال ما تزاد حتى عنوان فهاد الكتالوج. ملي يتربط مصدر البيانات أو يضيف المدير العناوين، غادي تبان هنا.";
+        " · " + (item.media_type === "series" ? "مسلسل" : "فيلم") +
+        (item.rating != null ? " · ⭐ " + Number(item.rating).toFixed(1) : "")
+      ).join("\n")
+    : "مازال ما تزاد حتى عنوان منشور فهاد الاختيار.";
 
-  await sendMessage(env, bot.slug, chatId, "<b>🎞️ " + heading + "</b>\n\n" + body, {
-    reply_markup: { inline_keyboard: keyboard }
-  });
+  const rangeStart = total ? from + 1 : 0;
+  const rangeEnd = Math.min(from + (data?.length || 0), total);
+  await sendMessage(env, bot.slug, chatId,
+    "<b>🎞️ " + heading + "</b>\n" +
+    "<i>عرض " + rangeStart + "–" + rangeEnd + " من " + total + "</i>\n\n" + body,
+    { reply_markup: { inline_keyboard: keyboard } }
+  );
 }
 
 export async function sendTitleCard(env, botSlug, chatId, posterPath, caption, options = {}) {
@@ -302,16 +397,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   if (title.media_type === "series") {
     keyboard.push([{ text: "📚 المواسم والحلقات", callback_data: "movies:seasons:" + title.id }]);
   }
-  if (bot.slug === "findly") {
-    const moviesBot = await getMoviesBot(env);
-    const username = moviesBot?.telegram_username?.replace(/^@/, "");
-    if (username) {
-      keyboard.push([{
-        text: "▶️ فتح في FINDLY Movies",
-        url: "https://t.me/" + username + "?start=movie_" + title.id
-      }]);
-    }
-  }
+
   keyboard.push([{ text: "⬅️ رجوع للقائمة", callback_data: "movies:home" }]);
 
   const caption = buildTitleCaption(title);
@@ -449,11 +535,23 @@ export function isMoviesSearchReply(message) {
   return Boolean(message?.reply_to_message?.text?.startsWith(SEARCH_PROMPT));
 }
 
+export function isMoviesYearReply(message) {
+  return Boolean(message?.reply_to_message?.text?.startsWith(YEAR_PROMPT));
+}
+
 export async function handleMoviesText(env, bot, chatId, message, telegramUserId) {
-  const term = normalizeMovieSearch(message?.text);
-  if (!term || term.startsWith("/")) return false;
+  const raw = normalizeMovieSearch(message?.text);
+  if (!raw || raw.startsWith("/")) return false;
+  if (isMoviesYearReply(message)) {
+    if (!/^\\d{4}$/.test(raw) || Number(raw) < 1888 || Number(raw) > 2200) {
+      await sendMessage(env, bot.slug, chatId, "دخل سنة صحيحة بين 1888 و2200، مثال: 2024.");
+      return true;
+    }
+    await sendList(env, bot, chatId, "year", 0, raw);
+    return true;
+  }
   if (bot.slug !== "movies" && !isMoviesSearchReply(message)) return false;
-  await sendList(env, bot, chatId, "search", 0, term);
+  await sendList(env, bot, chatId, "search", 0, raw);
   return true;
 }
 
@@ -465,12 +563,16 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   const telegramUserId = callbackQuery.from?.id;
 
   if (parsed.action === "home") await showMoviesHome(env, bot, chatId);
+  else if (parsed.action === "categories") await sendMoviesCategories(env, bot, chatId);
+  else if (parsed.action === "yearprompt") await showMoviesYearPrompt(env, bot, chatId);
   else if (parsed.action === "help") {
     await sendMessage(env, bot.slug, chatId,
       "<b>ℹ️ مساعدة FINDLY Movies</b>\n\n" +
-      "• اختار الإصدارات الجديدة أو الأعلى تقييماً للتصفح.\n" +
+      "• دخل للمكتبة واختار الكل أو الأفلام أو المسلسلات.\n" +
+      "• صفّي حسب التصنيف أو سنة الإصدار، ورتّب حسب تاريخ الإضافة أو الإصدار أو التقييم أو الاسم.\n" +
+      "• تنقّل بين الصفحات أو اختار رقم الصفحة مباشرة.\n" +
       "• استعمل البحث باسم الفيلم أو المسلسل.\n" +
-      "• افتح أي عنوان لعرض التفاصيل وإضافته للمكتبة.\n" +
+      "• افتح أي عنوان لعرض التفاصيل وإضافته للمفضلة.\n" +
       "• المسلسلات تعرض المواسم والحلقات المسجلة.\n\n" +
       "المشاهدة داخل Telegram لا تتفعل إلا للمحتوى المرخّص والمجهز للتسليم."
     );
@@ -482,6 +584,8 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   else if (parsed.action === "favorite") await toggleFavorite(env, bot, chatId, parsed.id, telegramUserId);
   else if (parsed.action === "seasons") await sendSeasons(env, bot, chatId, parsed.id);
   else if (parsed.action === "season") await sendEpisodes(env, bot, chatId, parsed.id);
+  else if (parsed.action === "genre") await sendList(env, bot, chatId, "genre", parsed.page, "", parsed.genreSlug);
+  else if (parsed.action === "year") await sendList(env, bot, chatId, "year", parsed.page, String(parsed.year));
   else await sendList(env, bot, chatId, parsed.action, parsed.page, parsed.query || "");
 
   return true;

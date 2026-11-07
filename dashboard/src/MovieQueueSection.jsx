@@ -16,7 +16,7 @@ const labels = {
   duplicate_in_batch: "مكرر داخل نفس اللائحة"
 };
 
-export default function MovieQueueSection({ fetchApi }) {
+export default function MovieQueueSection({ fetchApi, initialStatus = "all" }) {
   const [titles, setTitles] = useState("");
   const [mediaType, setMediaType] = useState("movie");
   const [duplicateItems, setDuplicateItems] = useState([]);
@@ -27,6 +27,9 @@ export default function MovieQueueSection({ fetchApi }) {
   const [notice, setNotice] = useState("");
   const [tmdbProcessingEnabled, setTmdbProcessingEnabled] = useState(false);
   const [tmdbMode, setTmdbMode] = useState("disabled");
+  const visibleItems = initialStatus === "review"
+    ? items.filter((item) => ["needs_review", "ready_for_review"].includes(item.status))
+    : items;
 
   async function refresh() {
     setLoading(true);
@@ -88,13 +91,13 @@ export default function MovieQueueSection({ fetchApi }) {
     <section className="panel movie-queue-panel">
       <header className="panel-header">
         <div>
-          <h2>طابور الأفلام</h2>
-          <p>أضف لائحة أفلام أو مسلسلات أو لائحة مختلطة. FINDLY يعالج عنواناً واحداً في كل ساعة ويحفظه كمسودة فقط.</p>
+          <h2>{initialStatus === "review" ? "مراجعة العناوين" : "طابور الأفلام"}</h2>
+          <p>{initialStatus === "review" ? "العناوين التي تحتاج اختيار نتيجة TMDB أو مراجعة المسودة قبل النشر اليدوي." : "أضف لائحة أفلام أو مسلسلات أو لائحة مختلطة. FINDLY يعالج عنواناً واحداً في كل ساعة ويحفظه كمسودة فقط."}</p>
         </div>
         <button className="secondary-button" type="button" onClick={refresh} disabled={loading}>تحديث</button>
       </header>
 
-      <form className="movies-card" onSubmit={addTitles}>
+      {initialStatus !== "review" && <form className="movies-card" onSubmit={addTitles}>
         <div className="movies-card-heading">
           <div><h3>إضافة عناوين</h3><p>كل سطر كيمثل فيلماً أو مسلسلاً واحداً. الحد الأقصى 100 عنوان في العملية.</p></div>
         </div>
@@ -116,25 +119,25 @@ export default function MovieQueueSection({ fetchApi }) {
         <div className="movies-form-actions">
           <button className="primary-button" disabled={saving || !titles.trim()}>{saving ? "كنضيف..." : "إضافة للطابور"}</button>
         </div>
-      </form>
+      </form>}
 
-      {!tmdbProcessingEnabled && <div className="auth-error" role="status">المعالجة التلقائية متوقفة. فعّل وضع التطوير غير التجاري أو الترخيص التجاري من إعدادات Worker.</div>}
-      {tmdbMode === "noncommercial_development" && <div className="auth-success" role="status">وضع التطوير غير التجاري مفعّل. استخدم بيانات TMDB للاختبار غير التجاري فقط؛ لا تستخدم هذا الوضع عند تشغيل خدمة تجارية.</div>}
-      {tmdbMode === "commercial" && <div className="auth-success" role="status">مصدر البيانات مفعّل بترخيص تجاري.</div>}
+      {initialStatus !== "review" && !tmdbProcessingEnabled && <div className="auth-error" role="status">المعالجة التلقائية متوقفة. فعّل وضع التطوير غير التجاري أو الترخيص التجاري من إعدادات Worker.</div>}
+      {initialStatus !== "review" && tmdbMode === "noncommercial_development" && <div className="auth-success" role="status">وضع التطوير غير التجاري مفعّل. استخدم بيانات TMDB للاختبار غير التجاري فقط؛ لا تستخدم هذا الوضع عند تشغيل خدمة تجارية.</div>}
+      {initialStatus !== "review" && tmdbMode === "commercial" && <div className="auth-success" role="status">مصدر البيانات مفعّل بترخيص تجاري.</div>}
       {error && <div className="auth-error" role="alert">{error}</div>}
       {notice && <div className="auth-success" role="status">{notice}</div>}
       {duplicateItems.length > 0 && <div className="auth-error" role="status"><strong>العناوين الموجودة مسبقاً:</strong><ul>{duplicateItems.map((item, index) => <li key={item.existing_id || index}>{item.title} — موجود باسم: {item.existing_title || item.title} ({item.media_type === "series" ? "مسلسل" : "فيلم"}) — الحالة: {labels[item.status] || item.status}{item.existing_url && <> — <a href={item.existing_url} target="_blank" rel="noreferrer">فتح المحتوى المنشور</a></>}</li>)}</ul></div>}
 
       <div className="movies-card movies-catalog-card">
         <div className="movies-catalog-toolbar">
-          <div><h3>لائحة المعالجة</h3><p>المعالجة لا تعني النشر. النشر يبقى بقرار يدوي منك.</p></div>
-          <strong>{items.length} عنوان</strong>
+          <div><h3>{initialStatus === "review" ? "العناوين التي تحتاج المراجعة" : "لائحة المعالجة"}</h3><p>المعالجة لا تعني النشر. النشر يبقى بقرار يدوي منك.</p></div>
+          <strong>{visibleItems.length} عنوان</strong>
         </div>
         <div className="table-wrap movies-table-wrap">
           <table className="movies-table">
             <thead><tr><th>العنوان</th><th>النوع</th><th>الحالة</th><th>المحاولات</th><th>الإجراء</th></tr></thead>
             <tbody>
-              {items.map((item) => (
+              {visibleItems.map((item) => (
                 <tr key={item.id}>
                   <td><strong>{item.submitted_title}</strong>{item.last_error_message && <small>{item.last_error_message}</small>}</td>
                   <td>{item.media_type === "series" ? "مسلسل" : "فيلم"}</td>
@@ -155,7 +158,7 @@ export default function MovieQueueSection({ fetchApi }) {
                   </td>
                 </tr>
               ))}
-              {!items.length && <tr><td colSpan="5" className="movies-empty-state">{loading ? "كنحمّلو..." : "الطابور فارغ. زيد أول لائحة ديال الأفلام."}</td></tr>}
+              {!visibleItems.length && <tr><td colSpan="5" className="movies-empty-state">{loading ? "كنحمّلو..." : initialStatus === "review" ? "ما كاين حتى عنوان محتاج المراجعة حالياً." : "الطابور فارغ. زيد أول لائحة ديال الأفلام."}</td></tr>}
             </tbody>
           </table>
         </div>

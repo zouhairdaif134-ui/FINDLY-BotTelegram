@@ -8,6 +8,7 @@ import MonetizationSection from "./MonetizationSection.jsx";
 import AISection from "./AISection.jsx";
 import MovieQueueSection from "./MovieQueueSection.jsx";
 import { buildMovieShareContent } from "../../src/lib/movie-sharing.js";
+import { filterAndSortMovies, paginateMovies, getMovieGenreNames } from "./movie-library.js";
 
 const PRODUCTION_API_URL =
   "https://findly-v3-api.berrchidcity99.workers.dev";
@@ -31,7 +32,7 @@ const API_URL =
 const menuGroups = [
   { icon: "🏠", label: "Overview", items: ["Overview"] },
   { icon: "🤖", label: "Bots & Telegram", items: ["Bots", "Telegram"] },
-  { icon: "🎬", label: "Movies & Categories", items: ["Movies", "Movie Queue", "Categories"] },
+  { icon: "🎬", label: "Movies & Categories", items: ["Movies", "Movie Queue", "Published", "Movie Categories", "Review", "Categories"] },
   { icon: "🗂️", label: "Menus & Content", items: ["Menus", "Content"] },
   { icon: "👥", label: "Users & Admins", items: ["Users", "Admins"] },
   { icon: "🔔", label: "Notifications", items: ["Notifications"] },
@@ -1871,13 +1872,17 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
           />
         )}
         {activeSection === "Movie Queue" && <MovieQueueSection fetchApi={fetchApi} />}
-
-        {(activeSection === "Movies" || activeSection === "Publishing & Sharing") && (
+        {activeSection === "Review" && <MovieQueueSection fetchApi={fetchApi} initialStatus="review" />}
+        {(activeSection === "Movies" || activeSection === "Published" || activeSection === "Movie Categories" || activeSection === "Publishing & Sharing") && (
           <MoviesSection
             movies={movies}
             bots={bots}
             fetchApi={fetchApi}
-            mode={activeSection === "Publishing & Sharing" ? "sharing" : "catalog"}
+            mode={
+              activeSection === "Publishing & Sharing" ? "sharing" :
+              activeSection === "Published" ? "published" :
+              activeSection === "Movie Categories" ? "genres" : "catalog"
+            }
             onRefresh={async () => setMovies(await fetchApi("/api/movies"))}
           />
         )}
@@ -4082,9 +4087,28 @@ function StatusBadge({
 }
 
 function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog" }) {
-  const [editing,setEditing]=useState(null),[form,setForm]=useState(null),[saving,setSaving]=useState(false),[error,setError]=useState("");
-  const [filter,setFilter]=useState("all"),[tmdbQuery,setTmdbQuery]=useState(""),[tmdbType,setTmdbType]=useState("movie"),[tmdbResults,setTmdbResults]=useState([]),[tmdbLoading,setTmdbLoading]=useState(false),[importingId,setImportingId]=useState(null);
-  const [shareStatus,setShareStatus]=useState("");
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [statusFilter, setStatusFilter] = useState(mode === "published" ? "active" : "all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
+  const [genreFilter, setGenreFilter] = useState("all");
+  const [searchFilter, setSearchFilter] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageJump, setPageJump] = useState("1");
+  const [tmdbQuery, setTmdbQuery] = useState("");
+  const [tmdbType, setTmdbType] = useState("movie");
+  const [tmdbResults, setTmdbResults] = useState([]);
+  const [tmdbLoading, setTmdbLoading] = useState(false);
+  const [importingId, setImportingId] = useState(null);
+  const [shareStatus, setShareStatus] = useState("");
+  const isSharing = mode === "sharing";
+  const isGenres = mode === "genres";
+  const isPublished = mode === "published";
+
   async function shareMovie(item, platform) {
     setShareStatus("");
     setError("");
@@ -4200,32 +4224,215 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
   }
 
-  const visible=movies.filter(item=>mode === "sharing" ? item.status === "active" : filter==="all"||item.status===filter);
-  async function searchTmdb(event){event.preventDefault();if(!tmdbQuery.trim())return;setTmdbLoading(true);setError("");try{const params=new URLSearchParams({query:tmdbQuery.trim(),media_type:tmdbType});setTmdbResults(await fetchApi("/api/movies/tmdb/search?"+params.toString()));}catch(e){setError(e.message||"TMDB search failed");}finally{setTmdbLoading(false);}}
-  function edit(item){setEditing(item.id);setForm({title:item.title||"",overview:item.overview||"",full_plot_summary:item.full_plot_summary||""});setError("");}
-  async function importTmdb(item){setImportingId(item.tmdb_id);setError("");try{const imported=await fetchApi("/api/movies/tmdb/import",{method:"POST",body:JSON.stringify({tmdb_id:item.tmdb_id,media_type:item.media_type})});setTmdbResults(results=>results.filter(result=>result.tmdb_id!==item.tmdb_id));await onRefresh();edit(imported);}catch(e){setError(e.message||"TMDB import failed");}finally{setImportingId(null);}}
-  async function save(event){event.preventDefault();if(!editing||!form)return;setSaving(true);setError("");try{await fetchApi("/api/movies/"+editing,{method:"PUT",body:JSON.stringify({overview:form.overview,full_plot_summary:form.full_plot_summary})});setEditing(null);setForm(null);await onRefresh();}catch(e){setError(e.message||"Unable to save synopsis");}finally{setSaving(false);}}
-  async function changeStatus(item,status){try{await fetchApi("/api/movies/"+item.id,{method:"PUT",body:JSON.stringify({status})});await onRefresh();}catch(e){setError(e.message||"Unable to update movie");}}
-  async function remove(item){if(!window.confirm("Delete this catalog entry permanently?"))return;try{await fetchApi("/api/movies/"+item.id,{method:"DELETE"});await onRefresh();}catch(e){setError(e.message||"Unable to delete movie");}}
+
+  const genreNames = getMovieGenreNames(movies);
+  const years = [...new Set(movies.map((item) => item.release_year).filter(Boolean))].sort((a, b) => b - a);
+  const filteredMovies = filterAndSortMovies(movies, {
+    search: searchFilter,
+    mediaType: typeFilter,
+    year: yearFilter,
+    genre: genreFilter,
+    status: isPublished ? "active" : statusFilter,
+    sort: sortOrder
+  });
+  const pagination = paginateMovies(filteredMovies, currentPage, 20);
+  const visible = isSharing
+    ? movies.filter((item) => item.status === "active")
+    : isGenres && genreFilter === "all" ? [] : pagination.items;
+
+  function resetPage(setter, value) {
+    setter(value);
+    setCurrentPage(1);
+    setPageJump("1");
+  }
+
+  async function searchTmdb(event) {
+    event.preventDefault();
+    if (!tmdbQuery.trim()) return;
+    setTmdbLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ query: tmdbQuery.trim(), media_type: tmdbType });
+      setTmdbResults(await fetchApi("/api/movies/tmdb/search?" + params.toString()));
+    } catch (e) {
+      setError(e.message || "TMDB search failed");
+    } finally {
+      setTmdbLoading(false);
+    }
+  }
+
+  function edit(item) {
+    setEditing(item.id);
+    setForm({
+      title: item.title || "",
+      original_title: item.original_title || "",
+      overview: item.overview || "",
+      full_plot_summary: item.full_plot_summary || ""
+    });
+    setError("");
+  }
+
+  async function importTmdb(item) {
+    setImportingId(item.tmdb_id);
+    setError("");
+    try {
+      const imported = await fetchApi("/api/movies/tmdb/import", {
+        method: "POST",
+        body: JSON.stringify({ tmdb_id: item.tmdb_id, media_type: item.media_type })
+      });
+      setTmdbResults((results) => results.filter((result) => result.tmdb_id !== item.tmdb_id));
+      await onRefresh();
+      edit(imported);
+    } catch (e) {
+      setError(e.message || "TMDB import failed");
+    } finally {
+      setImportingId(null);
+    }
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    if (!editing || !form) return;
+    setSaving(true);
+    setError("");
+    try {
+      await fetchApi("/api/movies/" + editing, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: form.title,
+          original_title: form.original_title,
+          overview: form.overview,
+          full_plot_summary: form.full_plot_summary
+        })
+      });
+      setEditing(null);
+      setForm(null);
+      await onRefresh();
+    } catch (e) {
+      setError(e.message || "Unable to save movie details");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function changeStatus(item, status) {
+    try {
+      await fetchApi("/api/movies/" + item.id, { method: "PUT", body: JSON.stringify({ status }) });
+      await onRefresh();
+    } catch (e) {
+      setError(e.message || "Unable to update movie");
+    }
+  }
+
+  async function remove(item) {
+    if (!window.confirm("Delete this catalog entry permanently?")) return;
+    try {
+      await fetchApi("/api/movies/" + item.id, { method: "DELETE" });
+      await onRefresh();
+    } catch (e) {
+      setError(e.message || "Unable to delete movie");
+    }
+  }
+
+  const title = isSharing ? "Publishing & Sharing" : isPublished ? "المحتوى المنشور" : isGenres ? "تصنيفات الأفلام والمسلسلات" : "مكتبة FINDLY";
+  const count = isSharing ? visible.length : isGenres ? genreNames.length : filteredMovies.length;
+
   return <section className="panel movies-workspace" aria-labelledby="movies-workspace-title">
-    <header className="movies-workspace-heading"><div><span className="movies-workspace-eyebrow">{mode === "sharing" ? "FINDLY PUBLISHING" : "FINDLY MASTER LIBRARY"}</span><h2 id="movies-workspace-title">{mode === "sharing" ? "Publishing & Sharing" : "Movies catalog"}</h2><p>{mode === "sharing" ? "اختار فيلماً منشوراً وشاركو باستعمال نفس بيانات مكتبة FINDLY على Facebook أو Instagram." : "كتب اسم الفيلم أو المسلسل، اختار النتيجة، وFINDLY غادي يعمر المعلومات ويحفظها كمسودة."}</p></div><div className="movies-title-count"><strong>{mode === "sharing" ? visible.length : movies.length}</strong><span>{mode === "sharing" ? "أفلام جاهزة للمشاركة" : "عناوين فالمكتبة"}</span></div></header>
-    {error&&<div className="auth-error movies-workspace-error" role="alert">{error}</div>}
-    {shareStatus&&<div className="auth-success movies-share-status" role="status">{shareStatus}</div>}
-    {mode !== "sharing" && <form className="movies-card tmdb-import-card" onSubmit={searchTmdb}>
-      <div className="movies-card-heading"><div><h3>إضافة فيلم أو مسلسل</h3><p>TMDB كيجلب المعلومات تلقائياً. الاختيار كيتسجل Draft وما كينشرش مباشرة.</p></div><span className="movies-card-step">01</span></div>
+    <header className="movies-workspace-heading">
+      <div>
+        <span className="movies-workspace-eyebrow">{isSharing ? "FINDLY PUBLISHING" : "FINDLY MASTER LIBRARY"}</span>
+        <h2 id="movies-workspace-title">{title}</h2>
+        <p>{isSharing ? "اختار عنواناً منشوراً وشاركو باستعمال بيانات مكتبة FINDLY." : isGenres ? "التصنيفات المستخرجة من بيانات الأفلام والمسلسلات، مع عدد العناوين في كل تصنيف." : isPublished ? "هنا كيبانو غير العناوين المنشورة فعلياً للمستخدمين في Telegram." : "المكان الرئيسي لإدارة المكتبة: استيراد، بحث، مراجعة، تعديل، ونشر يدوي."}</p>
+      </div>
+      <div className="movies-title-count"><strong>{count}</strong><span>{isGenres ? "تصنيف" : "عنوان"}</span></div>
+    </header>
+    {error && <div className="auth-error movies-workspace-error" role="alert">{error}</div>}
+    {shareStatus && <div className="auth-success movies-share-status" role="status">{shareStatus}</div>}
+
+    {!isSharing && !isPublished && !isGenres && <form className="movies-card tmdb-import-card" onSubmit={searchTmdb}>
+      <div className="movies-card-heading"><div><h3>إضافة فيلم أو مسلسل</h3><p>كتب الاسم، اختار نتيجة TMDB، وغادي تتسجل كمسودة. النشر كيبقى بقرار يدوي منك.</p></div><span className="movies-card-step">01</span></div>
       <div className="tmdb-search-row">
-        <label className="movies-field"><span>النوع</span><select className="toolbar-select" value={tmdbType} onChange={e=>setTmdbType(e.target.value)}><option value="movie">فيلم</option><option value="series">مسلسل</option></select></label>
-        <label className="movies-field tmdb-query-field"><span>اسم الفيلم أو المسلسل</span><input aria-label="Search movie or series title" placeholder="مثلاً: Interstellar" value={tmdbQuery} onChange={e=>setTmdbQuery(e.target.value)}/></label>
-        <button className="primary-button tmdb-search-button" disabled={tmdbLoading||!tmdbQuery.trim()}>{tmdbLoading?"كنقلب...":"بحث"}</button>
+        <label className="movies-field"><span>النوع</span><select className="toolbar-select" value={tmdbType} onChange={(e) => setTmdbType(e.target.value)}><option value="movie">فيلم</option><option value="series">مسلسل</option></select></label>
+        <label className="movies-field tmdb-query-field"><span>اسم الفيلم أو المسلسل</span><input aria-label="Search movie or series title" placeholder="مثلاً: Interstellar" value={tmdbQuery} onChange={(e) => setTmdbQuery(e.target.value)} /></label>
+        <button className="primary-button tmdb-search-button" disabled={tmdbLoading || !tmdbQuery.trim()}>{tmdbLoading ? "كنقلب..." : "بحث"}</button>
       </div>
     </form>}
-    {mode !== "sharing" && tmdbResults.length>0&&<div className="movies-card tmdb-results-card"><div className="movies-card-heading"><div><h3>نتائج البحث</h3><p>اختار العنوان الصحيح باش يتزاد للمكتبة كمسودة.</p></div></div><div className="table-wrap movies-table-wrap"><table className="movies-table"><thead><tr><th>الصورة</th><th>العنوان</th><th>السنة</th><th>التقييم</th><th>إضافة</th></tr></thead><tbody>{tmdbResults.map(item=><tr key={item.tmdb_id}><td>{item.poster_path?<img src={item.poster_path} alt="" loading="lazy"/>:"—"}</td><td><strong>{item.title}</strong><small>{item.original_title||""}</small></td><td>{item.release_year||"—"}</td><td>{item.rating??"—"}</td><td><button className="secondary-button" type="button" disabled={importingId===item.tmdb_id} onClick={()=>importTmdb(item)}>{importingId===item.tmdb_id?"كنضيف...":"إضافة للمكتبة"}</button></td></tr>)}</tbody></table></div></div>}
-    {mode !== "sharing" && editing&&form&&<form className="movies-card movie-editor-card" onSubmit={save}><div className="movies-card-heading"><div><h3>مراجعة الملخصات</h3><p><strong>{form.title}</strong> — المعلومات الأساسية والصور جابها TMDB.</p></div><span className="movies-card-step">02</span></div><div className="movies-form-grid">
-      <label className="movies-field movies-field-wide">Short Synopsis — الملخص القصير<textarea rows="4" value={form.overview} onChange={e=>setForm({...form,overview:e.target.value})} placeholder="ملخص قصير يظهر مباشرة في تفاصيل الفيلم..."/><small>هاد الملخص هو اللي كيبان للمستخدم مباشرة.</small></label>
-      <label className="movies-field movies-field-wide">Full Plot Summary — الملخص المفصل<textarea rows="8" value={form.full_plot_summary} onChange={e=>setForm({...form,full_plot_summary:e.target.value})} placeholder="اختياري: أضف ملخصاً مفصلاً من مصدر عندك الحق في استعماله..."/><small>اختياري. ما كيبانش للمستخدم حتى يضغط على «الملخص الكامل» داخل Telegram.</small></label>
-    </div><div className="movies-form-actions"><button className="primary-button" disabled={saving}>{saving?"كنحفظ...":"حفظ الملخصات"}</button><button type="button" className="secondary-button" onClick={()=>{setEditing(null);setForm(null);}}>إغلاق</button></div></form>}
-    <section className="movies-card movies-catalog-card" aria-labelledby="movies-catalog-title"><div className="movies-catalog-toolbar"><div><h3 id="movies-catalog-title">{mode === "sharing" ? "الأفلام المنشورة" : "مكتبة FINDLY"}</h3><p>{mode === "sharing" ? "المشاركة متاحة فقط للعناوين المنشورة." : "راجع العناوين، عدّل الملخصات، وتحكم في النشر."}</p></div><div className="movies-catalog-controls">{mode !== "sharing" && <label className="movies-field movies-filter-field"><span>الحالة</span><select className="toolbar-select" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">الكل</option><option value="draft">مسودة</option><option value="active">منشور</option><option value="inactive">متوقف</option></select></label>}<button className="secondary-button" type="button" onClick={onRefresh}>تحديث</button></div></div>
-      <div className="table-wrap movies-table-wrap"><table className="movies-table"><thead><tr><th>العنوان</th><th>النوع</th><th>السنة</th><th>التقييم</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>{visible.map(item=><tr key={item.id}><td><strong>{item.title}</strong><small>{item.original_title||""}</small></td><td>{item.media_type==="series"?"مسلسل":"فيلم"}</td><td>{item.release_year||"—"}</td><td>{item.rating??"—"}</td><td><span className={"movies-status status-"+item.status}>{item.status==="active"?"منشور":item.status==="draft"?"مسودة":"متوقف"}</span></td><td><div className="movies-row-actions">{mode !== "sharing" && <><button className="secondary-button" type="button" onClick={()=>edit(item)}>الملخصات</button>{item.status!=="active"&&<button className="secondary-button" type="button" onClick={()=>changeStatus(item,"active")}>نشر</button>}{item.status!=="inactive"&&<button className="secondary-button" type="button" onClick={()=>changeStatus(item,"inactive")}>إيقاف</button>}<button className="secondary-button" type="button" onClick={()=>remove(item)}>حذف</button></>}{mode === "sharing" && item.status==="active"&&<><button className="secondary-button" type="button" onClick={()=>shareMovie(item,"facebook")}>Facebook</button><button className="secondary-button" type="button" onClick={()=>shareMovie(item,"instagram")}>Instagram</button></>}</div></td></tr>)}{!visible.length&&<tr><td className="movies-empty-state" colSpan="6">{mode === "sharing" ? "ما كاين حتى فيلم منشور جاهز للمشاركة حالياً." : "المكتبة فارغة حالياً. كتب اسم فيلم أو مسلسل في خانة البحث أعلاه."}</td></tr>}</tbody></table></div>
+
+    {!isSharing && tmdbResults.length > 0 && <div className="movies-card tmdb-results-card">
+      <div className="movies-card-heading"><div><h3>نتائج البحث</h3><p>اختار العنوان الصحيح باش يتزاد للمكتبة كمسودة.</p></div></div>
+      <div className="table-wrap movies-table-wrap"><table className="movies-table"><thead><tr><th>الصورة</th><th>العنوان</th><th>السنة</th><th>التقييم</th><th>إضافة</th></tr></thead><tbody>
+        {tmdbResults.map((item) => <tr key={item.tmdb_id}><td>{item.poster_path ? <img src={item.poster_path} alt="" loading="lazy" /> : "—"}</td><td><strong>{item.title}</strong><small>{item.original_title || ""}</small></td><td>{item.release_year || "—"}</td><td>{item.rating ?? "—"}</td><td><button className="secondary-button" type="button" disabled={importingId === item.tmdb_id} onClick={() => importTmdb(item)}>{importingId === item.tmdb_id ? "كنضيف..." : "إضافة للمكتبة"}</button></td></tr>)}
+      </tbody></table></div>
+    </div>}
+
+    {!isSharing && editing && form && <form className="movies-card movie-editor-card" onSubmit={save}>
+      <div className="movies-card-heading"><div><h3>تفاصيل العنوان وتعديله</h3><p>راجع الاسم والملخصات قبل النشر.</p></div><span className="movies-card-step">02</span></div>
+      <div className="movies-form-grid">
+        <label className="movies-field">العنوان<textarea rows="2" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
+        <label className="movies-field">العنوان الأصلي<textarea rows="2" value={form.original_title} onChange={(e) => setForm({ ...form, original_title: e.target.value })} /></label>
+        <label className="movies-field movies-field-wide">Short Synopsis — الملخص القصير<textarea rows="4" value={form.overview} onChange={(e) => setForm({ ...form, overview: e.target.value })} placeholder="ملخص قصير يظهر مباشرة في تفاصيل الفيلم..." /><small>هاد الملخص هو اللي كيبان للمستخدم مباشرة.</small></label>
+        <label className="movies-field movies-field-wide">Full Plot Summary — الملخص المفصل<textarea rows="8" value={form.full_plot_summary} onChange={(e) => setForm({ ...form, full_plot_summary: e.target.value })} placeholder="اختياري: أضف ملخصاً مفصلاً من مصدر عندك الحق في استعماله..." /><small>اختياري. ما كيبانش للمستخدم حتى يضغط على «الملخص الكامل» داخل Telegram.</small></label>
+      </div>
+      <div className="movies-form-actions"><button className="primary-button" disabled={saving}>{saving ? "كنحفظ..." : "حفظ التعديلات"}</button><button type="button" className="secondary-button" onClick={() => { setEditing(null); setForm(null); }}>إغلاق</button></div>
+    </form>}
+
+    <section className="movies-card movies-catalog-card" aria-labelledby="movies-catalog-title">
+      <div className="movies-catalog-toolbar">
+        <div><h3 id="movies-catalog-title">{isSharing ? "العناوين المنشورة" : isGenres ? "التصنيفات" : "العناوين"}</h3><p>{isSharing ? "المشاركة متاحة فقط للعناوين المنشورة." : "عرض منظم، 20 عنواناً في الصفحة، مع بحث وفلاتر وترتيب."}</p></div>
+        <div className="movies-catalog-controls">
+          {!isSharing && !isGenres && <button className="secondary-button" type="button" onClick={() => { onRefresh(); setCurrentPage(1); }}>تحديث</button>}
+          {isSharing && <button className="secondary-button" type="button" onClick={onRefresh}>تحديث</button>}
+        </div>
+      </div>
+
+      {!isSharing && <div className="movies-library-filters">
+        <label className="movies-field"><span>البحث بالاسم</span><input value={searchFilter} onChange={(e) => resetPage(setSearchFilter, e.target.value)} placeholder="قلب على فيلم أو مسلسل..." /></label>
+        <label className="movies-field"><span>نوع المحتوى</span><select value={typeFilter} onChange={(e) => resetPage(setTypeFilter, e.target.value)}><option value="all">الكل</option><option value="movie">أفلام</option><option value="series">مسلسلات</option></select></label>
+        <label className="movies-field"><span>السنة</span><select value={yearFilter} onChange={(e) => resetPage(setYearFilter, e.target.value)}><option value="all">جميع السنوات</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
+        <label className="movies-field"><span>التصنيف</span><select value={genreFilter} onChange={(e) => resetPage(setGenreFilter, e.target.value)}><option value="all">جميع التصنيفات</option>{genreNames.map((genre) => <option key={genre} value={genre}>{genre}</option>)}</select></label>
+        {!isPublished && <label className="movies-field"><span>حالة النشر</span><select value={statusFilter} onChange={(e) => resetPage(setStatusFilter, e.target.value)}><option value="all">جميع الحالات</option><option value="draft">مسودة</option><option value="active">منشور</option><option value="inactive">متوقف</option></select></label>}
+        <label className="movies-field"><span>الترتيب</span><select value={sortOrder} onChange={(e) => resetPage(setSortOrder, e.target.value)}><option value="newest">المضاف حديثاً</option><option value="oldest">الأقدم إضافة</option><option value="title">الاسم A–Z</option><option value="rating">التقييم الأعلى</option></select></label>
+      </div>}
+
+      {isGenres && <div className="movies-genre-grid">
+        {genreNames.map((genre) => {
+          const genreCount = movies.filter((item) => (item.genres || []).includes(genre)).length;
+          return <button key={genre} type="button" className={"movies-genre-chip" + (genreFilter === genre ? " selected" : "")} onClick={() => { resetPage(setGenreFilter, genreFilter === genre ? "all" : genre); setCurrentPage(1); }}>
+            <strong>{genre}</strong><span>{genreCount} عنوان</span>
+          </button>;
+        })}
+        {!genreNames.length && <p className="movies-empty-state">مازال ما تسجّل حتى تصنيف. غادي يبان التصنيف ملي نستورد عناوين فيها Genres.</p>}
+      </div>}
+
+      {isSharing ? <div className="table-wrap movies-table-wrap"><table className="movies-table"><thead><tr><th>العنوان</th><th>النوع</th><th>السنة</th><th>التقييم</th><th>الإجراءات</th></tr></thead><tbody>
+        {visible.map((item) => <tr key={item.id}><td><strong>{item.title}</strong><small>{item.original_title || ""}</small></td><td>{item.media_type === "series" ? "مسلسل" : "فيلم"}</td><td>{item.release_year || "—"}</td><td>{item.rating ?? "—"}</td><td><div className="movies-row-actions"><button className="secondary-button" type="button" onClick={() => shareMovie(item, "facebook")}>Facebook</button><button className="secondary-button" type="button" onClick={() => shareMovie(item, "instagram")}>Instagram</button></div></td></tr>)}
+        {!visible.length && <tr><td colSpan="5" className="movies-empty-state">ما كاين حتى عنوان منشور جاهز للمشاركة حالياً.</td></tr>}
+      </tbody></table></div> : <div className="movies-library-list">
+        {visible.map((item) => <article className="movies-library-row" key={item.id}>
+          <div className="movies-library-main">
+            <h4>{item.title}</h4>
+            <p>{item.release_year || "سنة غير محددة"} · {item.media_type === "series" ? "مسلسل" : "فيلم"}{item.genres?.length ? " · " + item.genres.join("، ") : ""}{item.rating != null ? " · ⭐ " + Number(item.rating).toFixed(1) : ""}</p>
+          </div>
+          <div className="movies-library-status"><span className={"movies-status status-" + item.status}>{item.status === "active" ? "منشور" : item.status === "draft" ? "مسودة" : "متوقف"}</span></div>
+          {!isGenres && <div className="movies-row-actions">
+            <button className="secondary-button" type="button" onClick={() => edit(item)}>تفاصيل / تعديل</button>
+            {item.status !== "active" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "active")}>نشر</button>}
+            {item.status === "active" && <button className="secondary-button" type="button" onClick={() => changeStatus(item, "inactive")}>إيقاف</button>}
+            <button className="secondary-button" type="button" onClick={() => remove(item)}>حذف</button>
+          </div>}
+        </article>)}
+        {!visible.length && <p className="movies-empty-state">{isGenres ? "اختار تصنيفاً باش تشوف العناوين المرتبطة به." : "ما لقيّنا حتى عنوان مطابق للفلاتر الحالية."}</p>}
+      </div>}
+
+      {!isSharing && !isGenres && <footer className="movies-pagination">
+        <span>عرض {pagination.start}–{pagination.end} من {pagination.total}</span>
+        <div className="movies-pagination-controls">
+          <button className="secondary-button" type="button" disabled={pagination.page <= 1} onClick={() => { setCurrentPage(pagination.page - 1); setPageJump(String(pagination.page - 1)); }}>السابق</button>
+          <span>صفحة {pagination.page} / {pagination.pageCount}</span>
+          <button className="secondary-button" type="button" disabled={pagination.page >= pagination.pageCount} onClick={() => { setCurrentPage(pagination.page + 1); setPageJump(String(pagination.page + 1)); }}>التالي</button>
+          <label className="movies-page-jump"><span>انتقال إلى</span><input type="number" min="1" max={pagination.pageCount} value={pageJump} onChange={(e) => setPageJump(e.target.value)} /><button className="secondary-button" type="button" onClick={() => { const next = Number(pageJump); if (Number.isInteger(next) && next >= 1 && next <= pagination.pageCount) setCurrentPage(next); }}>اذهب</button></label>
+        </div>
+      </footer>}
     </section>
   </section>;
 }
