@@ -25,7 +25,7 @@ export function parseMovieQueueLines(value) {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index].trim();
     if (!line) continue;
-    const match = line.match(/^(MOVIE|TV)\\s*\\|\\s*(.+)$/i);
+    const match = line.match(/^(MOVIE|TV)\s*\|\s*(.+)$/i);
     if (!match || !match[2].trim()) {
       throw new Error(`Line ${index + 1}: Each line must start with MOVIE | or TV | followed by a title`);
     }
