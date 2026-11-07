@@ -653,7 +653,7 @@ export async function handleMoviesText(env, bot, chatId, message, telegramUserId
       return true;
     }
     const promptText = String(message.reply_to_message?.text || "");
-    const state = promptText.match(/\|filters:(all|movie|series):(none|[a-z0-9-]{1,20}):(added|old|top|az|release)(?=<\/tg-spoiler>)/);
+    const state = promptText.match(/\\|filters:(all|movie|series):(none|[a-z0-9-]{1,20}):(added|old|top|az|release)$/);
     if (state) {
       await sendList(env, bot, chatId, "filter", 0, "", "", {
         mediaType: state[1], genreSlug: state[2] === "none" ? "" : state[2],
