@@ -9,7 +9,7 @@ test("exports a pure AI configuration normalizer", () => {
 test("keeps AI disabled by default and applies bounded defaults", () => {
   const config = ai.normalizeAIConfig({}, {});
   assert.equal(config.enabled, false);
-  assert.equal(config.model, "gpt-4o-mini");
+  assert.equal(config.model, "@cf/qwen/qwen3.8-27b");
   assert.equal(config.apiUrl, "https://api.openai.com/v1/chat/completions");
   assert.equal(config.temperature, 0.7);
   assert.equal(config.maxTokens, 700);
