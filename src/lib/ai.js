@@ -2,7 +2,7 @@ import { getSupabase } from "./supabase.js";
 import { buildAIMemoryMessages } from "./ai-memory.js";
 import { AI_CATALOG_TOOLS, executeCatalogTool } from "./ai-catalog.js";
 
-const DEFAULT_MODEL = "gpt-4o-mini";
+const DEFAULT_MODEL = "@cf/qwen/qwen3.8-27b";
 const DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_SYSTEM_PROMPT =
   "You are a helpful assistant for FINDLY. Answer clearly and briefly.";
@@ -149,7 +149,51 @@ export async function getAIConfig(env, botId) {
   return normalizeAIConfig(data?.setting_value, env);
 }
 
-async function requestAIProvider(config, apiKey, messages, includeCatalogTools) {
+async function requestAIProvider(env, config, apiKey, messages, includeCatalogTools) {
+  if (typeof env.AI?.run === "function") {
+    try {
+      const tools = includeCatalogTools
+        ? AI_CATALOG_TOOLS.map((tool) => ({
+            name: tool.function.name,
+            description: tool.function.description,
+            parameters: tool.function.parameters
+          }))
+        : undefined;
+      const payload = await env.AI.run(config.model, {
+        messages,
+        temperature: config.temperature,
+        max_tokens: config.maxTokens,
+        ...(tools ? { tools, tool_choice: "auto" } : {})
+      });
+      if (!payload || typeof payload !== "object") {
+        throw new Error("AI provider returned an invalid response");
+      }
+      const toolCalls = Array.isArray(payload.tool_calls)
+        ? payload.tool_calls.slice(0, 3).map((call, index) => {
+            const name = call?.name || call?.function?.name;
+            const args = call?.arguments ?? call?.function?.arguments ?? {};
+            return {
+              id: typeof call?.id === "string" ? call.id : "catalog_call_" + index,
+              type: "function",
+              function: {
+                name: typeof name === "string" ? name.slice(0, 80) : "",
+                arguments: typeof args === "string" ? args.slice(0, 2000) : JSON.stringify(args).slice(0, 2000)
+              }
+            };
+          })
+        : [];
+      return {
+        role: "assistant",
+        content: typeof payload.response === "string"
+          ? payload.response
+          : (typeof payload.content === "string" ? payload.content : null),
+        ...(toolCalls.length ? { tool_calls: toolCalls } : {})
+      };
+    } catch {
+      throw new Error("AI provider request could not be completed");
+    }
+  }
+
   let response;
   try {
     const body = {
@@ -203,7 +247,7 @@ export async function generateAIReply(env, bot, userText, memory = {}) {
   if (!config.enabled) return null;
 
   const apiKey = env.AI_API_KEY;
-  if (!apiKey) {
+  if (typeof env.AI?.run !== "function" && !apiKey) {
     throw new Error("AI provider is not configured");
   }
 
@@ -221,7 +265,7 @@ export async function generateAIReply(env, bot, userText, memory = {}) {
     input,
     memory.preferences
   );
-  const firstMessage = await requestAIProvider(config, apiKey, messages, Boolean(supabase));
+  const firstMessage = await requestAIProvider(env, config, apiKey, messages, Boolean(supabase));
   const toolCalls = Array.isArray(firstMessage.tool_calls)
     ? firstMessage.tool_calls.slice(0, 3)
     : [];
@@ -235,9 +279,12 @@ export async function generateAIReply(env, bot, userText, memory = {}) {
     const callId = typeof call?.id === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(call.id)
       ? call.id
       : "catalog_call_" + index;
-    const rawArguments = typeof call?.function?.arguments === "string"
-      ? call.function.arguments.slice(0, 2000)
-      : "";
+    const rawValue = call?.function?.arguments;
+    const rawArguments = typeof rawValue === "string"
+      ? rawValue.slice(0, 2000)
+      : (rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)
+        ? JSON.stringify(rawValue).slice(0, 2000)
+        : "{}");
     assistantToolCalls.push({
       id: callId,
       type: "function",
@@ -263,7 +310,7 @@ export async function generateAIReply(env, bot, userText, memory = {}) {
       content: "Use only the returned FINDLY catalog records for movie and series facts. If the tool returned no matching records, say so. Do not invent titles, ratings, years, runtimes, genres, or plot details. Clearly distinguish missing catalog data from verified data."
     }
   ];
-  const finalMessage = await requestAIProvider(config, apiKey, followUpMessages, false);
+  const finalMessage = await requestAIProvider(env, config, apiKey, followUpMessages, false);
   return extractAIText(finalMessage) ||
     "ما لقيتش جواباً مؤكداً من بيانات مكتبة FINDLY. جرّب تعطيني اسم الفيلم أو النوع اللي كتقلب عليه.";
 }

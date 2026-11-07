@@ -148,3 +148,59 @@ test("AI caps provider tool calls and never executes unknown function names", as
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("uses the native Workers AI binding without an API key", async () => {
+  const calls = [];
+  const env = {
+    AI: {
+      async run(model, options) {
+        calls.push({ model, options });
+        return { response: "مرحبا من Workers AI." };
+      }
+    }
+  };
+  const reply = await generateAIReply(
+    env,
+    { id: "bot-id" },
+    "سلام",
+    { config: { ...config, model: "@cf/qwen/qwen3.8-27b" } }
+  );
+  assert.equal(reply, "مرحبا من Workers AI.");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].model, "@cf/qwen/qwen3.8-27b");
+  assert.equal(calls[0].options.messages.at(-1).content, "سلام");
+});
+
+test("passes catalog tools to Workers AI and executes only returned catalog tool calls", async () => {
+  const calls = [];
+  const env = {
+    AI: {
+      async run(model, options) {
+        calls.push({ model, options });
+        if (calls.length === 1) {
+          assert.deepEqual(options.tools.map((tool) => tool.name), [
+            "search_catalog", "recommend_catalog_titles", "find_similar_titles"
+          ]);
+          return {
+            tool_calls: [{
+              name: "search_catalog",
+              arguments: { query: "Dune", media_type: "movie" }
+            }]
+          };
+        }
+        return { response: "لقيت Dune (2021)." };
+      }
+    }
+  };
+  const db = createCatalogDb();
+  const reply = await generateAIReply(
+    env,
+    { id: "bot-id" },
+    "قلب ليا على Dune",
+    { config: { ...config, model: "@cf/qwen/qwen3.8-27b" }, supabase: db }
+  );
+  assert.equal(reply, "لقيت Dune (2021).");
+  assert.equal(calls.length, 2);
+  assert.ok(db.calls.some((call) => call.table === "movie_titles"));
+});
