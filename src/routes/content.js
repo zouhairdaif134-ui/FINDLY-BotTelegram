@@ -366,6 +366,7 @@ async function saveMovieSynopsis(env, actor, movieId, synopsis) {
     p_movie_id: movieId,
     p_overview: synopsis.overview,
     p_original_overview: synopsis.original_overview,
+    p_source_language: synopsis.source_language || "und",
     p_overview_language: synopsis.overview_language,
     p_overview_source: synopsis.overview_source
   });
@@ -387,7 +388,7 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
   if (!query) throw new Error("Search term is required");
   if (!["movie", "series"].includes(mediaType)) throw new Error("Invalid media type");
   const data = await tmdbRequest(env, mediaType === "series" ? "/search/tv" : "/search/movie", {
-    query, page: Math.min(5, Math.max(1, Number(page) || 1)), include_adult: false, language: "ar-SA"
+    query, page: Math.min(5, Math.max(1, Number(page) || 1)), include_adult: false
   });
   return (data.results || []).map((item) => ({
     tmdb_id: item.id,
@@ -412,7 +413,7 @@ export async function processMovieSynopsisBackfill(env, actor, requestedLimit = 
   const supabase = getSupabase(env);
   const { data: pending, error: pendingError } = await supabase
     .from("movie_titles")
-    .select("id,title,media_type,overview,original_overview")
+    .select("id,title,media_type,overview")
     .eq("overview_language", "pending")
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -420,7 +421,13 @@ export async function processMovieSynopsisBackfill(env, actor, requestedLimit = 
 
   let processed = 0;
   for (const item of pending || []) {
-    const sourceOverview = item.original_overview || item.overview || "";
+    const { data: sourceRow, error: sourceError } = await supabase
+      .from("movie_synopsis_sources")
+      .select("original_overview,source_language")
+      .eq("title_id", item.id)
+      .maybeSingle();
+    if (sourceError) throw sourceError;
+    const sourceOverview = sourceRow?.original_overview || item.overview || "";
     let localizedOverview = "";
     const { data: externalId, error: externalError } = await supabase
       .from("movie_external_ids")
@@ -437,6 +444,7 @@ export async function processMovieSynopsisBackfill(env, actor, requestedLimit = 
     }
 
     const synopsis = await resolveArabicSynopsis(env, localizedOverview, sourceOverview);
+    synopsis.source_language = sourceRow?.source_language || "und";
     await saveMovieSynopsis(env, actor, item.id, synopsis);
     processed += 1;
   }
@@ -489,6 +497,8 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", ac
     .from("movie_external_ids").select("title_id")
     .eq("provider", "tmdb").eq("external_id", String(tmdbId)).maybeSingle();
   if (lookupError) throw lookupError;
+
+  synopsis.source_language = details.original_language || "und";
 
   const movie = {
     media_type: mediaType,
