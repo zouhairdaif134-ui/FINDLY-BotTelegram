@@ -180,3 +180,60 @@ test("enqueues a mixed batch with two Supabase requests and reports existing and
   ]);
   assert.equal(result.total_requested, 100);
 });
+
+
+test("blocks titles already present in the catalog or any historical queue state", async () => {
+  const calls = [];
+  const catalogRows = [{
+    id: "catalog-active-1",
+    title: "Inception",
+    normalized_title: "inception",
+    media_type: "movie",
+    status: "active",
+    release_year: 2010
+  }];
+  const queueRows = [{
+    id: "queue-published-1",
+    submitted_title: "Breaking Bad",
+    normalized_title: "breaking bad",
+    media_type: "series",
+    status: "published",
+    catalog_title_id: "catalog-series-1"
+  }];
+  const supabase = {
+    from(table) {
+      const state = { table, insertRows: null, filters: [] };
+      const builder = {
+        select() { return builder; },
+        in(column, values) { state.filters.push({ column, values }); return builder; },
+        insert(rows) { state.insertRows = rows; return builder; },
+        then(resolve, reject) {
+          calls.push(state);
+          const data = state.insertRows
+            ? state.insertRows.map((row, index) => ({ id: "new-" + index, ...row, status: "pending" }))
+            : state.table === "movie_titles" ? catalogRows : queueRows;
+          return Promise.resolve({ data, error: null }).then(resolve, reject);
+        }
+      };
+      return builder;
+    }
+  };
+
+  const result = await movieQueue.enqueueMovieQueueBatch(supabase, [
+    { title: "Inception", media_type: "movie" },
+    { title: "Breaking Bad", media_type: "series" },
+    { title: "New Movie", media_type: "movie" }
+  ], { userId: "admin-1" });
+
+  assert.deepEqual(calls.map((call) => call.table), ["movie_titles", "movie_queue_items", "movie_queue_items"]);
+  assert.deepEqual(result.inserted.map((item) => item.submitted_title), ["New Movie"]);
+  assert.deepEqual(result.duplicates.map((item) => ({
+    title: item.title,
+    existing_title: item.existing_title,
+    status: item.status,
+    existing_type: item.existing_type
+  })), [
+    { title: "Inception", existing_title: "Inception", status: "active", existing_type: "catalog" },
+    { title: "Breaking Bad", existing_title: "Breaking Bad", status: "published", existing_type: "queue" }
+  ]);
+});
