@@ -1571,7 +1571,15 @@ async function processTelegramUpdate(
       botSlug: bot?.slug || null,
       category: safeAIError.category
     });
-    await recordAnalytics(env, bot, null, "ai_error", safeAIError);
+    try {
+      await recordAnalytics(env, bot, null, "ai_error", safeAIError);
+    } catch {
+      // Telemetry is best-effort and must never block the ordinary bot fallback.
+      console.warn("AI error telemetry could not be recorded:", {
+        botSlug: bot?.slug || null,
+        category: safeAIError.category
+      });
+    }
     // AI is an optional enhancement: continue into the ordinary bot response below.
   }
 
