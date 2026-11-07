@@ -53,6 +53,9 @@ test("parses compact combined library filters and keeps page state", () => {
   });
   assert.equal(parseMoviesCallback("movies:filter:movie:bad_slug:2026:top:0"), null);
   assert.deepEqual(parseMoviesCallback("movies:filters"), { action: "filters" });
+  assert.deepEqual(parseMoviesCallback("movies:filters:movie:action:2026:top"), {
+    action: "filters", mediaType: "movie", genreSlug: "action", year: 2026, sort: "top"
+  });
   assert.deepEqual(parseMoviesCallback("movies:filtergenres:movie:action:2026:top"), {
     action: "filtergenres", mediaType: "movie", genreSlug: "action", year: 2026, sort: "top"
   });
