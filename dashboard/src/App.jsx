@@ -4104,6 +4104,8 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
   const [tmdbResults, setTmdbResults] = useState([]);
   const [tmdbLoading, setTmdbLoading] = useState(false);
   const [importingId, setImportingId] = useState(null);
+  const [synopsisBackfillLoading, setSynopsisBackfillLoading] = useState(false);
+  const [synopsisBackfillStatus, setSynopsisBackfillStatus] = useState("");
   const [shareStatus, setShareStatus] = useState("");
   const isSharing = mode === "sharing";
   const isGenres = mode === "genres";
@@ -4290,6 +4292,30 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
     }
   }
 
+  async function localizeExistingSynopses() {
+    setSynopsisBackfillLoading(true);
+    setError("");
+    setSynopsisBackfillStatus("");
+    try {
+      const result = await fetchApi("/api/movies/synopsis/backfill", {
+        method: "POST",
+        body: JSON.stringify({ limit: 3 })
+      });
+      await onRefresh();
+      setSynopsisBackfillStatus(
+        result.remaining > 0
+          ? `تمت معالجة ${result.processed} ملخصات. ما زال ${result.remaining} عنواناً يحتاج إلى التعريب؛ اضغط «متابعة التعريب» لإكمال الدفعة التالية.`
+          : result.processed > 0
+            ? `اكتمل تعريب الملخصات. تمت معالجة ${result.processed} عناوين في هذه الدفعة، ولا توجد عناوين متبقية.`
+            : "جميع الملخصات مكتوبة بالعربية الفصحى أو لا تتوفر لها ملخصات."
+      );
+    } catch (e) {
+      setError(e.message || "تعذر تعريب الملخصات");
+    } finally {
+      setSynopsisBackfillLoading(false);
+    }
+  }
+
   async function save(event) {
     event.preventDefault();
     if (!editing || !form) return;
@@ -4344,10 +4370,16 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
         <h2 id="movies-workspace-title">{title}</h2>
         <p>{isSharing ? "اختار عنواناً منشوراً وشاركو باستعمال بيانات مكتبة FINDLY." : isGenres ? "التصنيفات المستخرجة من بيانات الأفلام والمسلسلات، مع عدد العناوين في كل تصنيف." : isPublished ? "هنا كيبانو غير العناوين المنشورة فعلياً للمستخدمين في Telegram." : "المكان الرئيسي لإدارة المكتبة: استيراد، بحث، مراجعة، تعديل، ونشر يدوي."}</p>
       </div>
-      <div className="movies-title-count"><strong>{count}</strong><span>{isGenres ? "تصنيف" : "عنوان"}</span></div>
+      <div className="movies-header-actions">
+        <div className="movies-title-count"><strong>{count}</strong><span>{isGenres ? "تصنيف" : "عنوان"}</span></div>
+        {!isSharing && !isPublished && !isGenres && <button className="secondary-button" type="button" onClick={localizeExistingSynopses} disabled={synopsisBackfillLoading}>
+          {synopsisBackfillLoading ? "جارٍ تعريب الملخصات..." : "تعريب / متابعة الملخصات"}
+        </button>}
+      </div>
     </header>
     {error && <div className="auth-error movies-workspace-error" role="alert">{error}</div>}
     {shareStatus && <div className="auth-success movies-share-status" role="status">{shareStatus}</div>}
+    {synopsisBackfillStatus && !isSharing && !isPublished && !isGenres && <div className="auth-success movies-share-status" role="status">{synopsisBackfillStatus}</div>}
 
     {!isSharing && !isPublished && !isGenres && <form className="movies-card tmdb-import-card" onSubmit={searchTmdb}>
       <div className="movies-card-heading"><div><h3>إضافة فيلم أو مسلسل</h3><p>كتب الاسم، اختار نتيجة TMDB، وغادي تتسجل كمسودة. النشر كيبقى بقرار يدوي منك.</p></div><span className="movies-card-step">01</span></div>

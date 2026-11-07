@@ -87,3 +87,24 @@ jobs:
           set -euo pipefail
           PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
           docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/movie_queue_verification.sql
+
+      - name: Prepare Arabic synopsis migration fixture
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/movie_synopsis_base_fixture.sql
+      - name: Apply Arabic synopsis migration to disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          LOG_FILE="$(mktemp)"
+          if ! docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261107180000_movie_synopsis_arabic.sql > "$LOG_FILE" 2>&1; then
+            cat "$LOG_FILE"
+            exit 1
+          fi
+          cat "$LOG_FILE"
+      - name: Verify Arabic synopsis privacy, defaults and audited updates
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/movie_synopsis_verification.sql

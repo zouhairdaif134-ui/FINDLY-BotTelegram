@@ -29,7 +29,8 @@ import {
   updateMovieCatalogItem,
   deleteMovieCatalogItem,
   searchTmdbCatalog,
-  importTmdbCatalogItem
+  importTmdbCatalogItem,
+  processMovieSynopsisBackfill
 } from "./routes/content.js";
 
 import {
@@ -1287,6 +1288,13 @@ export default {
        * =========================
        * Protected by existing FINDLY content permissions.
        */
+
+      if (url.pathname === "/api/movies/synopsis/backfill" && request.method === "POST") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentUpdate);
+        if (auth.response) return withCors(auth.response, request);
+        const body = await readJson(request);
+        return withCors(success(await processMovieSynopsisBackfill(env, auth, body.limit)), request);
+      }
 
       if (url.pathname === "/api/movies/queue/status" && request.method === "GET") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentView);
