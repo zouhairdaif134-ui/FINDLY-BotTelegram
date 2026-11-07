@@ -1291,8 +1291,11 @@ export default {
       if (url.pathname === "/api/movies/queue/status" && request.method === "GET") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentView);
         if (auth.response) return withCors(auth.response, request);
+        const commercialApproved = env.TMDB_COMMERCIAL_LICENSE_APPROVED === "true";
+        const nonCommercialDevelopment = env.TMDB_NONCOMMERCIAL_DEVELOPMENT === "true";
         return withCors(success({
-          tmdb_processing_enabled: env.TMDB_COMMERCIAL_LICENSE_APPROVED === "true"
+          tmdb_processing_enabled: commercialApproved || nonCommercialDevelopment,
+          tmdb_mode: commercialApproved ? "commercial" : nonCommercialDevelopment ? "noncommercial_development" : "disabled"
         }), request);
       }
 

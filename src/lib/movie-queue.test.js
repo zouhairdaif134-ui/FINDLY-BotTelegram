@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeMovieQueueTitle, selectTmdbQueueMatch, isMovieQueueProcessingEnabled } from "./movie-queue.js";
-import { assertTmdbCommercialUseAllowed } from "../routes/content.js";
+import { assertTmdbAccessAllowed } from "../routes/content.js";
 
 test("normalizes whitespace, case, and punctuation consistently", () => {
   assert.equal(
@@ -65,23 +65,32 @@ test("rejects punctuation-only titles at enqueue normalization boundary", () => 
   assert.equal(normalizeMovieQueueTitle("!!! — ???"), "");
 });
 
-test("blocks TMDB access until commercial use is explicitly approved", () => {
+test("blocks TMDB access when neither commercial approval nor non-commercial development mode is enabled", () => {
   assert.throws(
-    () => assertTmdbCommercialUseAllowed({ TMDB_API_KEY: "configured" }),
-    (error) => error.code === "TMDB_COMMERCIAL_LICENSE_REQUIRED" && error.status === 403
+    () => assertTmdbAccessAllowed({ TMDB_API_KEY: "configured" }),
+    (error) => error.code === "TMDB_ACCESS_DISABLED" && error.status === 403
   );
 });
 
-test("allows TMDB access only after the commercial approval flag is explicit", () => {
-  assert.doesNotThrow(() => assertTmdbCommercialUseAllowed({
+test("allows TMDB access in explicit non-commercial development mode without claiming commercial approval", () => {
+  assert.doesNotThrow(() => assertTmdbAccessAllowed({
+    TMDB_API_KEY: "configured",
+    TMDB_NONCOMMERCIAL_DEVELOPMENT: "true"
+  }));
+});
+
+test("allows TMDB access when commercial approval is explicit", () => {
+  assert.doesNotThrow(() => assertTmdbAccessAllowed({
     TMDB_API_KEY: "configured",
     TMDB_COMMERCIAL_LICENSE_APPROVED: "true"
   }));
 });
 
-test("keeps hourly processing disabled until commercial approval is explicit", () => {
+test("enables hourly processing only for explicit non-commercial development or commercial approval", () => {
   assert.equal(isMovieQueueProcessingEnabled({}), false);
   assert.equal(isMovieQueueProcessingEnabled({ TMDB_COMMERCIAL_LICENSE_APPROVED: "false" }), false);
   assert.equal(isMovieQueueProcessingEnabled({ TMDB_COMMERCIAL_LICENSE_APPROVED: true }), false);
   assert.equal(isMovieQueueProcessingEnabled({ TMDB_COMMERCIAL_LICENSE_APPROVED: "true" }), true);
+  assert.equal(isMovieQueueProcessingEnabled({ TMDB_NONCOMMERCIAL_DEVELOPMENT: "true" }), true);
+  assert.equal(isMovieQueueProcessingEnabled({ TMDB_NONCOMMERCIAL_DEVELOPMENT: true }), false);
 });
