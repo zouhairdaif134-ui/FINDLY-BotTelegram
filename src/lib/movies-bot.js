@@ -300,10 +300,26 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
     return "movies:" + (action === "library" ? "library" : action) + ":" + nextPage;
   };
   const navigation = [];
-  if (page > 0) navigation.push({ text: "⬅️ السابق", callback_data: pageCallback(page - 1) });
-  navigation.push({ text: "📄 " + (page + 1) + " / " + pageCount, callback_data: "movies:library:0" });
-  if (page + 1 < pageCount) navigation.push({ text: "التالي ➡️", callback_data: pageCallback(page + 1) });
+  const previousCallback = page > 0 ? pageCallback(page - 1) : "";
+  const nextCallback = page + 1 < pageCount ? pageCallback(page + 1) : "";
+  if (previousCallback && previousCallback.length <= 64) navigation.push({ text: "⬅️ السابق", callback_data: previousCallback });
+  navigation.push({ text: "📄 " + (page + 1) + " / " + pageCount, callback_data: pageCallback(page).slice(0, 64) });
+  if (nextCallback && nextCallback.length <= 64) navigation.push({ text: "التالي ➡️", callback_data: nextCallback });
   if (navigation.length) keyboard.push(navigation);
+
+  if (pageCount > 1) {
+    const pageButtons = [];
+    for (let pageIndex = 0; pageIndex < Math.min(pageCount, 10); pageIndex += 1) {
+      const callbackData = pageCallback(pageIndex);
+      if (callbackData.length <= 64) {
+        pageButtons.push({
+          text: pageIndex === page ? "• " + (pageIndex + 1) : String(pageIndex + 1),
+          callback_data: callbackData
+        });
+      }
+    }
+    if (pageButtons.length) keyboard.push(pageButtons);
+  }
 
   keyboard.push([
     { text: "الكل", callback_data: "movies:library:0" },
