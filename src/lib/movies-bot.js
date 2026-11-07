@@ -284,10 +284,10 @@ async function sendMoviesFilterMenu(env, bot, chatId, inputFilters = {}) {
   keyboard.push([{ text: "مسح جميع الفلاتر", callback_data: callback("all", "", null, "added") }]);
   keyboard.push([{ text: "⬅️ رجوع للمكتبة", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, filters.sort) }]);
   await sendMessage(env, bot.slug, chatId,
-    "<b>⚙️ الفلترة والترتيب</b>\\n\\nاختار النوع والتصنيف والسنة والترتيب. تقدر تجمع أكثر من فلتر.\\n\\n" +
-    "النوع: " + (filters.mediaType === "all" ? "الكل" : filters.mediaType === "movie" ? "أفلام" : "مسلسلات") + "\\n" +
-    "التصنيف: " + (filters.genreSlug || "الكل") + "\\n" +
-    "السنة: " + (filters.year || "كل السنوات") + "\\n" +
+    "<b>⚙️ الفلترة والترتيب</b>\n\nاختار النوع والتصنيف والسنة والترتيب. تقدر تجمع أكثر من فلتر.\n\n" +
+    "النوع: " + (filters.mediaType === "all" ? "الكل" : filters.mediaType === "movie" ? "أفلام" : "مسلسلات") + "\n" +
+    "التصنيف: " + (filters.genreSlug || "الكل") + "\n" +
+    "السنة: " + (filters.year || "كل السنوات") + "\n" +
     "الترتيب: " + filters.sort,
     { reply_markup: { inline_keyboard: keyboard } }
   );
@@ -698,7 +698,7 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
       "المشاهدة داخل Telegram لا تتفعل إلا للمحتوى المرخّص والمجهز للتسليم."
     );
   }
-  else if (parsed.action === "filters") await sendMoviesFilterMenu(env, bot, chatId);
+  else if (parsed.action === "filters") await sendMoviesFilterMenu(env, bot, chatId, parsed);
   else if (parsed.action === "filtergenres") await sendMoviesFilterGenres(env, bot, chatId, parsed);
   else if (parsed.action === "filteryearprompt") await showMoviesFilterYearPrompt(env, bot, chatId, parsed);
   else if (parsed.action === "filter") await sendList(env, bot, chatId, "filter", parsed.page, "", "", parsed);
