@@ -204,3 +204,29 @@ test("passes catalog tools to Workers AI and executes only returned catalog tool
   assert.equal(calls.length, 2);
   assert.ok(db.calls.some((call) => call.table === "movie_titles"));
 });
+
+
+test("retries a blank Workers AI response without catalog tools instead of falling through to the master menu", async () => {
+  const calls = [];
+  const env = {
+    AI: {
+      async run(model, options) {
+        calls.push({ model, options });
+        return calls.length === 1
+          ? { response: "" }
+          : { response: "مرحبا، أنا مساعد FINDLY. كيف نقدر نعاونك؟" };
+      }
+    }
+  };
+  const reply = await generateAIReply(
+    env,
+    { id: "bot-id" },
+    "سلام",
+    { config: { ...config, model: "@cf/qwen/qwen3.8-27b" }, supabase: createCatalogDb() }
+  );
+  assert.equal(reply, "مرحبا، أنا مساعد FINDLY. كيف نقدر نعاونك؟");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].options.tools.length, 3);
+  assert.equal(calls[1].options.tools, undefined);
+  assert.equal(calls[1].options.messages.at(-1).content, "سلام");
+});

@@ -269,7 +269,16 @@ export async function generateAIReply(env, bot, userText, memory = {}) {
   const toolCalls = Array.isArray(firstMessage.tool_calls)
     ? firstMessage.tool_calls.slice(0, 3)
     : [];
-  if (!toolCalls.length || !supabase) return extractAIText(firstMessage);
+  if (!toolCalls.length || !supabase) {
+    const firstReply = extractAIText(firstMessage);
+    if (firstReply) return firstReply;
+
+    // A blank first response must not silently fall through to the bot menu.
+    // Retry once without catalog tools to request a normal conversational answer.
+    const retryMessage = await requestAIProvider(env, config, apiKey, messages, false);
+    return extractAIText(retryMessage) ||
+      "ما قدرتش نولد جواب دابا. عاود صيفط رسالتك من بعد شوية.";
+  }
 
   const assistantToolCalls = [];
   const toolMessages = [];

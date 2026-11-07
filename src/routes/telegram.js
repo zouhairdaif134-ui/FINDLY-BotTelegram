@@ -1509,9 +1509,17 @@ async function processTelegramUpdate(
   }
 
   const aiStartedAt = Date.now();
+  let aiEnabledForRequest = false;
   try {
     const memoryUserId = message.chat?.type === "private" ? internalUser?.id : null;
     const aiConfig = await getAIConfig(env, bot.id);
+    aiEnabledForRequest = aiConfig.enabled;
+    console.log("AI configuration loaded:", {
+      botSlug: bot?.slug || null,
+      enabled: aiConfig.enabled,
+      workersAIBindingAvailable: typeof env.AI?.run === "function",
+      hasUserText: Boolean(text.trim())
+    });
     const memoryState = aiConfig.enabled && memoryUserId
       ? await getAIMemoryState(getSupabase(env), memoryUserId, bot.id)
       : null;
@@ -1530,6 +1538,17 @@ async function processTelegramUpdate(
           { history: memoryHistory, preferences: memoryPreferences, config: aiConfig, supabase: getSupabase(env) }
         )
       : null;
+
+    if (aiConfig.enabled && !aiReply) {
+      console.warn("AI provider returned no usable reply:", {
+        botSlug: bot?.slug || null,
+        duration_ms: Math.max(0, Date.now() - aiStartedAt)
+      });
+      await sendMessage(env, bot.slug, chatId,
+        "ما وصلنيش جواب واضح هاد المرة. عاود صيفط سؤالك من فضلك."
+      );
+      return { ok: true, ai: false, reason: "empty_reply" };
+    }
 
     if (aiReply) {
       if (memoryEnabled && memoryUserId) {
@@ -1578,7 +1597,14 @@ async function processTelegramUpdate(
         category: safeAIError.category
       });
     }
-    // AI is an optional enhancement: continue into the ordinary bot response below.
+    // AI is optional for bots where it is disabled. For an enabled assistant,
+    // report the failure instead of silently sending the unrelated master menu.
+    if (aiEnabledForRequest) {
+      await sendMessage(env, bot.slug, chatId,
+        "المساعد الذكي ما قدرش يجاوب دابا بسبب عطل مؤقت. عاود المحاولة من بعد شوية."
+      );
+      return { ok: true, ai: false, reason: "provider_error" };
+    }
   }
 
   if (
