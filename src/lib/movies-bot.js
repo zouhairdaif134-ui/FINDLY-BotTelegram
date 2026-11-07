@@ -437,7 +437,8 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
   const rangeEnd = Math.min(from + (data?.length || 0), total);
   await sendMessage(env, bot.slug, chatId,
     "<b>🎞️ " + heading + "</b>\n" +
-    "<i>عرض " + rangeStart + "–" + rangeEnd + " من " + total + "</i>\n\n" + body,
+    "<i>عرض " + rangeStart + "–" + rangeEnd + " من " + total + "</i>\n" +
+    "<i>حتى 10 عناوين في كل صفحة</i>\n\n" + body,
     { reply_markup: { inline_keyboard: keyboard } }
   );
 }
