@@ -5,16 +5,19 @@ import AnalyticsSection from "./AnalyticsSection.jsx";
 import AdminsSection from "./AdminsSection.jsx";
 import ActivityLogSection from "./ActivityLogSection.jsx";
 import MonetizationSection from "./MonetizationSection.jsx";
+import AISection from "./AISection.jsx";
 import { buildMovieShareContent } from "../../src/lib/movie-sharing.js";
 
 const PRODUCTION_API_URL =
   "https://findly-v3-api.berrchidcity99.workers.dev";
 const PREVIEW_API_URL =
-  "https://feat-findly-movies-runtime-hardening-findly-v3-api.berrchidcity99.workers.dev";
+  "https://feat-ai-advanced-phase1-findly-v3-api.berrchidcity99.workers.dev";
 const isPagesPreview =
   typeof window !== "undefined" &&
   (window.location.hostname ===
     "feat-findly-movies-runtime-h.findly-bottelegram.pages.dev" ||
+    window.location.hostname ===
+    "feat-ai-advanced-phase1.findly-bottelegram.pages.dev" ||
     /^[a-f0-9]{8}\.findly-bottelegram\.pages\.dev$/.test(
       window.location.hostname
     ));
@@ -1970,7 +1973,11 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
           />
         )}
 
-        {["AI", "Settings"].includes(activeSection) && (
+        {activeSection === "AI" && (
+          <AISection fetchApi={fetchApi} bots={bots} />
+        )}
+
+        {activeSection === "Settings" && (
           <ComingSoonSection section={activeSection} />
         )}
       </main>

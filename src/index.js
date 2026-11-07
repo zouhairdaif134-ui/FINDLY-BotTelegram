@@ -59,6 +59,7 @@ import {
   updateSetting,
   deleteSetting
 } from "./routes/settings.js";
+import { getAIAdminConfig, saveAIAdminConfig } from "./routes/ai.js";
 
 import {
   handleTelegramUpdate
@@ -82,6 +83,7 @@ import {
 
 import { authorizeRequest } from "./lib/auth.js";
 import { getSupabase } from "./lib/supabase.js";
+import { cleanupExpiredAISessionMessages } from "./lib/ai-memory.js";
 import { activateDueMonetizationCampaigns } from "./lib/monetization.js";
 import { renderMovieSharePage } from "./lib/movie-sharing.js";
 
@@ -140,7 +142,7 @@ const PERMISSIONS = {
 function corsHeaders(request) {
   const origin = request?.headers.get("Origin") || "";
   const isAllowedPreviewOrigin =
-    /^https:\/\/(?:feat-findly-movies-runtime-h|[a-f0-9]{8})\.findly-bottelegram\.pages\.dev$/.test(origin);
+    /^https:\/\/(?:feat-findly-movies-runtime-h|feat-ai-advanced-phase1|[a-f0-9]{8})\.findly-bottelegram\.pages\.dev$/.test(origin);
   const isAllowedOrigin =
     origin === "https://findly-bottelegram.pages.dev" ||
     isAllowedPreviewOrigin;
@@ -267,6 +269,15 @@ export default {
       cron: controller?.cron || null,
       started_at: startedAt
     });
+
+    try {
+      await cleanupExpiredAISessionMessages(getSupabase(env));
+    } catch (error) {
+      console.error("FINDLY AI session-memory expiry cleanup failed:", {
+        code: error?.code || null,
+        message: error?.message || "Unknown error"
+      });
+    }
 
     let monetization = null;
     try {
@@ -1777,6 +1788,31 @@ export default {
             await getMovieReferralAnalytics(env)
           )
         , request);
+      }
+
+      if (
+        url.pathname === "/api/ai/config" &&
+        request.method === "GET"
+      ) {
+        const auth = await requirePermission(env, request, PERMISSIONS.settings);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await getAIAdminConfig(
+          env,
+          url.searchParams.get("bot_id")
+        )), request);
+      }
+
+      if (
+        url.pathname === "/api/ai/config" &&
+        request.method === "PUT"
+      ) {
+        const auth = await requirePermission(env, request, PERMISSIONS.settings);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await saveAIAdminConfig(
+          env,
+          await readJson(request),
+          auth
+        )), request);
       }
 
       if (

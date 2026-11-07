@@ -11,7 +11,14 @@ import {
   showSharedJob,
   handleJobsCallback
 } from "../lib/jobs-ui.js";
-import { generateAIReply } from "../lib/ai.js";
+import { generateAIReply, getAIConfig, classifyAIError, recordAIAnalyticsBestEffort } from "../lib/ai.js";
+import {
+  parseAIMemoryCommand, buildAIMemoryConsentKeyboard, buildAIMemoryConfirmationKeyboard,
+  getAIMemoryState, ensureAIMemoryState, setAIMemoryConsent, setAIMemorySessionEnabled,
+  getAISessionHistory, appendAISessionMessage, setPendingAIMemoryPreference,
+  setPendingAIMemoryClear, confirmPendingAIMemoryPreference, confirmPendingAIMemoryClear,
+  cancelPendingAIMemoryAction, clearAIMemory
+} from "../lib/ai-memory.js";
 import {
   handleMoviesCallback,
   handleMoviesText,
@@ -1172,6 +1179,128 @@ export async function handleTelegramUpdate(
   }
 }
 
+
+function escapeMemoryHtml(value) {
+  return String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+async function handleAIMemoryCommand(env, bot, chatId, userId, command) {
+  if (!userId) {
+    await sendMessage(env, bot.slug, chatId, "ما قدرتش نحدد حساب Telegram ديالك. عاود المحاولة.");
+    return;
+  }
+  const supabase = getSupabase(env);
+  if (command.action === "status") {
+    const state = await getAIMemoryState(supabase, userId, bot.id);
+    const consent = state?.consent_status === "granted"
+      ? "الذاكرة الدائمة مفعّلة بموافقتك."
+      : state?.consent_status === "denied"
+        ? "الذاكرة الدائمة غير مفعّلة؛ السياق المؤقت فقط متاح."
+        : "مازال ما اخترتيش واش تفعّل الذاكرة الدائمة.";
+    const session = state?.session_enabled === false
+      ? "السياق المؤقت متوقف."
+      : "السياق المؤقت: آخر 12 رسالة، لمدة أقصاها 30 دقيقة.";
+    const preferences = state?.consent_status === "granted" && Array.isArray(state.preferences) ? state.preferences : [];
+    const visiblePreferences = preferences.slice(-8);
+    const list = visiblePreferences.length
+      ? "\n\n<b>التفضيلات المحفوظة:</b>\n" +
+        visiblePreferences.map((item, index) => String(index + 1) + ". " + escapeMemoryHtml(String(item).slice(0, 200))).join("\n") +
+        (preferences.length > visiblePreferences.length ? "\n... كاينين " + preferences.length + " تفضيلات فالمجموع." : "")
+      : "";
+    const keyboard = (!state || state.consent_status === "pending")
+      ? buildAIMemoryConsentKeyboard()
+      : undefined;
+    await sendMessage(env, bot.slug, chatId,
+      "<b>إعدادات الذاكرة ديالك</b>\n\n" + consent + "\n" + session + list +
+      "\n\nلإضافة تفضيل: <code>/memory add كنفضل الأجوبة المختصرة</code>\nما تحفظش كلمات السر أو معلومات حساسة.\nلإيقاف الذاكرة وحذف بياناتها: <code>/memory off</code>",
+      keyboard ? { reply_markup: keyboard } : {}
+    );
+    return;
+  }
+  if (command.action === "off") {
+    await clearAIMemory(supabase, userId, bot.id, true);
+    await sendMessage(env, bot.slug, chatId, "تم إيقاف الذاكرة وحذف سياق المحادثة والتفضيلات المحفوظة. تقدر ترجعها باستعمال <code>/memory on</code>.");
+    return;
+  }
+  if (command.action === "on") {
+    const state = await setAIMemorySessionEnabled(supabase, userId, bot.id, true);
+    if (state.consent_status !== "granted") {
+      await sendMessage(env, bot.slug, chatId,
+        "<b>اختار مستوى الذاكرة</b>\n\nرسائلك كتتعالج عبر مزود الذكاء الاصطناعي المفعّل. السياق المؤقت كيحتافظ بآخر 12 رسالة لمدة 30 دقيقة. الذاكرة الدائمة كتحتافظ غير بالتفضيلات اللي كتأكد حفظها. تقدر تبدل اختيارك أو تحذف البيانات باستعمال /memory.",
+        { reply_markup: buildAIMemoryConsentKeyboard() }
+      );
+    } else {
+      await sendMessage(env, bot.slug, chatId, "الذاكرة رجعات خدامة. التفضيلات المحفوظة ما تبدلاتش.");
+    }
+    return;
+  }
+  if (command.action === "add") {
+    const state = await getAIMemoryState(supabase, userId, bot.id);
+    if (state?.consent_status !== "granted") {
+      await sendMessage(env, bot.slug, chatId, "خاصك توافق أولاً على الذاكرة الدائمة. استعمل /memory واختار نعم أو لا.");
+      return;
+    }
+    const token = await setPendingAIMemoryPreference(supabase, userId, bot.id, command.preference);
+    await sendMessage(env, bot.slug, chatId,
+      "<b>واش نحتافظ بهاد التفضيل؟</b>\n\n" + escapeMemoryHtml(command.preference) +
+      "\n\nما غاديش يتحفظ حتى تضغط على تأكيد الحفظ.",
+      { reply_markup: buildAIMemoryConfirmationKeyboard("save", token) }
+    );
+    return;
+  }
+  if (command.action === "clear") {
+    const token = await setPendingAIMemoryClear(supabase, userId, bot.id);
+    await sendMessage(env, bot.slug, chatId,
+      "واش متأكد بغيتي تمسح التفضيلات الدائمة وسياق المحادثة المؤقت؟",
+      { reply_markup: buildAIMemoryConfirmationKeyboard("clear", token) }
+    );
+    return;
+  }
+  const help = command.action === "invalid"
+    ? "ما لقيتش تفضيل صالح للحفظ."
+    : "الأوامر المتاحة:\n/memory — عرض الحالة\n/memory add النص — اقتراح تفضيل للحفظ\n/memory clear — حذف البيانات بعد التأكيد\n/memory off — إيقاف الذاكرة وحذف بياناتها\n/memory on — إعادة تشغيل السياق المؤقت";
+  await sendMessage(env, bot.slug, chatId, help);
+}
+
+async function handleAIMemoryCallback(env, bot, chatId, callbackQuery, userId) {
+  const data = String(callbackQuery.data || "");
+  const supabase = getSupabase(env);
+  await answerCallback(env, bot.slug, callbackQuery.id);
+  if (!userId) {
+    await sendMessage(env, bot.slug, chatId, "تعذر التحقق من حساب Telegram ديالك.");
+    return;
+  }
+  if (data === "aimemory:consent:yes") {
+    await setAIMemoryConsent(supabase, userId, bot.id, "granted");
+    await setAIMemorySessionEnabled(supabase, userId, bot.id, true);
+    await sendMessage(env, bot.slug, chatId,
+      "تم تفعيل الذاكرة الدائمة. ما غاديش نحفظ أي تفضيل بوحدي؛ استعمل <code>/memory add النص</code> ومن بعد أكد الحفظ."
+    );
+    return;
+  }
+  if (data === "aimemory:consent:no") {
+    await setAIMemoryConsent(supabase, userId, bot.id, "denied");
+    await setAIMemorySessionEnabled(supabase, userId, bot.id, true);
+    await sendMessage(env, bot.slug, chatId, "تم اختيار السياق المؤقت فقط. التفضيلات الدائمة ما غاديش تتحفظ.");
+    return;
+  }
+  const confirmation = data.match(/^aimemory:confirm:(save|clear|cancel):([0-9a-f-]{36})$/i);
+  if (confirmation?.[1] === "save") {
+    const preferences = await confirmPendingAIMemoryPreference(supabase, userId, bot.id, confirmation[2]);
+    await sendMessage(env, bot.slug, chatId, "تم حفظ التفضيل بموافقتك. عدد التفضيلات المحفوظة: " + preferences.length + ".");
+    return;
+  }
+  if (confirmation?.[1] === "clear") {
+    await confirmPendingAIMemoryClear(supabase, userId, bot.id, confirmation[2]);
+    await sendMessage(env, bot.slug, chatId, "تم حذف التفضيلات وسياق المحادثة المؤقت.");
+    return;
+  }
+  if (confirmation?.[1] === "cancel") {
+    await cancelPendingAIMemoryAction(supabase, userId, bot.id, confirmation[2]);
+    await sendMessage(env, bot.slug, chatId, "تلغى العملية. ما تبدل حتى تفضيل محفوظ.");
+  }
+}
+
 async function processTelegramUpdate(
   env,
   bot,
@@ -1194,7 +1323,7 @@ async function processTelegramUpdate(
     message?.from ||
     callbackQuery?.from;
 
-  await saveTelegramUser(
+  const internalUser = await saveTelegramUser(
     env,
     bot,
     telegramUser
@@ -1241,6 +1370,12 @@ async function processTelegramUpdate(
       return {
         ok: true
       };
+    }
+
+    if (String(callbackQuery.data || "").startsWith("aimemory:")) {
+      const privateChat = callbackQuery.message?.chat?.type === "private";
+      await handleAIMemoryCallback(env, bot, chatId, callbackQuery, privateChat ? internalUser?.id : null);
+      return { ok: true };
     }
 
     await handleMenuCallback(
@@ -1344,6 +1479,16 @@ async function processTelegramUpdate(
     return { ok: true };
   }
 
+  const memoryCommand = parseAIMemoryCommand(text);
+  if (memoryCommand) {
+    if (message.chat?.type !== "private") {
+      await sendMessage(env, bot.slug, chatId, "إعدادات الذاكرة متاحة غير فالمحادثة الخاصة مع البوت، حفاظاً على الخصوصية.");
+      return { ok: true };
+    }
+    await handleAIMemoryCommand(env, bot, chatId, internalUser?.id, memoryCommand);
+    return { ok: true, ai_memory: memoryCommand.action };
+  }
+
   const moviesTextHandled = await handleMoviesText(env, bot, chatId, message, telegramUser?.id);
   if (moviesTextHandled) return { ok: true };
 
@@ -1363,30 +1508,54 @@ async function processTelegramUpdate(
     };
   }
 
+  const aiStartedAt = Date.now();
   try {
-    const aiReply = await generateAIReply(
-      env,
-      bot,
-      text
-    );
+    const memoryUserId = message.chat?.type === "private" ? internalUser?.id : null;
+    const aiConfig = await getAIConfig(env, bot.id);
+    const memoryState = aiConfig.enabled && memoryUserId
+      ? await getAIMemoryState(getSupabase(env), memoryUserId, bot.id)
+      : null;
+    const memoryEnabled = memoryState?.session_enabled !== false;
+    const memoryHistory = aiConfig.enabled && memoryEnabled && memoryUserId
+      ? await getAISessionHistory(getSupabase(env), memoryUserId, bot.id)
+      : [];
+    const memoryPreferences = aiConfig.enabled && memoryState?.consent_status === "granted" && Array.isArray(memoryState.preferences)
+      ? memoryState.preferences
+      : [];
+    const aiReply = aiConfig.enabled
+      ? await generateAIReply(
+          env,
+          bot,
+          text,
+          { history: memoryHistory, preferences: memoryPreferences, config: aiConfig, supabase: getSupabase(env) }
+        )
+      : null;
 
     if (aiReply) {
+      if (memoryEnabled && memoryUserId) {
+        await appendAISessionMessage(getSupabase(env), memoryUserId, bot.id, "user", text);
+        await appendAISessionMessage(getSupabase(env), memoryUserId, bot.id, "assistant", aiReply);
+      }
       await sendMessage(
         env,
         bot.slug,
         chatId,
         escapeHtml(aiReply)
       );
+      if (memoryUserId && !memoryState) {
+        await ensureAIMemoryState(getSupabase(env), memoryUserId, bot.id);
+        await sendMessage(env, bot.slug, chatId,
+          "<b>إعدادات الخصوصية ديال المساعد</b>\n\nرسائلك كتتعالج عبر مزود الذكاء الاصطناعي المفعّل. كنحتافظ بسياق مؤقت لآخر 12 رسالة لمدة 30 دقيقة. ما ترسلش كلمات السر أو معلومات حساسة. واش بغيتي حتى نحفظ تفضيلاتك بشكل دائم؟",
+          { reply_markup: buildAIMemoryConsentKeyboard() }
+        );
+      }
 
-      await recordAnalytics(
+      await recordAIAnalyticsBestEffort(
+        recordAnalytics,
         env,
         bot,
-        telegramUser,
         "ai_message",
-        {
-          update_id:
-            update?.update_id ?? null
-        }
+        { duration_ms: Math.max(0, Date.now() - aiStartedAt) }
       );
 
       return {
@@ -1395,18 +1564,21 @@ async function processTelegramUpdate(
       };
     }
   } catch (error) {
-    console.error("AI reply failed:", error);
-    await sendMessage(
-      env,
-      bot.slug,
-      chatId,
-      "وقع مشكل مؤقت فالمساعد الذكي. حاول من بعد."
+    const safeAIError = classifyAIError(error);
+    console.error("AI reply failed:", {
+      botSlug: bot?.slug || null,
+      category: safeAIError.category
+    });
+    const errorTelemetryRecorded = await recordAIAnalyticsBestEffort(
+      recordAnalytics, env, bot, "ai_error", safeAIError
     );
-    return {
-      ok: true,
-      ai: false,
-      error: "ai_unavailable"
-    };
+    if (!errorTelemetryRecorded) {
+      console.warn("AI error telemetry could not be recorded:", {
+        botSlug: bot?.slug || null,
+        category: safeAIError.category
+      });
+    }
+    // AI is an optional enhancement: continue into the ordinary bot response below.
   }
 
   if (

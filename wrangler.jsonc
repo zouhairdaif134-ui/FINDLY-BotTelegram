@@ -19,7 +19,8 @@
   },
   "previews": {
     "vars": {
-      "SUPABASE_URL": "https://preview.invalid"
+      "SUPABASE_URL": "https://gqowfavdkpqmyxwrpiep.supabase.co",
+      "SUPABASE_SECRET_KEY": "sb_publishable_IZuUPJVFlMHY0hWzNP8esw_fj697Ptn"
     }
   },
   "keep_vars": true
