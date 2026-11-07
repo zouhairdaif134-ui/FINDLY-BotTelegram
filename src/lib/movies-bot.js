@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase.js";
-import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
+import { sendMessage, sendPhoto, answerCallback } from "./telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const MOVIE_PAGE_SIZE = 20;
@@ -106,24 +106,6 @@ export function buildTitleCaption(title) {
     escapeHtml(metaText) + (genreText ? "\n" + escapeHtml(genreText) : "") +
     "\n──────────────\n" + escapeHtml(shortOverview) +
     "\n\n<i>" + escapeHtml("ℹ️ " + notice) + "</i>";
-}
-
-async function getMoviesBot(env) {
-  const { data, error } = await getSupabase(env)
-    .from("bots")
-    .select("telegram_username")
-    .eq("slug", "movies")
-    .eq("is_active", true)
-    .maybeSingle();
-  if (error || !data?.telegram_username) return null;
-  try {
-    const identity = await telegramRequest(env, "movies", "getMe");
-    const configuredUsername = data.telegram_username.replace(/^@/, "").toLowerCase();
-    if (!identity?.username || identity.username.toLowerCase() !== configuredUsername) return null;
-    return data;
-  } catch {
-    return null;
-  }
 }
 
 async function getMasterBot(env) {
