@@ -10,6 +10,10 @@ create table if not exists public.admin_profiles (
   is_active boolean not null default true
 );
 
+alter table public.admin_profiles
+  add column if not exists display_name text,
+  add column if not exists is_active boolean not null default true;
+
 create table if not exists public.admin_audit_logs (
   id uuid primary key default gen_random_uuid(),
   actor_id uuid not null,
