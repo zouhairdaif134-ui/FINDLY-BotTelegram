@@ -30,6 +30,7 @@ test("parses Library and Categories navigation callbacks", () => {
   assert.deepEqual(parseMoviesCallback("movies:genre:science-fiction:2"), {
     action: "genre", genreSlug: "science-fiction", page: 2
   });
+  assert.deepEqual(parseMoviesCallback("movies:added:1"), { action: "added", page: 1 });
   assert.deepEqual(parseMoviesCallback("movies:old:1"), { action: "old", page: 1 });
   assert.deepEqual(parseMoviesCallback("movies:az:0"), { action: "az", page: 0 });
   assert.deepEqual(parseMoviesCallback("movies:year:2024:0"), {
