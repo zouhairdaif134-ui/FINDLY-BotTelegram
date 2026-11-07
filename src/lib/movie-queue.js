@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase.js";
-import { searchTmdbCatalog, importTmdbCatalogItem } from "../routes/content.js";
+import { searchTmdbCatalog, importTmdbCatalogItem, assertTmdbCommercialUseAllowed } from "../routes/content.js";
 
 const ACTIVE_DUPLICATE_STATES = ["pending", "processing", "resolving", "needs_review", "ready_for_review", "already_in_catalog"];
 const MAX_BATCH_SIZE = 100;
@@ -177,6 +177,7 @@ async function saveAlreadyInCatalog(supabase, itemId, leaseToken, expectedStatus
 }
 
 export async function resolveMovieQueueItem(env, id, body, actor) {
+  assertTmdbCommercialUseAllowed(env);
   const supabase = getSupabase(env);
   const leaseExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
   const { data: claimed, error: claimError } = await supabase.rpc("claim_movie_queue_resolution", {
@@ -241,6 +242,9 @@ export async function rejectMovieQueueItem(env, id) {
 }
 
 export async function processMovieQueueHourly(env, now = new Date()) {
+  if (env.TMDB_COMMERCIAL_LICENSE_APPROVED !== "true") {
+    return { processed: false, skipped: true, reason: "TMDB_COMMERCIAL_LICENSE_REQUIRED" };
+  }
   const supabase = getSupabase(env);
   const nowIso = now.toISOString();
   const slotStart = new Date(Date.UTC(
