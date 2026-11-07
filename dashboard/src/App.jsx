@@ -6,6 +6,7 @@ import AdminsSection from "./AdminsSection.jsx";
 import ActivityLogSection from "./ActivityLogSection.jsx";
 import MonetizationSection from "./MonetizationSection.jsx";
 import AISection from "./AISection.jsx";
+import MovieQueueSection from "./MovieQueueSection.jsx";
 import { buildMovieShareContent } from "../../src/lib/movie-sharing.js";
 
 const PRODUCTION_API_URL =
@@ -28,7 +29,7 @@ const API_URL =
 const menuGroups = [
   { icon: "🏠", label: "Overview", items: ["Overview"] },
   { icon: "🤖", label: "Bots & Telegram", items: ["Bots", "Telegram"] },
-  { icon: "🎬", label: "Movies & Categories", items: ["Movies", "Categories"] },
+  { icon: "🎬", label: "Movies & Categories", items: ["Movies", "Movie Queue", "Categories"] },
   { icon: "🗂️", label: "Menus & Content", items: ["Menus", "Content"] },
   { icon: "👥", label: "Users & Admins", items: ["Users", "Admins"] },
   { icon: "🔔", label: "Notifications", items: ["Notifications"] },
@@ -1867,6 +1868,8 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
             }
           />
         )}
+        {activeSection === "Movie Queue" && <MovieQueueSection fetchApi={fetchApi} />}
+
         {(activeSection === "Movies" || activeSection === "Publishing & Sharing") && (
           <MoviesSection
             movies={movies}
