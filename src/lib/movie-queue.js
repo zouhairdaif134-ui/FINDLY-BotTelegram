@@ -20,14 +20,14 @@ export function normalizeMovieQueueTitle(value) {
 }
 
 export function parseMovieQueueLines(value) {
-  const lines = String(value || "").split(/\\r?\\n/);
+  const lines = String(value || "").split(/\r?\n/);
   const entries = [];
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index].trim();
     if (!line) continue;
     const match = line.match(/^(MOVIE|TV)\\s*\\|\\s*(.+)$/i);
     if (!match || !match[2].trim()) {
-      throw new Error(`Line ${index + 1}: each line must start with MOVIE | or TV | followed by a title`);
+      throw new Error(`Line ${index + 1}: Each line must start with MOVIE | or TV | followed by a title`);
     }
     entries.push({
       title: match[2].trim(),
@@ -59,7 +59,7 @@ export async function listMovieQueue(env, status = null) {
   let query = supabase
     .from("movie_queue_items")
     .select("id,submitted_title,normalized_title,media_type,status,tmdb_id,tmdb_candidates,catalog_title_id,attempt_count,next_attempt_at,last_error_code,last_error_message,created_at,updated_at,processed_at")
-    .order("created_at", { ascending: false })
+    .order("created_at", { ascending: true }).order("id", { ascending: true })
     .limit(300);
   if (status && ["pending", "processing", "resolving", "needs_review", "ready_for_review", "already_in_catalog", "failed", "rejected", "published"].includes(status)) {
     query = query.eq("status", status);
@@ -76,8 +76,8 @@ export async function enqueueMovieQueue(env, body, actor) {
   }
 
   const entries = requestedType === "mixed"
-    ? parseMovieQueueLines(body?.titles_text ?? (Array.isArray(body?.titles) ? body.titles.join("\\n") : ""))
-    : (Array.isArray(body?.titles) ? body.titles : String(body?.titles_text || "").split(/\\r?\\n/))
+    ? parseMovieQueueLines(body?.titles_text ?? (Array.isArray(body?.titles) ? body.titles.join("\n") : ""))
+    : (Array.isArray(body?.titles) ? body.titles : String(body?.titles_text || "").split(/\r?\n/))
       .map((value) => ({ title: String(value || "").trim(), media_type: requestedType }))
       .filter((entry) => entry.title);
 
