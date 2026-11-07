@@ -102,10 +102,13 @@ begin
   if v_review_claim_count <> 1 then
     raise exception 'first manual resolver must claim the needs_review item';
   end if;
+  if (select status from public.movie_queue_items where id = v_review_id) <> 'resolving' then
+    raise exception 'manual resolution must use its own resolving status';
+  end if;
   select count(*) into v_review_claim_count
   from public.claim_movie_queue_resolution(v_review_id, now() + interval '10 minutes');
   if v_review_claim_count <> 0 then
-    raise exception 'second manual resolver must not claim an already-processing item';
+    raise exception 'second manual resolver must not claim an already-resolving item';
   end if;
 end;
 $$;
