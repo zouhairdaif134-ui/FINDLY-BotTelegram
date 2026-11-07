@@ -4,7 +4,8 @@ import {
   normalizeMovieSearch,
   parseMoviesCallback,
   isMoviesSearchReply,
-  isMoviesYearReply
+  isMoviesYearReply,
+  MOVIE_PAGE_SIZE
 } from "./movies-bot.js";
 import { getTelegramToken, getTelegramWebhookSecret } from "./telegram.js";
 
@@ -39,9 +40,28 @@ test("parses Library and Categories navigation callbacks", () => {
   assert.equal(parseMoviesCallback("movies:genre:bad_slug:0"), null);
 });
 
-test("uses twenty titles per Telegram library page", async () => {
-  const { MOVIE_PAGE_SIZE } = await import("./movies-bot.js");
-  assert.equal(MOVIE_PAGE_SIZE, 20);
+test("uses ten titles per Telegram library page", () => {
+  assert.equal(MOVIE_PAGE_SIZE, 10);
+});
+
+test("parses compact combined library filters and keeps page state", () => {
+  assert.deepEqual(parseMoviesCallback("movies:filter:movie:action:2026:top:2"), {
+    action: "filter", mediaType: "movie", genreSlug: "action", year: 2026, sort: "top", page: 2
+  });
+  assert.deepEqual(parseMoviesCallback("movies:filter:all:none:0:added:0"), {
+    action: "filter", mediaType: "all", genreSlug: "", year: null, sort: "added", page: 0
+  });
+  assert.equal(parseMoviesCallback("movies:filter:movie:bad_slug:2026:top:0"), null);
+  assert.deepEqual(parseMoviesCallback("movies:filters"), { action: "filters" });
+  assert.deepEqual(parseMoviesCallback("movies:filters:movie:action:2026:top"), {
+    action: "filters", mediaType: "movie", genreSlug: "action", year: 2026, sort: "top"
+  });
+  assert.deepEqual(parseMoviesCallback("movies:filtergenres:movie:action:2026:top"), {
+    action: "filtergenres", mediaType: "movie", genreSlug: "action", year: 2026, sort: "top"
+  });
+  assert.deepEqual(parseMoviesCallback("movies:filteryearprompt:series:drama:2025:az"), {
+    action: "filteryearprompt", mediaType: "series", genreSlug: "drama", year: 2025, sort: "az"
+  });
 });
 
 test("recognizes only replies to the Movies search prompt", () => {
