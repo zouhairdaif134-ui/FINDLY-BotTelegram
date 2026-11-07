@@ -285,7 +285,7 @@ export async function processMovieQueueHourly(env, now = new Date()) {
     const selected = selectTmdbQueueMatch(results, item.submitted_title);
 
     if (!selected) {
-      await saveQueueState(supabase, item.id, {
+      await saveQueueState(supabase, item.id, item.lease_token, "processing", {
         status: "needs_review",
         tmdb_candidates: results.slice(0, 10),
         last_error_code: null,
@@ -302,7 +302,7 @@ export async function processMovieQueueHourly(env, now = new Date()) {
 
     const actor = await getQueueSubmitterActor(env, item.created_by);
     const imported = await importTmdbCatalogItem(env, selected.tmdb_id, item.media_type, actor);
-    await saveQueueState(supabase, item.id, {
+    await saveQueueState(supabase, item.id, item.lease_token, "processing", {
       status: "ready_for_review",
       tmdb_id: selected.tmdb_id,
       catalog_title_id: imported.id,
@@ -317,7 +317,7 @@ export async function processMovieQueueHourly(env, now = new Date()) {
     const retryable = ["TMDB_UPSTREAM_ERROR", "TypeError", "AbortError"].includes(details.code) ||
       /timeout|network|rate limit|temporar/i.test(details.message);
     const shouldRetry = retryable && Number(item.attempt_count || 0) < 3;
-    await saveQueueState(supabase, item.id, {
+    await saveQueueState(supabase, item.id, item.lease_token, "processing", {
       status: shouldRetry ? "pending" : "failed",
       next_attempt_at: shouldRetry
         ? new Date(now.getTime() + Math.min(60, 5 * (2 ** Number(item.attempt_count || 0))) * 60 * 1000).toISOString()
