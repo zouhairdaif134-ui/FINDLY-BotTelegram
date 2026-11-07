@@ -168,25 +168,32 @@ async function requestAIProvider(env, config, apiKey, messages, includeCatalogTo
       if (!payload || typeof payload !== "object") {
         throw new Error("AI provider returned an invalid response");
       }
-      const toolCalls = Array.isArray(payload.tool_calls)
-        ? payload.tool_calls.slice(0, 3).map((call, index) => {
-            const name = call?.name || call?.function?.name;
-            const args = call?.arguments ?? call?.function?.arguments ?? {};
-            return {
-              id: typeof call?.id === "string" ? call.id : "catalog_call_" + index,
-              type: "function",
-              function: {
-                name: typeof name === "string" ? name.slice(0, 80) : "",
-                arguments: typeof args === "string" ? args.slice(0, 2000) : JSON.stringify(args).slice(0, 2000)
-              }
-            };
-          })
-        : [];
+      // Workers AI model adapters can expose either the native { response, tool_calls }
+      // shape or an OpenAI-compatible { choices: [{ message }] } shape.
+      const message = payload.choices?.[0]?.message || payload.message || payload;
+      const rawToolCalls = Array.isArray(payload.tool_calls)
+        ? payload.tool_calls
+        : (Array.isArray(message?.tool_calls) ? message.tool_calls : []);
+      const toolCalls = rawToolCalls.slice(0, 3).map((call, index) => {
+        const name = call?.name || call?.function?.name;
+        const args = call?.arguments ?? call?.function?.arguments ?? {};
+        return {
+          id: typeof call?.id === "string" ? call.id : "catalog_call_" + index,
+          type: "function",
+          function: {
+            name: typeof name === "string" ? name.slice(0, 80) : "",
+            arguments: typeof args === "string" ? args.slice(0, 2000) : JSON.stringify(args).slice(0, 2000)
+          }
+        };
+      });
+      const content = typeof payload.response === "string"
+        ? payload.response
+        : (typeof message?.content === "string"
+          ? message.content
+          : (typeof payload.content === "string" ? payload.content : null));
       return {
         role: "assistant",
-        content: typeof payload.response === "string"
-          ? payload.response
-          : (typeof payload.content === "string" ? payload.content : null),
+        content,
         ...(toolCalls.length ? { tool_calls: toolCalls } : {})
       };
     } catch {
