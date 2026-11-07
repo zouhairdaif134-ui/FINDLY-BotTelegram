@@ -125,13 +125,13 @@ begin
     raise exception 'Movie catalog entry not found';
   end if;
 
-  insert into public.movie_synopsis_sources (title_id, original_overview, source_language)
+  insert into public.movie_synopsis_sources as source (title_id, original_overview, source_language)
   values (p_movie_id, p_original_overview, p_source_language)
   on conflict (title_id) do update
-    set original_overview = coalesce(public.movie_synopsis_sources.original_overview, excluded.original_overview),
+    set original_overview = coalesce(source.original_overview, excluded.original_overview),
         source_language = case
-          when public.movie_synopsis_sources.source_language = 'und' then excluded.source_language
-          else public.movie_synopsis_sources.source_language
+          when source.source_language = 'und' then excluded.source_language
+          else source.source_language
         end,
         updated_at = now();
 
