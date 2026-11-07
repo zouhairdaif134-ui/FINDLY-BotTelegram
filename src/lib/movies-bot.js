@@ -175,11 +175,7 @@ export async function showMoviesHome(env, bot, chatId) {
     [{ text: "ℹ️ المساعدة", callback_data: "movies:help" }]
   ];
 
-  if (bot.slug === "findly") {
-    const moviesBot = await getMoviesBot(env);
-    const username = moviesBot?.telegram_username?.replace(/^@/, "");
-    if (username) keyboard.push([{ text: "▶️ افتح FINDLY Movies", url: "https://t.me/" + username }]);
-  } else {
+  if (bot.slug !== "findly") {
     const master = await getMasterBot(env);
     const username = master?.telegram_username?.replace(/^@/, "");
     if (username) keyboard.push([{ text: "🏠 FINDLY الرئيسي", url: "https://t.me/" + username }]);
