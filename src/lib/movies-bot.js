@@ -53,7 +53,7 @@ export function parseMoviesCallback(value) {
     if (!Number.isInteger(year) || year < 1888 || year > 2200 || !Number.isInteger(page) || page < 0) return null;
     return { action, year, page };
   }
-  if (["home", "library", "categories", "new", "old", "top", "az", "films", "series", "favorites", "search", "help"].includes(action)) {
+  if (["home", "library", "categories", "yearprompt", "new", "old", "top", "az", "films", "series", "favorites", "search", "help"].includes(action)) {
     const page = Number(parts[2] || 0);
     return { action, page: Number.isInteger(page) && page >= 0 ? page : 0 };
   }
