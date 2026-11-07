@@ -7,6 +7,15 @@ const DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_SYSTEM_PROMPT =
   "You are a helpful assistant for FINDLY. Answer clearly and briefly.";
 
+export async function recordAIAnalyticsBestEffort(recordAnalytics, env, bot, eventType, eventData = {}) {
+  try {
+    await recordAnalytics(env, bot, null, eventType, eventData);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function classifyAIError(error) {
   const name = typeof error?.name === "string" ? error.name : "";
   const message = typeof error?.message === "string" ? error.message : "";
