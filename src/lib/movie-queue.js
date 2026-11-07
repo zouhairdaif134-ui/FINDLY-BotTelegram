@@ -95,13 +95,17 @@ async function findAllQueueItems(supabase, entries) {
 
 function queueDuplicate(entry, existing, status = existing.status, existingType = "queue", shareOrigin = null) {
   const isCatalog = existingType === "catalog";
-  const isPublished = isCatalog && existing.status === "active";
+  const publishedCatalogId = isCatalog && existing.status === "active"
+    ? existing.id
+    : existingType === "queue" && existing.status === "published"
+      ? existing.catalog_title_id
+      : null;
   return {
     title: entry.title,
     existing_title: isCatalog ? existing.title : existing.submitted_title,
     existing_id: existing.id || null,
     existing_type: existingType,
-    existing_url: isPublished && shareOrigin ? `${shareOrigin}/share/movie/${existing.id}` : null,
+    existing_url: publishedCatalogId && shareOrigin ? `${shareOrigin}/share/movie/${publishedCatalogId}` : null,
     media_type: entry.media_type,
     status
   };
