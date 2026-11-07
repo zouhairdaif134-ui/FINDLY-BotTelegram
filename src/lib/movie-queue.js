@@ -69,6 +69,146 @@ export async function listMovieQueue(env, status = null) {
   return data || [];
 }
 
+async function findActiveQueueItems(supabase, entries) {
+  const normalizedTitles = [...new Set(entries.map((entry) => entry.normalized_title))];
+  const mediaTypes = [...new Set(entries.map((entry) => entry.media_type))];
+  const { data, error } = await supabase
+    .from("movie_queue_items")
+    .select("id,submitted_title,normalized_title,status,media_type")
+    .in("normalized_title", normalizedTitles)
+    .in("media_type", mediaTypes)
+    .in("status", ACTIVE_DUPLICATE_STATES);
+  if (error) throw error;
+  return data || [];
+}
+
+function queueDuplicate(entry, existing, status = existing.status) {
+  return {
+    title: entry.title,
+    existing_title: existing.submitted_title,
+    existing_id: existing.id || null,
+    media_type: entry.media_type,
+    status
+  };
+}
+
+export async function enqueueMovieQueueBatch(supabase, entries, actor) {
+  if (!Array.isArray(entries) || !entries.length) {
+    throw new Error("Enter at least one movie or series title");
+  }
+  if (entries.length > MAX_BATCH_SIZE) {
+    throw new Error("A maximum of 100 titles can be added at once");
+  }
+
+  const firstEntries = [];
+  const duplicates = [];
+  const firstByKey = new Map();
+
+  for (const [inputOrder, entry] of entries.entries()) {
+    const title = String(entry?.title || "").trim();
+    const media_type = entry?.media_type;
+    if (!title || title.length > 200) {
+      throw new Error("Each title must contain between 1 and 200 characters");
+    }
+    if (!["movie", "series"].includes(media_type)) {
+      throw new Error("Each queue entry must have media_type movie or series");
+    }
+    const normalized_title = normalizeMovieQueueTitle(title);
+    if (!normalized_title) {
+      throw new Error("Each title must contain at least one letter or number");
+    }
+
+    const normalizedEntry = { title, media_type, normalized_title, input_order: inputOrder };
+    const key = `${media_type}:${normalized_title}`;
+    const first = firstByKey.get(key);
+    if (first) {
+      duplicates.push({ ...queueDuplicate(normalizedEntry, {
+        submitted_title: first.title,
+        id: null
+      }, "duplicate_in_batch"), _input_order: inputOrder });
+      continue;
+    }
+    firstByKey.set(key, normalizedEntry);
+    firstEntries.push(normalizedEntry);
+  }
+
+  const existingRows = await findActiveQueueItems(supabase, firstEntries);
+  const existingByKey = new Map(existingRows.map((row) => [
+    `${row.media_type}:${row.normalized_title}`,
+    row
+  ]));
+
+  const rowsToInsert = [];
+  for (const entry of firstEntries) {
+    const existing = existingByKey.get(`${entry.media_type}:${entry.normalized_title}`);
+    if (existing) {
+      duplicates.push({ ...queueDuplicate(entry, existing), _input_order: entry.input_order });
+    } else {
+      rowsToInsert.push({
+        submitted_title: entry.title,
+        normalized_title: entry.normalized_title,
+        media_type: entry.media_type,
+        created_by: actor.userId
+      });
+    }
+  }
+
+  if (!rowsToInsert.length) {
+    return {
+      inserted: [],
+      duplicates: duplicates.sort((a, b) => a._input_order - b._input_order).map(({ _input_order, ...item }) => item),
+      total_requested: entries.length
+    };
+  }
+
+  const insertRows = async (rows) => {
+    const { data, error } = await supabase
+      .from("movie_queue_items")
+      .insert(rows)
+      .select("id,submitted_title,media_type,status,created_at");
+    return { data: data || [], error };
+  };
+
+  let { data: inserted, error } = await insertRows(rowsToInsert);
+  if (error?.code === "23505") {
+    // A concurrent admin may have inserted one of these titles after our lookup.
+    // Re-read the conflicting keys, report them, and retry the remaining rows once.
+    const racedRows = await findActiveQueueItems(supabase, firstEntries);
+    const racedByKey = new Map(racedRows.map((row) => [
+      `${row.media_type}:${row.normalized_title}`,
+      row
+    ]));
+    const retryRows = [];
+    for (const row of rowsToInsert) {
+      const existing = racedByKey.get(`${row.media_type}:${row.normalized_title}`);
+      if (existing) {
+        const original = firstByKey.get(`${row.media_type}:${row.normalized_title}`);
+        duplicates.push({ ...queueDuplicate({
+          title: row.submitted_title,
+          media_type: row.media_type
+        }, existing), _input_order: original?.input_order ?? Number.MAX_SAFE_INTEGER });
+      } else {
+        retryRows.push(row);
+      }
+    }
+    if (retryRows.length) {
+      const retry = await insertRows(retryRows);
+      if (retry.error) throw retry.error;
+      inserted = retry.data;
+    } else {
+      inserted = [];
+    }
+    error = null;
+  }
+  if (error) throw error;
+
+  return {
+    inserted,
+    duplicates: duplicates.sort((a, b) => a._input_order - b._input_order).map(({ _input_order, ...item }) => item),
+    total_requested: entries.length
+  };
+}
+
 export async function enqueueMovieQueue(env, body, actor) {
   const requestedType = body?.media_type || "movie";
   if (!["movie", "series", "mixed"].includes(requestedType)) {
@@ -81,69 +221,7 @@ export async function enqueueMovieQueue(env, body, actor) {
       .map((value) => ({ title: String(value || "").trim(), media_type: requestedType }))
       .filter((entry) => entry.title);
 
-  if (!entries.length) throw new Error("Enter at least one movie or series title");
-  if (entries.length > MAX_BATCH_SIZE) throw new Error("A maximum of 100 titles can be added at once");
-  if (entries.some((entry) => entry.title.length > 200)) throw new Error("Each title must be 200 characters or fewer");
-
-  const supabase = getSupabase(env);
-  const inserted = [];
-  const duplicates = [];
-  for (const entry of entries) {
-    const { title, media_type } = entry;
-    const normalized = normalizeMovieQueueTitle(title);
-    if (!normalized) throw new Error("Each title must contain at least one letter or number");
-    const { data: existing, error: lookupError } = await supabase
-      .from("movie_queue_items")
-      .select("id,submitted_title,status,media_type")
-      .eq("normalized_title", normalized)
-      .eq("media_type", media_type)
-      .in("status", ACTIVE_DUPLICATE_STATES)
-      .limit(1);
-    if (lookupError) throw lookupError;
-    if (existing?.length) {
-      duplicates.push({
-        title,
-        existing_title: existing[0].submitted_title,
-        existing_id: existing[0].id,
-        media_type,
-        status: existing[0].status
-      });
-      continue;
-    }
-    const { data, error } = await supabase
-      .from("movie_queue_items")
-      .insert({
-        submitted_title: title,
-        normalized_title: normalized,
-        media_type,
-        created_by: actor.userId
-      })
-      .select("id,submitted_title,media_type,status,created_at")
-      .single();
-    if (error?.code === "23505") {
-      const { data: raced, error: racedLookupError } = await supabase
-        .from("movie_queue_items")
-        .select("id,submitted_title,status,media_type")
-        .eq("normalized_title", normalized)
-        .eq("media_type", media_type)
-        .in("status", ACTIVE_DUPLICATE_STATES)
-        .limit(1);
-      if (racedLookupError) throw racedLookupError;
-      if (raced?.length) {
-        duplicates.push({
-          title,
-          existing_title: raced[0].submitted_title,
-          existing_id: raced[0].id,
-          media_type,
-          status: raced[0].status
-        });
-        continue;
-      }
-    }
-    if (error) throw error;
-    inserted.push(data);
-  }
-  return { inserted, duplicates, total_requested: entries.length };
+  return enqueueMovieQueueBatch(getSupabase(env), entries, actor);
 }
 
 export async function retryMovieQueueItem(env, id) {
