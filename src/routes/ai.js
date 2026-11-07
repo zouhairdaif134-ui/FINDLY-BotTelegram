@@ -14,6 +14,10 @@ function requireBotId(botId) {
   return botId.trim();
 }
 
+function isProviderConfigured(env) {
+  return typeof env?.AI?.run === "function" || Boolean(env?.AI_API_KEY);
+}
+
 function publicConfig(config) {
   return {
     enabled: config.enabled,
@@ -34,7 +38,7 @@ export async function getAIAdminConfig(env, botId) {
   return {
     bot_id: id,
     config: publicConfig(config),
-    provider_configured: Boolean(env.AI_API_KEY)
+    provider_configured: isProviderConfigured(env)
   };
 }
 
