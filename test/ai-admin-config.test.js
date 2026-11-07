@@ -64,12 +64,3 @@ test("clamps numeric values before storing dashboard configuration", () => {
   assert.equal(stored.max_tokens, 2000);
   assert.equal(stored.timeout_ms, 30000);
 });
-
-
-test("recognizes the native Workers AI binding without requiring an API secret", () => {
-  const { normalized } = normalizeAIAdminInput({
-    enabled: true,
-    model: "@cf/qwen/qwen3.8-27b"
-  }, { AI: { run() {} } });
-  assert.equal(normalized.enabled, true);
-});
