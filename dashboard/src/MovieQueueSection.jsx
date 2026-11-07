@@ -9,7 +9,11 @@ const labels = {
   already_in_catalog: "موجود مسبقاً فالمكتبة",
   failed: "فشل",
   rejected: "مرفوض",
-  published: "منشور"
+  published: "منشور",
+  active: "منشور فالبوت",
+  draft: "مسودة موجودة",
+  inactive: "غير نشط",
+  duplicate_in_batch: "مكرر داخل نفس اللائحة"
 };
 
 export default function MovieQueueSection({ fetchApi }) {
