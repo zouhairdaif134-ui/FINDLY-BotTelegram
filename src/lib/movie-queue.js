@@ -1,7 +1,6 @@
 import { getSupabase } from "./supabase.js";
 import { searchTmdbCatalog, importTmdbCatalogItem, assertTmdbAccessAllowed } from "../routes/content.js";
 
-const ACTIVE_DUPLICATE_STATES = ["pending", "processing", "resolving", "needs_review", "ready_for_review", "already_in_catalog"];
 const MAX_BATCH_SIZE = 100;
 
 export function isMovieQueueProcessingEnabled(env) {
