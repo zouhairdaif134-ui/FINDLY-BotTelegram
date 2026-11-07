@@ -3,8 +3,7 @@ import "./ai-section.css";
 
 const DEFAULT_CONFIG = {
   enabled: false,
-  model: "gpt-4o-mini",
-  api_url: "https://api.openai.com/v1/chat/completions",
+  model: "@cf/qwen/qwen3.8-27b",
   system_prompt: "You are a helpful assistant for FINDLY. Answer clearly and briefly.",
   temperature: 0.7,
   max_tokens: 700,
@@ -84,8 +83,8 @@ export default function AISection({ fetchApi, bots = [] }) {
       </div>
 
       <div className="ai-admin__notice">
-        <strong>Provider credentials are not managed here.</strong>
-        <span> The API key is read from the Cloudflare secret AI_API_KEY. It is never displayed or stored in bot settings.</span>
+        <strong>Cloudflare Workers AI is the configured provider.</strong>
+        <span> Inference uses the Worker AI binding; no third-party API key is required.</span>
       </div>
 
       {error && <div className="ai-admin__alert ai-admin__alert--error">{error}</div>}
@@ -108,16 +107,11 @@ export default function AISection({ fetchApi, bots = [] }) {
             </select>
           </label>
 
-          <div className="ai-admin__grid">
-            <label className="ai-admin__field">
-              <span>Model</span>
-              <input value={config.model} maxLength={100} onChange={(e) => update("model", e.target.value)} required />
-            </label>
-            <label className="ai-admin__field">
-              <span>Provider endpoint</span>
-              <input type="url" value={config.api_url} maxLength={500} onChange={(e) => update("api_url", e.target.value)} required />
-            </label>
-          </div>
+          <label className="ai-admin__field">
+            <span>Workers AI model</span>
+            <input value={config.model} maxLength={100} onChange={(e) => update("model", e.target.value)} required />
+            <small>Default: @cf/qwen/qwen3.8-27b</small>
+          </label>
 
           <label className="ai-admin__field">
             <span>System prompt</span>
@@ -142,7 +136,7 @@ export default function AISection({ fetchApi, bots = [] }) {
 
           <div className="ai-admin__provider">
             <span className={providerConfigured ? "ai-provider-dot ai-provider-dot--ready" : "ai-provider-dot"} />
-            <div><strong>{providerConfigured ? "Provider secret detected" : "Provider secret missing"}</strong><small>{providerConfigured ? "AI can call the provider when enabled." : "Add AI_API_KEY in Cloudflare Worker secrets before enabling AI."}</small></div>
+            <div><strong>{providerConfigured ? "Workers AI binding detected" : "Workers AI binding unavailable"}</strong><small>{providerConfigured ? "AI can use Cloudflare inference when enabled." : "The Worker AI binding must be added before enabling AI."}</small></div>
           </div>
 
           <div className="ai-admin__actions">
