@@ -29,7 +29,7 @@
 
 **Interfaces:**
 - Produces: `public.movie_queue_items`, `public.movie_queue_slots`, and `public.claim_next_movie_queue_item(timestamptz,timestamptz)`.
-- The claim function is callable only by `service_role`, and atomically consumes one UTC slot while claiming one due pending row.
+- The claim function is callable only by `service_role`, atomically consumes one UTC slot while claiming one due pending row, and assigns a unique fencing token to the claim.
 
 - [x] Add database-level protection against duplicate active queue titles using a partial unique index on `(media_type, normalized_title)` for pending, processing, needs_review, ready_for_review, and already_in_catalog states.
 - [x] Extend the disposable PostgreSQL fixture with the Supabase roles required by the migration (`anon`, `authenticated`, and `service_role` with BYPASSRLS).
@@ -49,7 +49,7 @@
 - [x] Add focused tests for punctuation-only titles and duplicate normalization.
 - [x] Reject titles that normalize to an empty key; handle PostgreSQL unique-violation races as duplicates rather than failing the entire batch.
 - [x] Replace selection of an arbitrary active administrator with the queue item's `created_by` identity for audit attribution; fail safely if no submitting administrator is recorded.
-- [ ] Run `npm test`; expected outcome is all queue unit tests passing.
+- [x] Run `npm test`; all queue unit tests passed on the verified PR head.
 
 ### Task 3: Prevent duplicate manual resolution and preserve draft-only behavior
 
@@ -66,7 +66,7 @@
 - [x] Add an atomic SQL claim operation for manual match resolution, restricted to `service_role`.
 - [x] Claim the item before importing; restore `needs_review` if the import fails, and return a conflict if another request already claimed it.
 - [x] Verify imported catalog status remains draft and that queue resolution never sets catalog status to active.
-- [ ] Run focused Node and SQL verification; expected outcome is one successful resolver per item and no publication side effect.
+- [x] Run focused Node and SQL verification; PostgreSQL checks confirm single resolver claims, active-title uniqueness during resolution, and stale lease-token rejection.
 
 ### Task 4: Verify integration and open review
 
