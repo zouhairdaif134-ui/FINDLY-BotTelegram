@@ -80,12 +80,14 @@ export function parseMoviesCallback(value) {
   }
   if (action === "filtergenres") {
     const mediaType = parts[2] || "all";
-    const yearValue = Number(parts[3] || 0);
-    const sort = parts[4] || "added";
+    const genreSlug = parts[3] === "none" ? "" : (parts[3] || "");
+    const yearValue = Number(parts[4] || 0);
+    const sort = parts[5] || "added";
     if (!["all", "movie", "series"].includes(mediaType) ||
+        (genreSlug && !/^[a-z0-9-]{1,20}$/.test(genreSlug)) ||
         (yearValue !== 0 && (!Number.isInteger(yearValue) || yearValue < 1888 || yearValue > 2200)) ||
         !["added", "old", "top", "az", "release"].includes(sort)) return null;
-    return { action, mediaType, year: yearValue || null, sort };
+    return { action, mediaType, genreSlug, year: yearValue || null, sort };
   }
   if (["home", "library", "categories", "yearprompt", "added", "new", "old", "top", "az", "films", "series", "favorites", "search", "help"].includes(action)) {
     const page = Number(parts[2] || 0);
@@ -255,7 +257,7 @@ async function sendMoviesFilterMenu(env, bot, chatId, inputFilters = {}) {
       { text: filters.mediaType === "movie" ? "• أفلام" : "🎬 أفلام", callback_data: callback("movie", filters.genreSlug, filters.year, filters.sort) },
       { text: filters.mediaType === "series" ? "• مسلسلات" : "📺 مسلسلات", callback_data: callback("series", filters.genreSlug, filters.year, filters.sort) }
     ],
-    [{ text: "🏷️ اختيار التصنيف" + (filters.genreSlug ? " · " + filters.genreSlug : ""), callback_data: "movies:filtergenres:" + filters.mediaType + ":" + (filters.year || 0) + ":" + filters.sort }],
+    [{ text: "🏷️ اختيار التصنيف" + (filters.genreSlug ? " · " + filters.genreSlug : ""), callback_data: "movies:filtergenres:" + filters.mediaType + ":" + (filters.genreSlug || "none") + ":" + (filters.year || 0) + ":" + filters.sort }],
     [{ text: "📅 سنة الإصدار" + (filters.year ? " · " + filters.year : ""), callback_data: "movies:filteryearprompt:" + filters.mediaType + ":" + (filters.genreSlug || "none") + ":" + (filters.year || 0) + ":" + filters.sort }]
   ];
   keyboard.push([
@@ -266,6 +268,7 @@ async function sendMoviesFilterMenu(env, bot, chatId, inputFilters = {}) {
     { text: filters.sort === "top" ? "• الأعلى تقييماً" : "⭐ الأعلى تقييماً", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, "top") },
     { text: filters.sort === "az" ? "• A-Z" : "A-Z", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, "az") }
   ]);
+  keyboard.push([{ text: filters.sort === "release" ? "• الأحدث إصداراً" : "الأحدث إصداراً", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, "release") }]);
   keyboard.push([{ text: "تطبيق الفلاتر", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, filters.sort) }]);
   keyboard.push([{ text: "مسح جميع الفلاتر", callback_data: callback("all", "", null, "added") }]);
   keyboard.push([{ text: "⬅️ رجوع للمكتبة", callback_data: callback(filters.mediaType, filters.genreSlug, filters.year, filters.sort) }]);
@@ -297,7 +300,7 @@ async function showMoviesFilterYearPrompt(env, bot, chatId, filters = {}) {
   const promptText = YEAR_PROMPT + "|filters:" + normalized.mediaType + ":" +
     (normalized.genreSlug || "none") + ":" + normalized.sort;
   await sendMessage(env, bot.slug, chatId,
-    "<b>" + YEAR_PROMPT + "</b>\\nجاوب على هاد الرسالة بسنة الإصدار، مثال: 2024.",
+    "<b>" + YEAR_PROMPT + "</b>\\nجاوب على هاد الرسالة بسنة الإصدار، مثال: 2024.\\n<tg-spoiler>" + promptText.slice(YEAR_PROMPT.length) + "</tg-spoiler>",
     { reply_markup: { force_reply: { force_reply: true, selective: true, input_field_placeholder: "مثلاً 2024" } } }
   );
 }
@@ -638,8 +641,8 @@ export async function handleMoviesText(env, bot, chatId, message, telegramUserId
       await sendMessage(env, bot.slug, chatId, "دخل سنة صحيحة بين 1888 و2200، مثال: 2024.");
       return true;
     }
-    const promptText = String(message.reply_to_message?.text || "");
-    const state = promptText.match(/\\|filters:(all|movie|series):(none|[a-z0-9-]{1,20}):(added|old|top|az|release)$/);
+      const promptText = String(message.reply_to_message?.text || "");
+    const state = promptText.match(/\\|filters:(all|movie|series):(none|[a-z0-9-]{1,20}):(added|old|top|az|release)(?=<\\/tg-spoiler>)/);
     if (state) {
       await sendList(env, bot, chatId, "filter", 0, "", "", {
         mediaType: state[1], genreSlug: state[2] === "none" ? "" : state[2],
