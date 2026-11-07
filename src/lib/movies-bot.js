@@ -641,7 +641,7 @@ export async function handleMoviesText(env, bot, chatId, message, telegramUserId
       await sendMessage(env, bot.slug, chatId, "دخل سنة صحيحة بين 1888 و2200، مثال: 2024.");
       return true;
     }
-      const promptText = String(message.reply_to_message?.text || "");
+    const promptText = String(message.reply_to_message?.text || "");
     const state = promptText.match(/\|filters:(all|movie|series):(none|[a-z0-9-]{1,20}):(added|old|top|az|release)(?=<\/tg-spoiler>)/);
     if (state) {
       await sendList(env, bot, chatId, "filter", 0, "", "", {
