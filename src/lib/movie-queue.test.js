@@ -222,10 +222,11 @@ test("blocks titles already present in the catalog or any historical queue state
     { title: "Inception", media_type: "movie" },
     { title: "Breaking Bad", media_type: "series" },
     { title: "New Movie", media_type: "movie" }
-  ], { userId: "admin-1" });
+  ], { userId: "admin-1" }, "https://api.example.test");
 
   assert.deepEqual(calls.map((call) => call.table), ["movie_titles", "movie_queue_items", "movie_queue_items"]);
   assert.deepEqual(result.inserted.map((item) => item.submitted_title), ["New Movie"]);
+  assert.equal(result.duplicates[0].existing_url, "https://api.example.test/share/movie/catalog-active-1");
   assert.deepEqual(result.duplicates.map((item) => ({
     title: item.title,
     existing_title: item.existing_title,
