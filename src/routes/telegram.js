@@ -1,3 +1,4 @@
+import { extractTelegramMedia } from "../lib/movie-media.js";
 import { getSupabase } from "../lib/supabase.js";
 import { buildTelegramUserProfile } from "../lib/telegram-user.js";
 import { claimTelegramAdDelivery, buildTelegramAdPayload, recordTelegramAdDelivery } from "../lib/monetization.js";
@@ -1312,6 +1313,56 @@ async function processTelegramUpdate(
     update_id: update?.update_id ?? null,
     recordId
   });
+
+  const channelPost = update.channel_post;
+  if (bot.slug === "movies" && channelPost) {
+    const media = extractTelegramMedia(channelPost);
+    if (!media) return { ok: true, media_ignored: true };
+
+    const supabase = getSupabase(env);
+    const { data: title, error: titleError } = await supabase
+      .from("movie_titles")
+      .select("id,title")
+      .eq("id", media.titleId)
+      .maybeSingle();
+    if (titleError) throw titleError;
+    if (!title) {
+      await sendMessage(env, bot.slug, media.chatId, "ما لقيتش هاد العنوان فمكتبة FINDLY. تأكد من UUID اللي كتبتي فالوصف.");
+      return { ok: true, media_unlinked: true };
+    }
+
+    const { error: mediaError } = await supabase
+      .from("movie_media_assets")
+      .upsert({
+        title_id: media.titleId,
+        storage_chat_id: media.chatId,
+        storage_message_id: media.messageId,
+        media_type: media.mediaType,
+        file_id: media.fileId,
+        file_unique_id: media.fileUniqueId,
+        file_size: media.fileSize,
+        file_name: media.fileName,
+        mime_type: media.mimeType,
+        quality_label: media.quality,
+        status: "active"
+      }, { onConflict: "storage_chat_id,storage_message_id" });
+    if (mediaError) throw mediaError;
+
+    const { error: titleUpdateError } = await supabase
+      .from("movie_titles")
+      .update({ metadata_status: "authorized_media_available" })
+      .eq("id", media.titleId);
+    if (titleUpdateError) throw titleUpdateError;
+
+    await sendMessage(
+      env,
+      bot.slug,
+      media.chatId,
+      "تم تسجيل نسخة " + media.quality + " وربطها بعنوان: <b>" + escapeHtml(title.title) + "</b>.",
+      { reply_to_message_id: media.messageId }
+    );
+    return { ok: true, media_registered: true };
+  }
 
   const message =
     update.message;
