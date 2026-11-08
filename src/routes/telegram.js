@@ -1,4 +1,4 @@
-import { extractTelegramMedia, resolveMovieMediaTitleId } from "../lib/movie-media.js";
+import { extractTelegramMedia, findMovieMediaTitle, resolveMovieMediaTitleId } from "../lib/movie-media.js";
 import { getSupabase } from "../lib/supabase.js";
 import { buildTelegramUserProfile } from "../lib/telegram-user.js";
 import { claimTelegramAdDelivery, buildTelegramAdPayload, recordTelegramAdDelivery } from "../lib/monetization.js";
@@ -1320,14 +1320,24 @@ async function processTelegramUpdate(
     if (!media) return { ok: true, media_ignored: true };
 
     const supabase = getSupabase(env);
-    let titleLookup = supabase
-      .from("movie_titles")
-      .select("id,title");
-    titleLookup = media.titleId
-      ? titleLookup.eq("id", media.titleId)
-      : titleLookup.eq("title", media.title).eq("release_year", media.releaseYear);
-    const { data: title, error: titleError } = await titleLookup.maybeSingle();
-    if (titleError) throw titleError;
+    let title = null;
+    if (media.titleId) {
+      const { data, error: titleError } = await supabase
+        .from("movie_titles")
+        .select("id,title,release_year")
+        .eq("id", media.titleId)
+        .maybeSingle();
+      if (titleError) throw titleError;
+      title = data;
+    } else {
+      const { data: candidates, error: titleError } = await supabase
+        .from("movie_titles")
+        .select("id,title,release_year")
+        .eq("release_year", media.releaseYear)
+        .limit(100);
+      if (titleError) throw titleError;
+      title = findMovieMediaTitle(candidates || [], media);
+    }
     if (!title) {
       await sendMessage(env, bot.slug, media.chatId, "ما لقيتش هاد العنوان فمكتبة FINDLY. تأكد من UUID اللي كتبتي فالوصف.");
       return { ok: true, media_unlinked: true };
