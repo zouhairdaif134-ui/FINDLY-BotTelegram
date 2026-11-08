@@ -2,6 +2,27 @@ export function resolveMovieMediaTitleId(media, title) {
   return title?.id || media?.titleId || null;
 }
 
+export function normalizeMovieTitle(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("en")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export function findMovieMediaTitle(titles, media) {
+  if (!Array.isArray(titles) || !media?.title || !Number.isInteger(media.releaseYear)) return null;
+  const target = normalizeMovieTitle(media.title);
+  if (!target) return null;
+  const matches = titles.filter((title) =>
+    Number(title.release_year) === media.releaseYear &&
+    normalizeMovieTitle(title.title) === target
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function parseMovieStorageCaption(caption) {
