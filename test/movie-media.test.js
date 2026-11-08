@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseMovieStorageCaption, extractTelegramMedia } from "../src/lib/movie-media.js";
+import { parseMovieStorageCaption, extractTelegramMedia, resolveMovieMediaTitleId } from "../src/lib/movie-media.js";
 
 test("parses a FINDLY storage caption with a title UUID and quality label", () => {
   assert.deepEqual(
@@ -62,4 +62,16 @@ test("uses Telegram file_id delivery methods for stored media types", () => {
   assert.deepEqual(getTelegramMediaDelivery("audio"), { method: "sendAudio", field: "audio" });
   assert.deepEqual(getTelegramMediaDelivery("animation"), { method: "sendAnimation", field: "animation" });
   assert.equal(getTelegramMediaDelivery("unknown"), null);
+});
+
+
+test("resolves title-based media links to the matched database title ID", () => {
+  const media = { titleId: null, title: "Tetris", releaseYear: 2023 };
+  const title = { id: "b3a8db5f-16f2-43e9-81cf-176db3834374", title: "Tetris" };
+  assert.equal(resolveMovieMediaTitleId(media, title), title.id);
+});
+
+test("preserves UUID-based media links when resolving the title ID", () => {
+  const media = { titleId: "550e8400-e29b-41d4-a716-446655440000" };
+  assert.equal(resolveMovieMediaTitleId(media, null), media.titleId);
 });
