@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase.js";
-import { sendMessage, sendPhoto, answerCallback } from "./telegram.js";
+import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const MOVIE_PAGE_SIZE = 10;
@@ -104,7 +104,7 @@ export function parseMoviesCallback(value) {
     const page = Number(parts[2] || 0);
     return { action, page: Number.isInteger(page) && page >= 0 ? page : 0 };
   }
-  if (["title", "favorite", "seasons", "plot"].includes(action) && UUID_RE.test(parts[2] || "")) {
+  if (["title", "favorite", "seasons", "plot", "watch"].includes(action) && UUID_RE.test(parts[2] || "")) {
     return { action, id: parts[2] };
   }
   if (action === "season" && UUID_RE.test(parts[2] || "")) {
@@ -131,9 +131,9 @@ export function buildTitleCaption(title) {
   ].filter(Boolean).join("  ·  ");
   const genres = Array.isArray(title.genres) ? title.genres.filter(Boolean).join("، ") : "";
   const genreText = genres ? "🎭 التصنيف: " + Array.from(genres).slice(0, 180).join("") : "";
-  const notice = title.metadata_status === "authorized_media_available"
-    ? "المحتوى مسجل كمتاح بترخيص، لكن التسليم داخل Telegram لم يتم تفعيله بعد."
-    : "المشاهدة داخل FINDLY غير متاحة حالياً. لا نعرض روابط غير موثوقة أو محتوى غير مرخّص.";
+  const notice = title.media_available
+    ? "المشاهدة متاحة. اختار زر المشاهدة أسفل التفاصيل."
+    : "المشاهدة داخل FINDLY غير متاحة حالياً.";
   const prefixText = headingText + "\n" + metaText + (genreText ? "\n" + genreText : "") + "\n──────────────\n";
   const suffixText = "\n\nℹ️ " + notice;
   const limit = Math.max(0, 1024 - prefixText.length - suffixText.length);
@@ -490,12 +490,42 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     isFavorite = Boolean(favorite);
   }
 
+  const { data: mediaAssets, error: mediaError } = await supabase
+    .from("movie_media_assets")
+    .select("id,quality_label")
+    .eq("title_id", title.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (mediaError) throw mediaError;
+  title.media_available = Boolean(mediaAssets?.length);
+
   const keyboard = [];
   if (userId) {
     keyboard.push([{
       text: isFavorite ? "💔 إزالة من مكتبتي" : "❤️ أضف إلى مكتبتي",
       callback_data: "movies:favorite:" + title.id
     }]);
+  }
+  if (title.media_available && bot.slug === "findly") {
+    const { data: moviesBot, error: moviesBotError } = await supabase
+      .from("bots")
+      .select("telegram_username")
+      .eq("slug", "movies")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (moviesBotError) throw moviesBotError;
+    const username = moviesBot?.telegram_username?.replace(/^@/, "");
+    if (username) {
+      keyboard.push([{ text: "▶️ إضغط هنا للمشاهدة", url: "https://t.me/" + username + "?start=movie_" + title.id }]);
+    }
+  } else if (title.media_available && bot.slug === "movies") {
+    for (const asset of mediaAssets) {
+      keyboard.push([{
+        text: "▶️ مشاهدة · " + String(asset.quality_label || "Original").slice(0, 24),
+        callback_data: "movies:watch:" + asset.id
+      }]);
+    }
   }
   if (title.full_plot_summary) {
     keyboard.push([{ text: "📖 قراءة الملخص الكامل (حرق الأحداث)", callback_data: "movies:plot:" + title.id }]);
@@ -511,6 +541,40 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     parse_mode: "HTML",
     reply_markup: { inline_keyboard: keyboard }
   });
+}
+
+async function sendMovieMedia(env, bot, chatId, assetId) {
+  if (bot.slug !== "movies" || !UUID_RE.test(assetId || "")) {
+    await sendMessage(env, bot.slug, chatId, "خدمة تسليم الفيديو غير متاحة من هاد البوت.");
+    return;
+  }
+  const { data: asset, error } = await getSupabase(env)
+    .from("movie_media_assets")
+    .select("storage_chat_id,storage_message_id,quality_label")
+    .eq("id", assetId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (error) throw error;
+  if (!asset) {
+    await sendMessage(env, bot.slug, chatId, "هاد النسخة ما بقاتش متاحة. رجع للتفاصيل واختار نسخة أخرى.");
+    return;
+  }
+  try {
+    await telegramRequest(env, bot.slug, "copyMessage", {
+      chat_id: chatId,
+      from_chat_id: asset.storage_chat_id,
+      message_id: asset.storage_message_id
+    });
+  } catch (error) {
+    console.error("FINDLY_MOVIE_MEDIA_COPY_FAILED", {
+      assetId,
+      code: error?.code || null,
+      status: error?.status || null
+    });
+    await sendMessage(env, bot.slug, chatId,
+      "تعذر إرسال هاد النسخة دابا. جرّب من جديد بعد قليل أو اختار نسخة أخرى."
+    );
+  }
 }
 
 async function sendFullPlotSummary(env, bot, chatId, titleId) {
@@ -705,6 +769,7 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   else if (parsed.action === "search") await showMoviesSearchPrompt(env, bot, chatId);
   else if (parsed.action === "favorites") await sendFavorites(env, bot, chatId, telegramUserId);
   else if (parsed.action === "title") await sendTitle(env, bot, chatId, parsed.id, telegramUserId);
+  else if (parsed.action === "watch") await sendMovieMedia(env, bot, chatId, parsed.id);
   else if (parsed.action === "plot") await sendFullPlotSummary(env, bot, chatId, parsed.id);
   else if (parsed.action === "favorite") await toggleFavorite(env, bot, chatId, parsed.id, telegramUserId);
   else if (parsed.action === "seasons") await sendSeasons(env, bot, chatId, parsed.id);
