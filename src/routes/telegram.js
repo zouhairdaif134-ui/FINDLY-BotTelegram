@@ -1,4 +1,4 @@
-import { extractTelegramMedia } from "../lib/movie-media.js";
+import { extractTelegramMedia, resolveMovieMediaTitleId } from "../lib/movie-media.js";
 import { getSupabase } from "../lib/supabase.js";
 import { buildTelegramUserProfile } from "../lib/telegram-user.js";
 import { claimTelegramAdDelivery, buildTelegramAdPayload, recordTelegramAdDelivery } from "../lib/monetization.js";
@@ -1333,10 +1333,13 @@ async function processTelegramUpdate(
       return { ok: true, media_unlinked: true };
     }
 
+    const linkedTitleId = resolveMovieMediaTitleId(media, title);
+    if (!linkedTitleId) throw new Error("Resolved movie title ID is missing");
+
     const { error: mediaError } = await supabase
       .from("movie_media_assets")
       .upsert({
-        title_id: media.titleId,
+        title_id: linkedTitleId,
         storage_chat_id: media.chatId,
         storage_message_id: media.messageId,
         media_type: media.mediaType,
@@ -1353,7 +1356,7 @@ async function processTelegramUpdate(
     const { error: titleUpdateError } = await supabase
       .from("movie_titles")
       .update({ metadata_status: "authorized_media_available" })
-      .eq("id", media.titleId);
+      .eq("id", linkedTitleId);
     if (titleUpdateError) throw titleUpdateError;
 
     await sendMessage(
