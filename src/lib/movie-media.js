@@ -47,3 +47,13 @@ export function extractTelegramMedia(channelPost) {
     quality: link.quality
   };
 }
+
+export function getTelegramMediaDelivery(mediaType) {
+  const deliveries = {
+    video: { method: "sendVideo", field: "video" },
+    document: { method: "sendDocument", field: "document" },
+    audio: { method: "sendAudio", field: "audio" },
+    animation: { method: "sendAnimation", field: "animation" }
+  };
+  return deliveries[mediaType] || null;
+}

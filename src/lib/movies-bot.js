@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase.js";
+import { getTelegramMediaDelivery } from "./movie-media.js";
 import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -550,7 +551,7 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
   }
   const { data: asset, error } = await getSupabase(env)
     .from("movie_media_assets")
-    .select("storage_chat_id,storage_message_id,quality_label")
+    .select("media_type,file_id,quality_label")
     .eq("id", assetId)
     .eq("status", "active")
     .maybeSingle();
@@ -559,16 +560,21 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
     await sendMessage(env, bot.slug, chatId, "هاد النسخة ما بقاتش متاحة. رجع للتفاصيل واختار نسخة أخرى.");
     return;
   }
+  const delivery = getTelegramMediaDelivery(asset.media_type);
+  if (!delivery || !asset.file_id) {
+    await sendMessage(env, bot.slug, chatId, "نوع هاد النسخة ما مدعومش حالياً.");
+    return;
+  }
   try {
-    await telegramRequest(env, bot.slug, "copyMessage", {
+    await telegramRequest(env, bot.slug, delivery.method, {
       chat_id: chatId,
-      from_chat_id: asset.storage_chat_id,
-      message_id: asset.storage_message_id,
+      [delivery.field]: asset.file_id,
       caption: "🎬 FINDLY Movies · " + String(asset.quality_label || "Original").slice(0, 24)
     });
   } catch (error) {
-    console.error("FINDLY_MOVIE_MEDIA_COPY_FAILED", {
+    console.error("FINDLY_MOVIE_MEDIA_SEND_FAILED", {
       assetId,
+      mediaType: asset.media_type,
       code: error?.code || null,
       status: error?.status || null
     });

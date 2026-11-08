@@ -53,3 +53,13 @@ test("ignores channel posts without a supported media attachment or matching cap
     video: { file_id: "id", file_unique_id: "unique", file_size: 100 }
   }), null);
 });
+
+import { getTelegramMediaDelivery } from "../src/lib/movie-media.js";
+
+test("uses Telegram file_id delivery methods for stored media types", () => {
+  assert.deepEqual(getTelegramMediaDelivery("video"), { method: "sendVideo", field: "video" });
+  assert.deepEqual(getTelegramMediaDelivery("document"), { method: "sendDocument", field: "document" });
+  assert.deepEqual(getTelegramMediaDelivery("audio"), { method: "sendAudio", field: "audio" });
+  assert.deepEqual(getTelegramMediaDelivery("animation"), { method: "sendAnimation", field: "animation" });
+  assert.equal(getTelegramMediaDelivery("unknown"), null);
+});
