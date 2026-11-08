@@ -5,11 +5,11 @@ export function resolveMovieMediaTitleId(media, title) {
 export function normalizeMovieTitle(value) {
   return String(value || "")
     .normalize("NFKD")
-    .replace(/[\\u0300-\\u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("en")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
-    .replace(/\\s+/g, " ");
+    .replace(/\s+/g, " ");
 }
 
 export function findMovieMediaTitle(titles, media) {
