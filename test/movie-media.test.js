@@ -5,13 +5,16 @@ import { parseMovieStorageCaption, extractTelegramMedia } from "../src/lib/movie
 test("parses a FINDLY storage caption with a title UUID and quality label", () => {
   assert.deepEqual(
     parseMovieStorageCaption("FINDLY:550e8400-e29b-41d4-a716-446655440000 | 1080p"),
-    { titleId: "550e8400-e29b-41d4-a716-446655440000", quality: "1080p" }
+    { titleId: "550e8400-e29b-41d4-a716-446655440000", title: null, releaseYear: null, quality: "1080p" }
   );
 });
 
 test("rejects malformed FINDLY storage captions", () => {
   assert.equal(parseMovieStorageCaption("FINDLY:not-a-uuid"), null);
   assert.equal(parseMovieStorageCaption("ordinary caption"), null);
+  assert.deepEqual(parseMovieStorageCaption("FINDLY:Wicker (2026) | 1080p"), {
+    titleId: null, title: "Wicker", releaseYear: 2026, quality: "1080p"
+  });
 });
 
 test("extracts video metadata from a channel post without downloading the file", () => {
@@ -36,6 +39,8 @@ test("extracts video metadata from a channel post without downloading the file",
     fileName: "film.mp4",
     mimeType: "video/mp4",
     titleId: "550e8400-e29b-41d4-a716-446655440000",
+    title: null,
+    releaseYear: null,
     quality: "720p"
   });
 });
