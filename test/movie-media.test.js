@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseMovieStorageCaption, extractTelegramMedia, resolveMovieMediaTitleId } from "../src/lib/movie-media.js";
+import { parseMovieStorageCaption, extractTelegramMedia, resolveMovieMediaTitleId, normalizeMovieTitle, findMovieMediaTitle } from "../src/lib/movie-media.js";
 
 test("parses a FINDLY storage caption with a title UUID and quality label", () => {
   assert.deepEqual(
@@ -74,4 +74,21 @@ test("resolves title-based media links to the matched database title ID", () => 
 test("preserves UUID-based media links when resolving the title ID", () => {
   const media = { titleId: "550e8400-e29b-41d4-a716-446655440000" };
   assert.equal(resolveMovieMediaTitleId(media, null), media.titleId);
+});
+
+test("matches storage captions to catalog titles without case or punctuation sensitivity", () => {
+  const media = { title: "Day Of Reckoning", releaseYear: 2025 };
+  const catalogTitle = { id: "f4a20a18-3f42-4d3c-9e87-12d3a4567890", title: "Day of Reckoning", release_year: 2025 };
+  assert.equal(normalizeMovieTitle(media.title), normalizeMovieTitle(catalogTitle.title));
+  assert.equal(findMovieMediaTitle([catalogTitle], media), catalogTitle);
+});
+
+test("does not link a media caption when the year differs or the match is ambiguous", () => {
+  const media = { title: "Day Of Reckoning", releaseYear: 2025 };
+  const wrongYear = { id: "f4a20a18-3f42-4d3c-9e87-12d3a4567890", title: "Day of Reckoning", release_year: 2024 };
+  const duplicate = { id: "a4a20a18-3f42-4d3c-9e87-12d3a4567891", title: "DAY OF RECKONING", release_year: 2025 };
+  assert.equal(findMovieMediaTitle([wrongYear], media), null);
+  assert.equal(findMovieMediaTitle([
+    { ...wrongYear, release_year: 2025 }, duplicate
+  ], media), null);
 });
