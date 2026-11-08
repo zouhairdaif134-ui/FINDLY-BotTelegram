@@ -225,7 +225,8 @@ export async function setWebhook(
       secret_token: getTelegramWebhookSecret(env, botSlug),
       allowed_updates: [
         "message",
-        "callback_query"
+        "callback_query",
+        "channel_post"
       ]
     }
   );
