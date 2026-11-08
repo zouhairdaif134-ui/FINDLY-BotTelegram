@@ -20,6 +20,12 @@ test("rejects malformed callback data and non-UUID title identifiers", () => {
   assert.equal(parseMoviesCallback("movies:unknown:0"), null);
 });
 
+test("parses media watch callbacks only with UUID asset identifiers", () => {
+  const id = "550e8400-e29b-41d4-a716-446655440000";
+  assert.deepEqual(parseMoviesCallback("movies:watch:" + id), { action: "watch", id });
+  assert.equal(parseMoviesCallback("movies:watch:not-a-uuid"), null);
+});
+
 test("parses title, favorite and season callbacks only with UUID identifiers", () => {
   const id = "550e8400-e29b-41d4-a716-446655440000";
   assert.deepEqual(parseMoviesCallback("movies:title:" + id), { action: "title", id });
