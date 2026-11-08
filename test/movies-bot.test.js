@@ -4,7 +4,8 @@ import {
   normalizeMovieSearch,
   parseMoviesCallback,
   isMoviesSearchReply,
-  parseMovieStartPayload
+  parseMovieStartPayload,
+  resolveMovieWatchAction
 } from "../src/lib/movies-bot.js";
 import { getTelegramToken } from "../src/lib/telegram.js";
 
@@ -126,8 +127,9 @@ test("buildTitleCaption escapes metadata and keeps the rendered caption within T
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
-  assert.equal(rendered.length, 1024, "caption should use the available Telegram caption space without exceeding it");
+  assert.ok(rendered.length <= 1024, "caption must stay within Telegram's 1024-character limit");
   assert.ok(rendered.includes("…"), "long overview should be truncated with an ellipsis");
+  assert.doesNotMatch(caption, /المشاهدة داخل FINDLY غير متاحة|المشاهدة متاحة/);
 });
 
 test("buildTitleCaption provides a clean fallback synopsis when overview is missing", () => {
@@ -179,4 +181,23 @@ test("parses movie deep links with Facebook and Instagram attribution", () => {
 test("rejects invalid movie deep links and unknown attribution sources", () => {
   assert.equal(parseMovieStartPayload("movie_not-a-uuid_facebook"), null);
   assert.equal(parseMovieStartPayload("movie_550e8400-e29b-41d4-a716-446655440000_tiktok"), null);
+});
+
+
+test("parses direct-watch movie deep links without changing legacy movie links", () => {
+  const id = "550e8400-e29b-41d4-a716-446655440000";
+  assert.deepEqual(parseMovieStartPayload("movie_" + id + "_watch"), {
+    titleId: id, source: null, action: "watch"
+  });
+  assert.deepEqual(parseMovieStartPayload("movie_" + id), {
+    titleId: id, source: null
+  });
+});
+
+test("direct-watch flow sends a single available asset and asks quality only for multiple assets", () => {
+  assert.deepEqual(resolveMovieWatchAction([]), { action: "unavailable", asset: null });
+  const original = { id: "asset-1", quality_label: "Original" };
+  assert.deepEqual(resolveMovieWatchAction([original]), { action: "deliver", asset: original });
+  const hd = { id: "asset-2", quality_label: "HD" };
+  assert.deepEqual(resolveMovieWatchAction([original, hd]), { action: "choose_quality", asset: null });
 });

@@ -3,6 +3,13 @@ import { getTelegramMediaDelivery } from "./movie-media.js";
 import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function resolveMovieWatchAction(assets) {
+  const available = Array.isArray(assets) ? assets.filter((asset) => asset?.id) : [];
+  if (!available.length) return { action: "unavailable", asset: null };
+  if (available.length === 1) return { action: "deliver", asset: available[0] };
+  return { action: "choose_quality", asset: null };
+}
 export const MOVIE_PAGE_SIZE = 10;
 const SEARCH_PROMPT = "🔎 بحث FINDLY Movies";
 const YEAR_PROMPT = "📅 سنة إصدار FINDLY";
@@ -132,12 +139,8 @@ export function buildTitleCaption(title) {
   ].filter(Boolean).join("  ·  ");
   const genres = Array.isArray(title.genres) ? title.genres.filter(Boolean).join("، ") : "";
   const genreText = genres ? "🎭 التصنيف: " + Array.from(genres).slice(0, 180).join("") : "";
-  const notice = title.media_available
-    ? "المشاهدة متاحة. اختار زر المشاهدة أسفل التفاصيل."
-    : "المشاهدة داخل FINDLY غير متاحة حالياً.";
   const prefixText = headingText + "\n" + metaText + (genreText ? "\n" + genreText : "") + "\n──────────────\n";
-  const suffixText = "\n\nℹ️ " + notice;
-  const limit = Math.max(0, 1024 - prefixText.length - suffixText.length);
+  const limit = Math.max(0, 1024 - prefixText.length);
   const overview = String(title.overview || "لا يتوفر ملخص لهذا العنوان حالياً.");
   let shortOverview = "";
   let used = 0;
@@ -152,8 +155,7 @@ export function buildTitleCaption(title) {
   }
   return "<b>" + escapeHtml(headingText) + "</b>\n" +
     escapeHtml(metaText) + (genreText ? "\n" + escapeHtml(genreText) : "") +
-    "\n──────────────\n" + escapeHtml(shortOverview) +
-    "\n\n<i>" + escapeHtml("ℹ️ " + notice) + "</i>";
+    "\n──────────────\n" + escapeHtml(shortOverview);
 }
 
 async function getMasterBot(env) {
@@ -518,7 +520,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     if (moviesBotError) throw moviesBotError;
     const username = moviesBot?.telegram_username?.replace(/^@/, "");
     if (username) {
-      keyboard.push([{ text: "▶️ إضغط هنا للمشاهدة", url: "https://t.me/" + username + "?start=movie_" + title.id }]);
+      keyboard.push([{ text: "▶️ مشاهدة الآن", url: "https://t.me/" + username + "?start=movie_" + title.id + "_watch" }]);
     }
   } else if (title.media_available && bot.slug === "movies") {
     for (const asset of mediaAssets) {
@@ -582,6 +584,58 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
       "تعذر إرسال هاد النسخة دابا. جرّب من جديد بعد قليل أو اختار نسخة أخرى."
     );
   }
+}
+
+async function sendMovieTitleMedia(env, bot, chatId, titleId) {
+  if (bot.slug !== "movies" || !UUID_RE.test(titleId || "")) {
+    await sendMessage(env, bot.slug, chatId, "رابط المشاهدة غير صالح.");
+    return;
+  }
+
+  const supabase = getSupabase(env);
+  const { data: title, error: titleError } = await supabase
+    .from("movie_titles")
+    .select("id")
+    .eq("id", titleId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (titleError) throw titleError;
+  if (!title) {
+    await sendMessage(env, bot.slug, chatId, "هاد العنوان ما بقاش متاح.");
+    return;
+  }
+
+  const { data: assets, error: mediaError } = await supabase
+    .from("movie_media_assets")
+    .select("id,media_type,file_id,quality_label")
+    .eq("title_id", title.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (mediaError) throw mediaError;
+
+  const deliverableAssets = (assets || []).filter((asset) =>
+    asset.file_id && getTelegramMediaDelivery(asset.media_type)
+  );
+  const decision = resolveMovieWatchAction(deliverableAssets);
+
+  if (decision.action === "unavailable") {
+    await sendMessage(env, bot.slug, chatId, "المشاهدة غير متاحة حالياً. ما كايناش نسخة جاهزة للإرسال.");
+    return;
+  }
+
+  if (decision.action === "deliver") {
+    await sendMovieMedia(env, bot, chatId, decision.asset.id);
+    return;
+  }
+
+  const keyboard = deliverableAssets.map((asset) => [{
+    text: "▶️ " + String(asset.quality_label || "Original").slice(0, 24),
+    callback_data: "movies:watch:" + asset.id
+  }]);
+  await sendMessage(env, bot.slug, chatId, "اختار الجودة:", {
+    reply_markup: { inline_keyboard: keyboard }
+  });
 }
 
 async function sendFullPlotSummary(env, bot, chatId, titleId) {
@@ -789,15 +843,24 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
 }
 
 export function parseMovieStartPayload(startPayload) {
-  const match = /^movie_([0-9a-f-]{36})(?:_(facebook|instagram))?$/i.exec(startPayload || "");
+  const match = /^movie_([0-9a-f-]{36})(?:_(facebook|instagram|watch))?$/i.exec(startPayload || "");
   if (!match || !UUID_RE.test(match[1])) return null;
-  return { titleId: match[1], source: match[2] ? match[2].toLowerCase() : null };
+  const suffix = match[2] ? match[2].toLowerCase() : null;
+  return {
+    titleId: match[1],
+    source: suffix === "facebook" || suffix === "instagram" ? suffix : null,
+    ...(suffix === "watch" ? { action: "watch" } : {})
+  };
 }
 
 export async function handleMoviesStart(env, bot, chatId, startPayload, telegramUserId) {
   const payload = parseMovieStartPayload(startPayload);
   if (payload) {
-    await sendTitle(env, bot, chatId, payload.titleId, telegramUserId);
+    if (payload.action === "watch") {
+      await sendMovieTitleMedia(env, bot, chatId, payload.titleId);
+    } else {
+      await sendTitle(env, bot, chatId, payload.titleId, telegramUserId);
+    }
     return;
   }
   await showMoviesHome(env, bot, chatId);
