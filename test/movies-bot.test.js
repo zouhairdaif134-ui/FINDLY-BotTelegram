@@ -190,7 +190,7 @@ test("parses direct-watch movie deep links without changing legacy movie links",
     titleId: id, source: null, action: "watch"
   });
   assert.deepEqual(parseMovieStartPayload("movie_" + id), {
-    titleId: id, source: null, action: null
+    titleId: id, source: null
   });
 });
 
