@@ -22,13 +22,22 @@ begin
     raise exception 'movie_media_assets must not expose policies to end-user roles';
   end if;
 
-  if not has_table_privilege('service_role', 'public.movie_media_assets', 'SELECT,INSERT,UPDATE,DELETE') then
+  if not has_table_privilege('service_role', 'public.movie_media_assets', 'SELECT')
+     or not has_table_privilege('service_role', 'public.movie_media_assets', 'INSERT')
+     or not has_table_privilege('service_role', 'public.movie_media_assets', 'UPDATE')
+     or not has_table_privilege('service_role', 'public.movie_media_assets', 'DELETE') then
     raise exception 'service_role must have full access to movie_media_assets';
   end if;
-  if has_table_privilege('anon', 'public.movie_media_assets', 'SELECT,INSERT,UPDATE,DELETE') then
+  if has_table_privilege('anon', 'public.movie_media_assets', 'SELECT')
+     or has_table_privilege('anon', 'public.movie_media_assets', 'INSERT')
+     or has_table_privilege('anon', 'public.movie_media_assets', 'UPDATE')
+     or has_table_privilege('anon', 'public.movie_media_assets', 'DELETE') then
     raise exception 'anon must not have access to movie_media_assets';
   end if;
-  if has_table_privilege('authenticated', 'public.movie_media_assets', 'SELECT,INSERT,UPDATE,DELETE') then
+  if has_table_privilege('authenticated', 'public.movie_media_assets', 'SELECT')
+     or has_table_privilege('authenticated', 'public.movie_media_assets', 'INSERT')
+     or has_table_privilege('authenticated', 'public.movie_media_assets', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.movie_media_assets', 'DELETE') then
     raise exception 'authenticated must not have access to movie_media_assets';
   end if;
 
