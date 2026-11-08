@@ -563,7 +563,8 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
     await telegramRequest(env, bot.slug, "copyMessage", {
       chat_id: chatId,
       from_chat_id: asset.storage_chat_id,
-      message_id: asset.storage_message_id
+      message_id: asset.storage_message_id,
+      caption: "🎬 FINDLY Movies · " + String(asset.quality_label || "Original").slice(0, 24)
     });
   } catch (error) {
     console.error("FINDLY_MOVIE_MEDIA_COPY_FAILED", {
