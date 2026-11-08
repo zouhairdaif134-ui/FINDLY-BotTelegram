@@ -9,6 +9,7 @@ on:
       - main
     paths:
       - "src/**"
+      - "test/**"
       - "dashboard/**"
       - "package.json"
       - "package-lock.json"

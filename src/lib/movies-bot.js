@@ -1,5 +1,4 @@
 import { getSupabase } from "./supabase.js";
-import { getTelegramMediaDelivery } from "./movie-media.js";
 import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -9,6 +8,19 @@ export function resolveMovieWatchAction(assets) {
   if (!available.length) return { action: "unavailable", asset: null };
   if (available.length === 1) return { action: "deliver", asset: available[0] };
   return { action: "choose_quality", asset: null };
+}
+
+export function buildMovieMediaCopyPayload(asset, chatId) {
+  const messageId = Number(asset?.storage_message_id);
+  if (!chatId || !asset?.storage_chat_id || !Number.isSafeInteger(messageId) || messageId <= 0) {
+    return null;
+  }
+  return {
+    chat_id: chatId,
+    from_chat_id: String(asset.storage_chat_id),
+    message_id: messageId,
+    caption: "🎬 FINDLY Movies · " + String(asset.quality_label || "Original").slice(0, 24)
+  };
 }
 export const MOVIE_PAGE_SIZE = 10;
 const SEARCH_PROMPT = "🔎 بحث FINDLY Movies";
@@ -495,13 +507,14 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
 
   const { data: mediaAssets, error: mediaError } = await supabase
     .from("movie_media_assets")
-    .select("id,quality_label")
+    .select("id,quality_label,storage_chat_id,storage_message_id")
     .eq("title_id", title.id)
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(10);
   if (mediaError) throw mediaError;
-  title.media_available = Boolean(mediaAssets?.length);
+  const availableMediaAssets = (mediaAssets || []).filter((asset) => buildMovieMediaCopyPayload(asset, chatId));
+  title.media_available = availableMediaAssets.length > 0;
 
   const keyboard = [];
   if (userId) {
@@ -523,7 +536,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
       keyboard.push([{ text: "▶️ مشاهدة الآن", url: "https://t.me/" + username + "?start=movie_" + title.id + "_watch" }]);
     }
   } else if (title.media_available && bot.slug === "movies") {
-    for (const asset of mediaAssets) {
+    for (const asset of availableMediaAssets) {
       keyboard.push([{
         text: "▶️ مشاهدة · " + String(asset.quality_label || "Original").slice(0, 24),
         callback_data: "movies:watch:" + asset.id
@@ -553,7 +566,7 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
   }
   const { data: asset, error } = await getSupabase(env)
     .from("movie_media_assets")
-    .select("media_type,file_id,quality_label")
+    .select("storage_chat_id,storage_message_id,quality_label")
     .eq("id", assetId)
     .eq("status", "active")
     .maybeSingle();
@@ -562,21 +575,18 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
     await sendMessage(env, bot.slug, chatId, "هاد النسخة ما بقاتش متاحة. رجع للتفاصيل واختار نسخة أخرى.");
     return;
   }
-  const delivery = getTelegramMediaDelivery(asset.media_type);
-  if (!delivery || !asset.file_id) {
-    await sendMessage(env, bot.slug, chatId, "نوع هاد النسخة ما مدعومش حالياً.");
+  const payload = buildMovieMediaCopyPayload(asset, chatId);
+  if (!payload) {
+    await sendMessage(env, bot.slug, chatId, "مرجع الملف في قناة التخزين غير مكتمل. تواصل مع الإدارة.");
     return;
   }
   try {
-    await telegramRequest(env, bot.slug, delivery.method, {
-      chat_id: chatId,
-      [delivery.field]: asset.file_id,
-      caption: "🎬 FINDLY Movies · " + String(asset.quality_label || "Original").slice(0, 24)
-    });
+    await telegramRequest(env, bot.slug, "copyMessage", payload);
   } catch (error) {
-    console.error("FINDLY_MOVIE_MEDIA_SEND_FAILED", {
+    console.error("FINDLY_MOVIE_MEDIA_COPY_FAILED", {
       assetId,
-      mediaType: asset.media_type,
+      storageChatId: asset.storage_chat_id,
+      storageMessageId: asset.storage_message_id,
       code: error?.code || null,
       status: error?.status || null
     });
@@ -607,7 +617,7 @@ async function sendMovieTitleMedia(env, bot, chatId, titleId) {
 
   const { data: assets, error: mediaError } = await supabase
     .from("movie_media_assets")
-    .select("id,media_type,file_id,quality_label")
+    .select("id,storage_chat_id,storage_message_id,quality_label")
     .eq("title_id", title.id)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -615,7 +625,7 @@ async function sendMovieTitleMedia(env, bot, chatId, titleId) {
   if (mediaError) throw mediaError;
 
   const deliverableAssets = (assets || []).filter((asset) =>
-    asset.file_id && getTelegramMediaDelivery(asset.media_type)
+    buildMovieMediaCopyPayload(asset, chatId)
   );
   const decision = resolveMovieWatchAction(deliverableAssets);
 
