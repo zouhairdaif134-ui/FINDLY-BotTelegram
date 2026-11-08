@@ -1320,11 +1320,13 @@ async function processTelegramUpdate(
     if (!media) return { ok: true, media_ignored: true };
 
     const supabase = getSupabase(env);
-    const { data: title, error: titleError } = await supabase
+    let titleLookup = supabase
       .from("movie_titles")
-      .select("id,title")
-      .eq("id", media.titleId)
-      .maybeSingle();
+      .select("id,title");
+    titleLookup = media.titleId
+      ? titleLookup.eq("id", media.titleId)
+      : titleLookup.eq("title", media.title).eq("release_year", media.releaseYear);
+    const { data: title, error: titleError } = await titleLookup.maybeSingle();
     if (titleError) throw titleError;
     if (!title) {
       await sendMessage(env, bot.slug, media.chatId, "ما لقيتش هاد العنوان فمكتبة FINDLY. تأكد من UUID اللي كتبتي فالوصف.");
