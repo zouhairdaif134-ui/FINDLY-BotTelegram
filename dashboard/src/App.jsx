@@ -4119,10 +4119,10 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
     setShareFacebookUrl("");
     setError("");
     try {
-      const moviesBot = bots.find((bot) => bot.slug === "movies" && bot.is_active);
+      const masterBot = bots.find((bot) => bot.slug === "findly" && bot.is_active);
       const share = buildMovieShareContent(
         item,
-        moviesBot?.telegram_username,
+        masterBot?.telegram_username,
         platform,
         API_URL
       );
