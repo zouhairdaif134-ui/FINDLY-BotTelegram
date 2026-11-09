@@ -852,6 +852,10 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   return true;
 }
 
+export function isMovieDeepLinkBot(bot) {
+  return bot?.slug === "findly" || bot?.slug === "movies";
+}
+
 export function parseMovieStartPayload(startPayload) {
   const match = /^movie_([0-9a-f-]{36})(?:_(facebook|instagram|watch))?$/i.exec(startPayload || "");
   if (!match || !UUID_RE.test(match[1])) return null;
