@@ -7,7 +7,7 @@ import ActivityLogSection from "./ActivityLogSection.jsx";
 import MonetizationSection from "./MonetizationSection.jsx";
 import AISection from "./AISection.jsx";
 import MovieQueueSection from "./MovieQueueSection.jsx";
-import { buildMovieShareContent } from "../../src/lib/movie-sharing.js";
+import { buildMovieShareContent, getMovieShareBotUsername } from "../../src/lib/movie-sharing.js";
 import { filterAndSortMovies, paginateMovies, getMovieGenreNames } from "./movie-library.js";
 
 const PRODUCTION_API_URL =
@@ -4119,10 +4119,9 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
     setShareFacebookUrl("");
     setError("");
     try {
-      const masterBot = bots.find((bot) => bot.slug === "findly" && bot.is_active);
       const share = buildMovieShareContent(
         item,
-        masterBot?.telegram_username,
+        getMovieShareBotUsername(bots),
         platform,
         API_URL
       );
