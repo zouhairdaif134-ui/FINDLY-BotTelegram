@@ -21,6 +21,13 @@ function trustedPosterUrl(value) {
   }
 }
 
+export function getMovieShareBotUsername(bots) {
+  const masterBot = Array.isArray(bots)
+    ? bots.find((bot) => bot?.slug === "findly" && bot?.is_active !== false)
+    : null;
+  return masterBot?.telegram_username || "";
+}
+
 export function buildMovieShareContent(
   movie,
   username,
