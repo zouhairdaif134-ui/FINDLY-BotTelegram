@@ -25,6 +25,7 @@ import {
   handleMoviesText,
   handleMoviesStart,
   parseMovieStartPayload,
+  isMovieDeepLinkBot,
   showMoviesHome,
   showMoviesSearchPrompt
 } from "../lib/movies-bot.js";
@@ -1496,7 +1497,7 @@ async function processTelegramUpdate(
         };
       }
     }
-    if (bot.slug === "movies") {
+    if (isMovieDeepLinkBot(bot)) {
       const referral = parseMovieStartPayload(startPayload);
       if (referral?.source) {
         await recordAnalytics(env, bot, telegramUser, "movie_referral_start", {
