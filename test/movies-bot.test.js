@@ -6,7 +6,8 @@ import {
   isMoviesSearchReply,
   parseMovieStartPayload,
   resolveMovieWatchAction,
-  buildMovieMediaCopyPayload
+  buildMovieMediaCopyPayload,
+  isMovieDeepLinkBot
 } from "../src/lib/movies-bot.js";
 import { getTelegramToken } from "../src/lib/telegram.js";
 
@@ -222,4 +223,11 @@ test("builds a Telegram copyMessage request from the private storage channel ref
 test("rejects incomplete Telegram storage references instead of falling back to file_id", () => {
   assert.equal(buildMovieMediaCopyPayload({ file_id: "legacy-file-id" }, 987654321), null);
   assert.equal(buildMovieMediaCopyPayload({ storage_chat_id: "-100123", storage_message_id: "0" }, 987654321), null);
+});
+
+
+test("accepts movie detail deep links on the Master bot and legacy Watch bot only", () => {
+  assert.equal(isMovieDeepLinkBot({ slug: "findly", bot_type: "master" }), true);
+  assert.equal(isMovieDeepLinkBot({ slug: "movies", bot_type: "child" }), true);
+  assert.equal(isMovieDeepLinkBot({ slug: "other", bot_type: "child" }), false);
 });
