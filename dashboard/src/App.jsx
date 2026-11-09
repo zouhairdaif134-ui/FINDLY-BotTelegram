@@ -4107,12 +4107,14 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
   const [synopsisBackfillLoading, setSynopsisBackfillLoading] = useState(false);
   const [synopsisBackfillStatus, setSynopsisBackfillStatus] = useState("");
   const [shareStatus, setShareStatus] = useState("");
+  const [shareCaption, setShareCaption] = useState("");
   const isSharing = mode === "sharing";
   const isGenres = mode === "genres";
   const isPublished = mode === "published";
 
   async function shareMovie(item, platform) {
     setShareStatus("");
+    setShareCaption("");
     setError("");
     let facebookPopup = null;
     let facebookNavigated = false;
@@ -4132,6 +4134,7 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
         platform,
         API_URL
       );
+      setShareCaption(share.caption);
 
       if (platform === "facebook") {
         // Facebook's composer does not reliably display og:description in every
@@ -4379,6 +4382,18 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
     </header>
     {error && <div className="auth-error movies-workspace-error" role="alert">{error}</div>}
     {shareStatus && <div className="auth-success movies-share-status" role="status">{shareStatus}</div>}
+    {isSharing && shareCaption && <section className="movies-card movies-share-caption" aria-label="نص منشور الفيلم">
+      <div className="movies-card-heading"><div><h3>نص المنشور</h3><p>إلا ما تلصقش النص تلقائياً فـ Facebook، نسخو من هنا ولسقو فخانة «Quoi de neuf ?».</p></div></div>
+      <textarea aria-label="نص مشاركة الفيلم" readOnly value={shareCaption} rows={8} />
+      <button className="secondary-button" type="button" onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(shareCaption);
+          setShareStatus("تنسخ نص الفيلم. رجع لـ Facebook ولسقو فخانة «Quoi de neuf ?».");
+        } catch {
+          setShareStatus("حدد النص الظاهر أعلاه ونسخو يدوياً، ثم لسقو فـ Facebook.");
+        }
+      }}>نسخ نص المنشور</button>
+    </section>}
     {synopsisBackfillStatus && !isSharing && !isPublished && !isGenres && <div className="auth-success movies-share-status" role="status">{synopsisBackfillStatus}</div>}
 
     {!isSharing && !isPublished && !isGenres && <form className="movies-card tmdb-import-card" onSubmit={searchTmdb}>
