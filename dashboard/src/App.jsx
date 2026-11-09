@@ -4108,6 +4108,7 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
   const [synopsisBackfillStatus, setSynopsisBackfillStatus] = useState("");
   const [shareStatus, setShareStatus] = useState("");
   const [shareCaption, setShareCaption] = useState("");
+  const [shareFacebookUrl, setShareFacebookUrl] = useState("");
   const isSharing = mode === "sharing";
   const isGenres = mode === "genres";
   const isPublished = mode === "published";
@@ -4115,18 +4116,9 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
   async function shareMovie(item, platform) {
     setShareStatus("");
     setShareCaption("");
+    setShareFacebookUrl("");
     setError("");
-    let facebookPopup = null;
-    let facebookNavigated = false;
     try {
-      if (platform === "facebook") {
-        facebookPopup = window.open("about:blank", "_blank");
-        if (!facebookPopup) throw new Error("سمح للنوافذ المنبثقة باش نكملو مشاركة Facebook.");
-      }
-      await fetchApi(`/api/movies/${encodeURIComponent(item.id)}/share`, {
-        method: "POST",
-        body: JSON.stringify({ platform })
-      });
       const moviesBot = bots.find((bot) => bot.slug === "movies" && bot.is_active);
       const share = buildMovieShareContent(
         item,
@@ -4134,28 +4126,25 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
         platform,
         API_URL
       );
-      setShareCaption(share.caption);
 
+      // Facebook does not support reliably pre-filling the post caption through
+      // its sharer URL. Keep the caption visible in FINDLY first; the user copies
+      // it explicitly, then opens Facebook in a separate user gesture.
       if (platform === "facebook") {
-        // Facebook's composer does not reliably display og:description in every
-        // Feed layout. Copy the same database-backed movie caption first, then
-        // open the canonical share page so the user can paste it into the post.
-        const clipboardPromise = navigator.clipboard?.writeText
-          ? navigator.clipboard.writeText(share.caption).then(() => true).catch(() => false)
-          : Promise.resolve(false);
-
-        facebookPopup.opener = null;
-        facebookPopup.location.href = share.facebookShareUrl;
-        facebookNavigated = true;
-
-        const copied = await clipboardPromise;
-        setShareStatus(
-          copied
-            ? "نسخنا تلقائياً نص الفيلم من مكتبة FINDLY. فـ Facebook لسق النص فخانة «Quoi de neuf ?»؛ الصورة والعنوان كيجيو من بطاقة الرابط."
-            : "تحلات مشاركة Facebook. إذا ما بانش الملخص فالبطاقة، انسخ نص الفيلم من FINDLY أو فعّل صلاحية Clipboard ثم عاود المشاركة."
-        );
+        setShareCaption(share.caption);
+        await fetchApi(`/api/movies/${encodeURIComponent(item.id)}/share`, {
+          method: "POST",
+          body: JSON.stringify({ platform })
+        });
+        setShareFacebookUrl(share.facebookShareUrl);
+        setShareStatus("نص المنشور واجد. نسخو من الزر، ومن بعد افتح Facebook ولسق النص فخانة المنشور.");
         return;
       }
+
+      await fetchApi(`/api/movies/${encodeURIComponent(item.id)}/share`, {
+        method: "POST",
+        body: JSON.stringify({ platform })
+      });
 
       const response = await fetch(share.posterDownloadUrl, { mode: "cors" });
       if (!response.ok) {
@@ -4209,7 +4198,6 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
         "حمّلنا صورة الفيلم ونسخنا النص. افتح Instagram، اختار الصورة من Gallery، ولسق النص فالوصف."
       );
     } catch (error) {
-      if (facebookPopup && !facebookNavigated) facebookPopup.close();
       if (error?.name === "AbortError") {
         setShareStatus("تم إلغاء المشاركة.");
         return;
@@ -4383,16 +4371,20 @@ function MoviesSection({ movies, bots = [], fetchApi, onRefresh, mode = "catalog
     {error && <div className="auth-error movies-workspace-error" role="alert">{error}</div>}
     {shareStatus && <div className="auth-success movies-share-status" role="status">{shareStatus}</div>}
     {isSharing && shareCaption && <section className="movies-card movies-share-caption" aria-label="نص منشور الفيلم">
-      <div className="movies-card-heading"><div><h3>نص المنشور</h3><p>إلا ما تلصقش النص تلقائياً فـ Facebook، نسخو من هنا ولسقو فخانة «Quoi de neuf ?».</p></div></div>
-      <textarea aria-label="نص مشاركة الفيلم" readOnly value={shareCaption} rows={8} />
-      <button className="secondary-button" type="button" onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(shareCaption);
-          setShareStatus("تنسخ نص الفيلم. رجع لـ Facebook ولسقو فخانة «Quoi de neuf ?».");
-        } catch {
-          setShareStatus("حدد النص الظاهر أعلاه ونسخو يدوياً، ثم لسقو فـ Facebook.");
-        }
-      }}>نسخ نص المنشور</button>
+      <div className="movies-card-heading"><div><h3>1. نص المنشور</h3><p>Facebook ما كيسمحش نعمروا خانة المنشور تلقائياً من رابط المشاركة. خاصك تنسخ النص هنا أولاً.</p></div></div>
+      <textarea aria-label="نص مشاركة الفيلم" readOnly value={shareCaption} rows={8} onFocus={(event) => event.target.select()} />
+      <div className="movies-row-actions">
+        <button className="primary-button" type="button" onClick={async () => {
+          try {
+            if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+            await navigator.clipboard.writeText(shareCaption);
+            setShareStatus("تنسخ نص المنشور. دابا ضغط على «فتح Facebook»، ومن بعد لسق النص.");
+          } catch {
+            setShareStatus("النسخ التلقائي غير متاح. ضغط مطولاً على النص أعلاه، اختار تحديد الكل ثم نسخ.");
+          }
+        }}>نسخ نص المنشور</button>
+        {shareFacebookUrl && <button className="secondary-button" type="button" onClick={() => window.open(shareFacebookUrl, "_blank", "noopener,noreferrer")}>2. فتح Facebook</button>}
+      </div>
     </section>}
     {synopsisBackfillStatus && !isSharing && !isPublished && !isGenres && <div className="auth-success movies-share-status" role="status">{synopsisBackfillStatus}</div>}
 
