@@ -182,16 +182,26 @@ export async function answerCallback(
   callbackQueryId,
   text = ""
 ) {
-  return telegramRequest(
-    env,
-    botSlug,
-    "answerCallbackQuery",
-    {
-      callback_query_id:
-        callbackQueryId,
-      text
+  try {
+    return await telegramRequest(
+      env,
+      botSlug,
+      "answerCallbackQuery",
+      {
+        callback_query_id: callbackQueryId,
+        text
+      }
+    );
+  } catch (error) {
+    const message = String(error?.message || "").toLowerCase();
+    if (
+      error?.code === "TELEGRAM_API_ERROR" &&
+      (message.includes("query is too old") || message.includes("query id is invalid"))
+    ) {
+      return null;
     }
-  );
+    throw error;
+  }
 }
 
 export function getTelegramWebhookSecret(env, botSlug) {
