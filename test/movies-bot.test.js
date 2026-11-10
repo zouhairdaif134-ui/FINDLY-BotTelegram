@@ -222,10 +222,14 @@ test("builds a sendVideo request from the Watch Bot's stored Telegram file_id", 
     payload: {
       chat_id: 987654321,
       video: "watch-bot-file-id",
-      caption: "🎬 FINDLY Movies · 1080p",
-      supports_streaming: true
+      caption: "🎬 FINDLY Movies · 1080p"
     }
   });
+});
+
+test("does not claim an unverified video is streamable", () => {
+  const request = buildMovieMediaDeliveryRequest({ media_type: "video", file_id: "video-id" }, 123);
+  assert.equal(Object.hasOwn(request.payload, "supports_streaming"), false);
 });
 
 test("builds a sendDocument request for media stored as a Telegram document", () => {
