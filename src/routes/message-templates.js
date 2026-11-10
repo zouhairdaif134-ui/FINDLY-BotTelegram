@@ -128,7 +128,11 @@ export async function getMessageTemplates(env) {
           default_value: item.defaultValue,
           placeholders: item.placeholders
         }
-      ]))
+      ])),
+      buttons: {
+        allowed: MESSAGE_BUTTON_ACTIONS[slug] || [],
+        selected: Array.isArray(saved.buttons) ? saved.buttons : []
+      }
     };
   });
 }
@@ -197,4 +201,17 @@ export async function getMessageTemplate(env, botSlug, templateKey, variables = 
       : "اكتشف الأفلام والمسلسلات واختر ما تريد مشاهدته.",
     ...variables
   });
+}
+
+export async function getMessageButtons(env, botSlug) {
+  const allowed = MESSAGE_BUTTON_ACTIONS[botSlug] || [];
+  const { data: bot, error: botError } = await getSupabase(env).from("bots").select("id").eq("slug",botSlug).maybeSingle();
+  if (botError) throw botError;
+  if (!bot) return [];
+  const { data: row, error } = await getSupabase(env).from("bot_settings").select("setting_value").eq("bot_id",bot.id).eq("setting_key","message_templates").maybeSingle();
+  if (error) throw error;
+  const selected = row?.setting_value?.buttons;
+  if (!Array.isArray(selected)) return [];
+  const ids = new Set(allowed.map((item) => item.id));
+  return selected.filter((id) => ids.has(id)).map((id) => allowed.find((item) => item.id === id));
 }
