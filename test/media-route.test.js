@@ -68,6 +68,7 @@ test("verifies Watch Bot identity, channel type, administrator access and channe
   const result = await verifyMovieStorageChannel({
     chatId: "@findly_media_storage",
     configuredUsername: "@FindlyMovies2026Bot",
+    expectedWebhookUrl: "https://worker.example/telegram/movies",
     telegram: async (method, payload) => {
       calls.push({ method, payload });
       if (method === "getMe") return { id: 7001, is_bot: true, username: "FindlyMovies2026Bot" };
@@ -186,5 +187,23 @@ test("rejects webhook configurations that would disable Watch Bot messages or ca
       }
     }),
     (error) => error.status === 409 && error.code === "TELEGRAM_REQUIRED_UPDATES_DISABLED"
+  );
+});
+
+test("rejects a Watch Bot webhook that points to a different Worker route", async () => {
+  await assert.rejects(
+    verifyMovieStorageChannel({
+      chatId: "-1001234567890",
+      configuredUsername: "FindlyMovies2026Bot",
+      expectedWebhookUrl: "https://worker.example/telegram/movies",
+      telegram: async (method) => {
+        if (method === "getMe") return { id: 7001, is_bot: true, username: "FindlyMovies2026Bot" };
+        if (method === "getChat") return { id: -1001234567890, type: "channel", title: "Storage" };
+        if (method === "getWebhookInfo") return { url: "https://other-worker.example/telegram/movies", allowed_updates: ["message", "callback_query", "channel_post"] };
+        if (method === "getChatMember") return { status: "administrator" };
+        throw new Error("Unexpected Telegram method: " + method);
+      }
+    }),
+    (error) => error.status === 409 && error.code === "TELEGRAM_WEBHOOK_MISMATCH"
   );
 });
