@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase.js";
-import { answerCallback, editMessageText, sendMessage } from "./telegram.js";
+import { editMessageText, sendMessage } from "./telegram.js";
 
 const PAGE_SIZE = 5;
 
@@ -250,10 +250,9 @@ export async function handleJobsCallback(env, bot, chatId, callbackQuery) {
   const data = callbackQuery.data || "";
   const messageId = callbackQuery.message?.message_id;
   if (!messageId) return;
-  if (data === "jobs:noop") { await answerCallback(env, bot.slug, callbackQuery.id); return; }
-  if (data === "jobs:latest") { await answerCallback(env, bot.slug, callbackQuery.id); await renderJobsList(env, bot, chatId, messageId, 0, null); return; }
+  if (data === "jobs:noop") return;
+  if (data === "jobs:latest") { await renderJobsList(env, bot, chatId, messageId, 0, null); return; }
   if (data === "jobs:cities") {
-    await answerCallback(env, bot.slug, callbackQuery.id);
     const cities = await loadCities(env);
     const keyboard = cities.map((city, index) => [
       {
@@ -311,7 +310,6 @@ export async function handleJobsCallback(env, bot, chatId, callbackQuery) {
     return;
   }
   if (data === "jobs:interest") {
-    await answerCallback(env, bot.slug, callbackQuery.id, "سجلنا الاهتمام");
     await recordJobInterest(env, bot, callbackQuery.from);
     await editMessageText(env, bot.slug, chatId, messageId, "<b>🔔 تنبيهات فرص الشغل</b>\n\nسجلنا اهتمامك. ملي يتفعل نظام التنبيهات الحقيقية غادي نعلموك.", { reply_markup: { inline_keyboard: [[{ text: "◀️ فرص الشغل", callback_data: "jobs:latest" }]] } });
   }
