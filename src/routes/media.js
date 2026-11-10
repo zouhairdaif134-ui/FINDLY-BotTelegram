@@ -297,7 +297,7 @@ export async function handleMediaRoute(env, request, url, helpers) {
       const body = await helpers.readJson(request);
       const supabase = getSupabase(env);
       const existing = await readStorageConfig(supabase);
-      const verified = await verifyConfiguredStorageChannel(env, body?.chat_id);
+      const verified = await verifyConfiguredStorageChannel(env, body?.chat_id, request);
       if (existing?.active_storage_chat_id &&
           existing.active_storage_chat_id !== verified.chat_id &&
           body?.confirm_change !== true) {
