@@ -54,7 +54,7 @@ test("ignores channel posts without a supported media attachment or matching cap
   }), null);
 });
 
-import { getTelegramMediaDelivery, canDistributeMovieMedia, isActiveMovieStorageChannel } from "../src/lib/movie-media.js";
+import { getTelegramMediaDelivery, canDistributeMovieMedia, isActiveMovieStorageChannel, isAllowedMovieMediaStatusTransition } from "../src/lib/movie-media.js";
 
 test("uses Telegram file_id delivery methods for stored media types", () => {
   assert.deepEqual(getTelegramMediaDelivery("video"), { method: "sendVideo", field: "video" });
@@ -105,4 +105,14 @@ test("only the configured active Telegram channel can ingest new media", () => {
   assert.equal(isActiveMovieStorageChannel("-1001234567890", "-1009999999999"), false);
   assert.equal(isActiveMovieStorageChannel("-1001234567890", null), false);
   assert.equal(isActiveMovieStorageChannel("-1001234567890", ""), false);
+});
+
+test("media review permits only pending approval or rejection and active deactivation", () => {
+  assert.equal(isAllowedMovieMediaStatusTransition("pending_review", "active"), true);
+  assert.equal(isAllowedMovieMediaStatusTransition("pending_review", "rejected"), true);
+  assert.equal(isAllowedMovieMediaStatusTransition("active", "inactive"), true);
+  assert.equal(isAllowedMovieMediaStatusTransition("active", "rejected"), false);
+  assert.equal(isAllowedMovieMediaStatusTransition("inactive", "active"), false);
+  assert.equal(isAllowedMovieMediaStatusTransition("rejected", "active"), false);
+  assert.equal(isAllowedMovieMediaStatusTransition("unknown", "active"), false);
 });
