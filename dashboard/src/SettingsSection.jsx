@@ -28,6 +28,10 @@ export default function SettingsSection({ fetchApi }) {
   const [integrations, setIntegrations] = useState(null);
   const [integrationsLoading, setIntegrationsLoading] = useState(false);
   const [integrationsError, setIntegrationsError] = useState("");
+  const [selectedButtons, setSelectedButtons] = useState([]);
+  const [buttonsSaving, setButtonsSaving] = useState(false);
+  const [buttonsNotice, setButtonsNotice] = useState("");
+  const [buttonsError, setButtonsError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -81,6 +85,37 @@ export default function SettingsSection({ fetchApi }) {
     ["telegram_watch", "Telegram · Watch Bot"]
   ];
 
+
+
+  const activeBotConfig = messageTemplates.find((item) => item.bot_slug === selectedBot);
+  const availableButtons = activeBotConfig?.buttons?.allowed || [];
+  useEffect(() => {
+    setSelectedButtons(activeBotConfig?.buttons?.selected || []);
+  }, [selectedBot, messageTemplates]);
+
+  function toggleButton(action, checked) {
+    setSelectedButtons((current) => checked
+      ? [...current, action]
+      : current.filter((item) => item !== action));
+  }
+
+  async function saveButtons() {
+    setButtonsSaving(true);
+    setButtonsError("");
+    setButtonsNotice("");
+    try {
+      await fetchApi("/api/message-templates", {
+        method: "PUT",
+        body: JSON.stringify({ bot_slug: selectedBot, template_key: "buttons", value: selectedButtons })
+      });
+      await loadTemplates();
+      setButtonsNotice("تم حفظ أزرار القائمة الآمنة.");
+    } catch (err) {
+      setButtonsError(err?.message || "تعذر حفظ الأزرار.");
+    } finally {
+      setButtonsSaving(false);
+    }
+  }
 
   const activeTemplate = messageTemplates.find((item) => item.bot_slug === selectedBot)?.templates?.[selectedTemplate];
 
@@ -277,6 +312,27 @@ export default function SettingsSection({ fetchApi }) {
             </div>
           </form>
         )}
+      </section>
+
+      <section className="settings-admin__card">
+        <div className="settings-admin__card-heading">
+          <div><h3>أزرار القائمة المضمنة</h3><p>اختيار إجراءات جاهزة فقط لكل بوت، بدون إدخال callback أو رابط عشوائي.</p></div>
+          <span className="settings-admin__tag">إجراءات آمنة</span>
+        </div>
+        {buttonsError && <div className="settings-admin__alert settings-admin__alert--error" role="alert">{buttonsError}</div>}
+        {buttonsNotice && <div className="settings-admin__alert settings-admin__alert--success" role="status">{buttonsNotice}</div>}
+        <div className="settings-admin__button-options">
+          {availableButtons.map((item) => (
+            <label className="settings-admin__button-option" key={item.id}>
+              <span>{item.label}</span>
+              <input type="checkbox" checked={selectedButtons.includes(item.id)} onChange={(e) => toggleButton(item.id, e.target.checked)} />
+            </label>
+          ))}
+        </div>
+        <small className="settings-admin__timestamp">إلا خليتي الاختيارات فارغة، كيرجع البوت للأزرار الافتراضية ديالو.</small>
+        <div className="settings-admin__footer">
+          <button type="button" onClick={saveButtons} disabled={buttonsSaving}>{buttonsSaving ? "جارٍ الحفظ…" : "حفظ الأزرار"}</button>
+        </div>
       </section>
 
       <section className="settings-admin__card">

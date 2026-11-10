@@ -37,6 +37,24 @@ export const MESSAGE_TEMPLATE_DEFINITIONS = Object.freeze({
 const ALLOWED_TAGS = new Set(["b","strong","i","em","u","ins","s","strike","del","code","pre","a"]);
 const PLACEHOLDER_RE = /\{([a-z_]+)\}/g;
 
+export const MESSAGE_BUTTON_ACTIONS = Object.freeze({
+  findly: [
+    { id: "home", label: "القائمة الرئيسية" },
+    { id: "movies", label: "الأفلام والمسلسلات" },
+    { id: "search", label: "البحث" },
+    { id: "help", label: "المساعدة" }
+  ],
+  movies: [
+    { id: "library", label: "المكتبة" },
+    { id: "categories", label: "التصنيفات" },
+    { id: "added", label: "المضاف حديثاً" },
+    { id: "top", label: "الأعلى تقييماً" },
+    { id: "search", label: "البحث" },
+    { id: "favorites", label: "مكتبتي" },
+    { id: "help", label: "المساعدة" }
+  ]
+});
+
 export function validateMessageTemplate(botSlug, templateKey, value) {
   const definition = MESSAGE_TEMPLATE_DEFINITIONS[botSlug]?.templates?.[templateKey];
   if (!definition) throw new Error("Unsupported bot or message template.");
@@ -110,16 +128,43 @@ export async function getMessageTemplates(env) {
           default_value: item.defaultValue,
           placeholders: item.placeholders
         }
-      ]))
+      ])),
+      buttons: {
+        allowed: MESSAGE_BUTTON_ACTIONS[slug] || [],
+        selected: Array.isArray(saved.buttons) ? saved.buttons : []
+      }
     };
   });
+}
+
+export function validateMessageButtons(botSlug, selected) {
+  const allowed = new Set((MESSAGE_BUTTON_ACTIONS[botSlug] || []).map((item) => item.id));
+  if (!Array.isArray(selected) || selected.length > 8 || selected.some((item) => typeof item !== "string" || !allowed.has(item)) || new Set(selected).size !== selected.length) {
+    throw new Error("Buttons must use unique predefined actions for the selected bot.");
+  }
+  return selected;
 }
 
 export async function saveMessageTemplate(env, payload, actor) {
   const botSlug = String(payload?.bot_slug || "");
   const templateKey = String(payload?.template_key || "");
-  const value = validateMessageTemplate(botSlug, templateKey, payload?.value);
   const definition = MESSAGE_TEMPLATE_DEFINITIONS[botSlug];
+  if (templateKey === "buttons") {
+    const selected = validateMessageButtons(botSlug, payload?.value);
+    const { data: bot, error: botError } = await getSupabase(env).from("bots").select("id").eq("slug",botSlug).maybeSingle();
+    if (botError) throw botError;
+    if (!bot) throw new Error("Bot configuration was not found.");
+    const { data: existing, error } = await getSupabase(env).from("bot_settings").select("id,setting_value").eq("bot_id",bot.id).eq("setting_key","message_templates").maybeSingle();
+    if (error) throw error;
+    const next = { ...(existing?.setting_value || {}), buttons: selected };
+    await recordAdminMutation(env, actor, {
+      action: "settings.message_buttons.update", entityType: "bot_setting", entityId: existing?.id || null,
+      operation: existing ? "update" : "create",
+      payload: existing ? { setting_value: next } : { bot_id: bot.id, setting_key: "message_templates", setting_value: next }
+    });
+    return { bot_slug: botSlug, template_key: "buttons", value: selected };
+  }
+  const value = validateMessageTemplate(botSlug, templateKey, payload?.value);
   const { data: bot, error: botError } = await getSupabase(env)
     .from("bots").select("id").eq("slug",botSlug).maybeSingle();
   if (botError) throw botError;
@@ -160,4 +205,17 @@ export async function getMessageTemplate(env, botSlug, templateKey, variables = 
       : "اكتشف الأفلام والمسلسلات واختر ما تريد مشاهدته.",
     ...variables
   });
+}
+
+export async function getMessageButtons(env, botSlug) {
+  const allowed = MESSAGE_BUTTON_ACTIONS[botSlug] || [];
+  const { data: bot, error: botError } = await getSupabase(env).from("bots").select("id").eq("slug",botSlug).maybeSingle();
+  if (botError) throw botError;
+  if (!bot) return [];
+  const { data: row, error } = await getSupabase(env).from("bot_settings").select("setting_value").eq("bot_id",bot.id).eq("setting_key","message_templates").maybeSingle();
+  if (error) throw error;
+  const selected = row?.setting_value?.buttons;
+  if (!Array.isArray(selected)) return [];
+  const ids = new Set(allowed.map((item) => item.id));
+  return selected.filter((id) => ids.has(id)).map((id) => allowed.find((item) => item.id === id));
 }

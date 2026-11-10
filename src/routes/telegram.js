@@ -1,6 +1,6 @@
 import { extractTelegramMedia, findMovieMediaTitle, resolveMovieMediaTitleId, isActiveMovieStorageChannel } from "../lib/movie-media.js";
 import { getMaintenanceDecision } from "./system-settings.js";
-import { getMessageTemplate } from "./message-templates.js";
+import { getMessageTemplate, getMessageButtons } from "./message-templates.js";
 import { getSupabase } from "../lib/supabase.js";
 import { buildTelegramUserProfile } from "../lib/telegram-user.js";
 import { claimTelegramAdDelivery, buildTelegramAdPayload, recordTelegramAdDelivery } from "../lib/monetization.js";
@@ -496,6 +496,13 @@ async function sendMasterMenu(
 
     return [button];
   });
+  const configuredButtons = await getMessageButtons(env, "findly");
+  if (configuredButtons.length) {
+    keyboard.splice(0, keyboard.length, ...configuredButtons.map((item) => [{
+      text: item.label,
+      callback_data: "findly:" + item.id
+    }]));
+  }
 
   await recordAnalytics(
     env,
@@ -743,6 +750,22 @@ async function handleMenuCallback(
 ) {
   const moviesHandled = await handleMoviesCallback(env, bot, chatId, callbackQuery);
   if (moviesHandled) return;
+  if (callbackQuery.data?.startsWith("findly:")) {
+    const action = callbackQuery.data.slice("findly:".length);
+    await answerCallback(env, bot.slug, callbackQuery.id);
+    if (action === "home") {
+      await sendMasterMenu(env, bot, chatId, callbackQuery.from);
+    } else if (action === "movies") {
+      await showMoviesHome(env, bot, chatId);
+    } else if (action === "search") {
+      await showMoviesSearchPrompt(env, bot, chatId);
+    } else if (action === "help") {
+      const helpText = await getMessageTemplate(env, "findly", "help", { bot_name: bot.name });
+      await sendMessage(env, bot.slug, chatId, helpText || "استعمل /start للعودة للقائمة الرئيسية.");
+    }
+    return;
+  }
+
 
   if (callbackQuery.data?.startsWith("jobs:")) {
     await handleJobsCallback(env, bot, chatId, callbackQuery);
