@@ -136,8 +136,27 @@ export async function getMessageTemplates(env) {
 export async function saveMessageTemplate(env, payload, actor) {
   const botSlug = String(payload?.bot_slug || "");
   const templateKey = String(payload?.template_key || "");
-  const value = validateMessageTemplate(botSlug, templateKey, payload?.value);
   const definition = MESSAGE_TEMPLATE_DEFINITIONS[botSlug];
+  if (templateKey === "buttons") {
+    const allowed = new Set((MESSAGE_BUTTON_ACTIONS[botSlug] || []).map((item) => item.id));
+    const selected = payload?.value;
+    if (!Array.isArray(selected) || selected.length > 8 || selected.some((item) => typeof item !== "string" || !allowed.has(item)) || new Set(selected).size !== selected.length) {
+      throw new Error("Buttons must use unique predefined actions for the selected bot.");
+    }
+    const { data: bot, error: botError } = await getSupabase(env).from("bots").select("id").eq("slug",botSlug).maybeSingle();
+    if (botError) throw botError;
+    if (!bot) throw new Error("Bot configuration was not found.");
+    const { data: existing, error } = await getSupabase(env).from("bot_settings").select("id,setting_value").eq("bot_id",bot.id).eq("setting_key","message_templates").maybeSingle();
+    if (error) throw error;
+    const next = { ...(existing?.setting_value || {}), buttons: selected };
+    await recordAdminMutation(env, actor, {
+      action: "settings.message_buttons.update", entityType: "bot_setting", entityId: existing?.id || null,
+      operation: existing ? "update" : "create",
+      payload: existing ? { setting_value: next } : { bot_id: bot.id, setting_key: "message_templates", setting_value: next }
+    });
+    return { bot_slug: botSlug, template_key: "buttons", value: selected };
+  }
+  const value = validateMessageTemplate(botSlug, templateKey, payload?.value);
   const { data: bot, error: botError } = await getSupabase(env)
     .from("bots").select("id").eq("slug",botSlug).maybeSingle();
   if (botError) throw botError;
