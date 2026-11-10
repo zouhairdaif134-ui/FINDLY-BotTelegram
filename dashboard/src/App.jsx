@@ -423,7 +423,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       setTelegramMessage("");
 
       const result = await fetchApi(
-        "/api/telegram/webhook/findly"
+        `/api/telegram/webhook/${telegramBotSlug}`
       );
 
       const webhook = result?.webhook || null;
@@ -461,7 +461,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       setTelegramMessage("");
   
       await fetchApi(
-        "/api/telegram/webhook/findly",
+        `/api/telegram/webhook/${telegramBotSlug}`,
         {
           method: "DELETE"
         }
