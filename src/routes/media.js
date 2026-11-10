@@ -30,6 +30,7 @@ function validateChatReference(value) {
 export async function verifyMovieStorageChannel({
   chatId,
   configuredUsername,
+  expectedWebhookUrl,
   telegram
 }) {
   const reference = validateChatReference(chatId);
@@ -68,6 +69,9 @@ export async function verifyMovieStorageChannel({
   if (!webhook?.url) {
     throw makeError("Webhook ديال Watch Bot غير متصل. اربط البوت أولاً من قسم Telegram.", 409, "TELEGRAM_WEBHOOK_MISSING");
   }
+  if (expectedWebhookUrl && webhook.url !== expectedWebhookUrl) {
+    throw makeError("Webhook ديال Watch Bot لا يشير إلى مسار FINDLY الصحيح.", 409, "TELEGRAM_WEBHOOK_MISMATCH");
+  }
 
   const allowedUpdates = Array.isArray(webhook.allowed_updates) ? webhook.allowed_updates : [];
   const receivesChannelPosts = allowedUpdates.length === 0 || allowedUpdates.includes("channel_post");
@@ -102,11 +106,12 @@ async function getMoviesBot(env) {
   return data;
 }
 
-async function verifyConfiguredStorageChannel(env, chatId) {
+async function verifyConfiguredStorageChannel(env, chatId, request) {
   const bot = await getMoviesBot(env);
   return verifyMovieStorageChannel({
     chatId,
     configuredUsername: bot.telegram_username,
+    expectedWebhookUrl: new URL("/telegram/movies", request.url).toString(),
     telegram: (method, payload) => telegramRequest(env, "movies", method, payload)
   });
 }
@@ -284,7 +289,7 @@ export async function handleMediaRoute(env, request, url, helpers) {
 
     if (resource === "storage-channel" && parts.length === 2 && id === "test" && request.method === "POST") {
       const body = await helpers.readJson(request);
-      const verified = await verifyConfiguredStorageChannel(env, body?.chat_id);
+      const verified = await verifyConfiguredStorageChannel(env, body?.chat_id, request);
       return send(helpers, request, verified);
     }
 
