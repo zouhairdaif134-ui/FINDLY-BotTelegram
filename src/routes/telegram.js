@@ -1062,9 +1062,13 @@ export async function handleTelegramUpdate(
 
   const maintenance = await getMaintenanceDecision(env, botSlug, update);
   if (maintenance.maintenance && !maintenance.allow) {
-    const chatId = update?.message?.chat?.id ?? update?.callback_query?.message?.chat?.id ?? update?.edited_message?.chat?.id;
-    if (chatId != null) {
-      await sendMessage(env, bot.slug, chatId, maintenance.message);
+    if (update?.callback_query?.id) {
+      await answerCallback(env, bot.slug, update.callback_query.id, maintenance.message);
+    } else {
+      const chatId = update?.message?.chat?.id ?? update?.edited_message?.chat?.id;
+      if (chatId != null) {
+        await sendMessage(env, bot.slug, chatId, maintenance.message);
+      }
     }
     return { ok: true, maintenance: true };
   }
