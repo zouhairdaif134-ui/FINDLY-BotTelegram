@@ -160,7 +160,9 @@ export default function MediaReviewSection({ fetchApi }) {
     const title = asset.movie_titles?.title || "هذا العنوان";
     const prompt = status === "authorized"
       ? "هل تؤكد أنك تحققت من امتلاك FINDLY لحقوق توزيع «" + title + "»؟ بعد التأكيد يمكن إظهار خيار المشاهدة."
-      : "هل تؤكد أن توزيع «" + title + "» غير مصرح به؟ سيتم إيقاف المشاهدة.";
+      : status === "not_authorized"
+        ? "هل تؤكد أن توزيع «" + title + "» غير مصرح به؟ سيتم إيقاف المشاهدة."
+        : "هل تريد إعادة حالة حقوق توزيع «" + title + "» إلى غير متحققة؟ سيبقى خيار المشاهدة متوقفاً.";
     if (!window.confirm(prompt)) return;
 
     try {
@@ -294,6 +296,7 @@ export default function MediaReviewSection({ fetchApi }) {
                   {rightsStatus === "authorized"
                     ? <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "not_authorized")}>تسجيل عدم التصريح بالتوزيع</button>
                     : <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "authorized")}>تأكيد حقوق التوزيع</button>}
+                  {rightsStatus !== "unverified" && <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "unverified")}>إعادة التحقق لاحقاً</button>}
                 </div>
 
                 {asset.status === "pending_review" && <div className="media-asset-actions">
