@@ -866,16 +866,10 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   else if (parsed.action === "categories") await sendMoviesCategories(env, bot, chatId);
   else if (parsed.action === "yearprompt") await showMoviesYearPrompt(env, bot, chatId);
   else if (parsed.action === "help") {
-    await sendMessage(env, bot.slug, chatId,
-      "<b>ℹ️ مساعدة FINDLY Movies</b>\n\n" +
-      "• دخل للمكتبة واختار الكل أو الأفلام أو المسلسلات.\n" +
-      "• صفّي حسب التصنيف أو سنة الإصدار، ورتّب حسب تاريخ الإضافة أو الإصدار أو التقييم أو الاسم.\n" +
-      "• تنقّل بين الصفحات أو اختار رقم الصفحة مباشرة.\n" +
-      "• استعمل البحث باسم الفيلم أو المسلسل.\n" +
-      "• افتح أي عنوان لعرض التفاصيل وإضافته للمفضلة.\n" +
-      "• المسلسلات تعرض المواسم والحلقات المسجلة.\n\n" +
-      "المشاهدة داخل Telegram لا تتفعل إلا للمحتوى المرخّص والمجهز للتسليم."
-    );
+    const helpText = await getMessageTemplate(env, bot.slug === "findly" ? "findly" : "movies", "help", {
+      bot_name: "FINDLY Movies"
+    });
+    await sendMessage(env, bot.slug, chatId, helpText || "<b>ℹ️ مساعدة FINDLY Movies</b>\\n\\nاستعمل البحث أو المكتبة لاكتشاف المحتوى.");
   }
   else if (parsed.action === "filters") await sendMoviesFilterMenu(env, bot, chatId, parsed);
   else if (parsed.action === "filtergenres") await sendMoviesFilterGenres(env, bot, chatId, parsed);
