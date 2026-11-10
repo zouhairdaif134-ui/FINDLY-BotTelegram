@@ -109,7 +109,7 @@ async function verifyConfiguredStorageChannel(env, chatId) {
 async function readStorageConfig(supabase) {
   const { data, error } = await supabase
     .from("movie_media_storage_config")
-    .select("id,active_storage_chat_id,active_channel_title,updated_by,updated_at")
+    .select("id,active_storage_chat_id,active_channel_title,updated_at")
     .eq("id", 1)
     .maybeSingle();
   if (error) throw error;
@@ -278,7 +278,7 @@ export async function handleMediaRoute(env, request, url, helpers) {
           active_channel_title: verified.title,
           updated_by: auth.userId
         }, { onConflict: "id" })
-        .select("id,active_storage_chat_id,active_channel_title,updated_by,updated_at")
+        .select("id,active_storage_chat_id,active_channel_title,updated_at")
         .single();
       if (error) throw error;
 
