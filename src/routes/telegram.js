@@ -1,4 +1,4 @@
-import { extractTelegramMedia, findMovieMediaTitle, resolveMovieMediaTitleId } from "../lib/movie-media.js";
+import { extractTelegramMedia, findMovieMediaTitle, resolveMovieMediaTitleId, isActiveMovieStorageChannel } from "../lib/movie-media.js";
 import { getSupabase } from "../lib/supabase.js";
 import { buildTelegramUserProfile } from "../lib/telegram-user.js";
 import { claimTelegramAdDelivery, buildTelegramAdPayload, recordTelegramAdDelivery } from "../lib/monetization.js";
@@ -1327,8 +1327,7 @@ async function processTelegramUpdate(
       .eq("id", 1)
       .maybeSingle();
     if (storageConfigError) throw storageConfigError;
-    if (!storageConfig?.active_storage_chat_id ||
-        String(storageConfig.active_storage_chat_id) !== media.chatId) {
+    if (!isActiveMovieStorageChannel(media.chatId, storageConfig?.active_storage_chat_id)) {
       return { ok: true, media_ignored: true, reason: "inactive_storage_channel" };
     }
 
