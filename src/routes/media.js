@@ -74,6 +74,10 @@ export async function verifyMovieStorageChannel({
   if (!receivesChannelPosts) {
     throw makeError("Webhook ديال Watch Bot لا يستقبل channel_post. أعد ربط Webhook من قسم Telegram.", 409, "TELEGRAM_CHANNEL_POST_DISABLED");
   }
+  const requiredUpdates = ["message", "callback_query", "channel_post"];
+  if (allowedUpdates.length > 0 && !requiredUpdates.every((updateType) => allowedUpdates.includes(updateType))) {
+    throw makeError("Webhook ديال Watch Bot خاصو يستقبل message وcallback_query وchannel_post للحفاظ على وظائف البوت.", 409, "TELEGRAM_REQUIRED_UPDATES_DISABLED");
+  }
 
   return {
     chat_id: String(chat.id),
