@@ -1075,6 +1075,11 @@ export async function handleTelegramUpdate(
   botSlug,
   update
 ) {
+  // Telegram callback queries expire quickly; acknowledge before database work.
+  if (update?.callback_query?.id) {
+    await answerCallback(env, botSlug, update.callback_query.id);
+  }
+
   const bot =
     await getBot(
       env,
