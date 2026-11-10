@@ -141,7 +141,7 @@ function send(helpers, request, data) {
 }
 
 function sendFailure(helpers, request, error) {
-  const status = Number(error?.status) ||
+  const status = error?.code === "TELEGRAM_API_ERROR" ? 502 : Number(error?.status) ||
     (error?.code === "PGRST116" ? 404 : error?.code === "23505" ? 409 : error?.code ? 500 : 400);
   const code = status === 404 ? "NOT_FOUND" :
     status === 409 ? (error?.code || "CONFLICT") :
