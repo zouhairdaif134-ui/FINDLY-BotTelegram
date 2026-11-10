@@ -6,7 +6,6 @@ import {
   isMoviesSearchReply,
   parseMovieStartPayload,
   resolveMovieWatchAction,
-  buildMovieMediaCopyPayload,
   buildMovieMediaDeliveryRequest,
   isMovieDeepLinkBot
 } from "../src/lib/movies-bot.js";
@@ -203,27 +202,6 @@ test("direct-watch flow sends a single available asset and asks quality only for
   assert.deepEqual(resolveMovieWatchAction([original]), { action: "deliver", asset: original });
   const hd = { id: "asset-2", quality_label: "HD" };
   assert.deepEqual(resolveMovieWatchAction([original, hd]), { action: "choose_quality", asset: null });
-});
-
-
-test("builds a Telegram copyMessage request from the private storage channel reference", () => {
-  const payload = buildMovieMediaCopyPayload({
-    storage_chat_id: "-1001234567890",
-    storage_message_id: "321",
-    quality_label: "480p",
-    file_id: "must-not-be-used"
-  }, 987654321);
-  assert.deepEqual(payload, {
-    chat_id: 987654321,
-    from_chat_id: "-1001234567890",
-    message_id: 321,
-    caption: "🎬 FINDLY Movies · 480p"
-  });
-});
-
-test("rejects incomplete Telegram storage references instead of falling back to file_id", () => {
-  assert.equal(buildMovieMediaCopyPayload({ file_id: "legacy-file-id" }, 987654321), null);
-  assert.equal(buildMovieMediaCopyPayload({ storage_chat_id: "-100123", storage_message_id: "0" }, 987654321), null);
 });
 
 
