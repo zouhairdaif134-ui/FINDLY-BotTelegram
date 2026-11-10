@@ -90,3 +90,13 @@ export function canDistributeMovieMedia(rightsStatus) {
 export function isActiveMovieStorageChannel(messageChatId, activeStorageChatId) {
   return Boolean(activeStorageChatId) && String(messageChatId) === String(activeStorageChatId);
 }
+
+export function isAllowedMovieMediaStatusTransition(currentStatus, nextStatus) {
+  const transitions = {
+    pending_review: ["active", "rejected"],
+    active: ["inactive"],
+    inactive: [],
+    rejected: []
+  };
+  return Boolean(transitions[currentStatus]?.includes(nextStatus));
+}
