@@ -1409,6 +1409,9 @@ async function processTelegramUpdate(
         file_size: media.fileSize,
         file_name: media.fileName,
         mime_type: media.mimeType,
+        video_width: media.videoWidth,
+        video_height: media.videoHeight,
+        duration_seconds: media.durationSeconds,
         quality_label: media.quality
       }, { onConflict: "storage_chat_id,storage_message_id" })
       .select("id,status")
