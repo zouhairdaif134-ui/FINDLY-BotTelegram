@@ -89,7 +89,7 @@ test("ignores channel posts without a supported media attachment or matching cap
   }), null);
 });
 
-import { getTelegramMediaDelivery, canDistributeMovieMedia, isActiveMovieStorageChannel, isAllowedMovieMediaStatusTransition } from "../src/lib/movie-media.js";
+import { getTelegramMediaDelivery, canDistributeMovieMedia, isActiveMovieStorageChannel, isAllowedMovieMediaStatusTransition, canApproveMovieMediaAsset } from "../src/lib/movie-media.js";
 
 test("uses Telegram file_id delivery methods for stored media types", () => {
   assert.deepEqual(getTelegramMediaDelivery("video"), { method: "sendVideo", field: "video" });
@@ -150,4 +150,13 @@ test("media review permits only pending approval or rejection and active deactiv
   assert.equal(isAllowedMovieMediaStatusTransition("inactive", "active"), false);
   assert.equal(isAllowedMovieMediaStatusTransition("rejected", "active"), false);
   assert.equal(isAllowedMovieMediaStatusTransition("unknown", "active"), false);
+});
+
+
+test("only Telegram video posts can be approved for in-chat movie playback", () => {
+  assert.equal(canApproveMovieMediaAsset({ media_type: "video" }), true);
+  assert.equal(canApproveMovieMediaAsset({ media_type: "document", mime_type: "video/mp4" }), false);
+  assert.equal(canApproveMovieMediaAsset({ media_type: "audio" }), false);
+  assert.equal(canApproveMovieMediaAsset({ media_type: "animation" }), false);
+  assert.equal(canApproveMovieMediaAsset(null), false);
 });
