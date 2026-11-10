@@ -151,3 +151,14 @@ jobs:
           set -euo pipefail
           PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
           docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/system_settings_verification.sql
+
+      - name: Apply private Worker error monitoring migration
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261110120000_settings_worker_error_monitoring.sql
+      - name: Verify Worker error monitoring RLS and grants
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/settings_worker_error_monitoring_verification.sql
