@@ -14,7 +14,7 @@ test("webhook subscribes to channel_post updates while preserving existing updat
       TELEGRAM_MOVIES_BOT_TOKEN: "test-token",
       TELEGRAM_MOVIES_WEBHOOK_SECRET: "test-secret"
     }, "movies", "https://example.com/telegram/movies");
-    assert.deepEqual(payload.allowed_updates, ["message", "callback_query", "channel_post"]);
+    assert.deepEqual(payload.allowed_updates, ["message", "callback_query", "channel_post", "edited_channel_post"]);
   } finally {
     globalThis.fetch = originalFetch;
   }
