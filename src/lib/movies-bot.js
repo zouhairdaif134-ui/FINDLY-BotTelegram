@@ -1,6 +1,7 @@
 import { getSupabase } from "./supabase.js";
 import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
 import { canDistributeMovieMedia } from "./movie-media.js";
+import { getMessageTemplate } from "../routes/message-templates.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -231,10 +232,12 @@ export async function showMoviesHome(env, bot, chatId) {
     env,
     bot.slug,
     chatId,
-    "<b>🎬 FINDLY Movies</b>\n\n" +
-      (bot.slug === "findly"
+    await getMessageTemplate(env, bot.slug === "findly" ? "findly" : "movies", "start", {
+      bot_name: "🎬 FINDLY Movies",
+      welcome_text: bot.slug === "findly"
         ? "اكتشف الأفلام والمسلسلات، وشوف التفاصيل والتقييمات قبل المشاهدة."
-        : "مكتبة FINDLY للأفلام والمسلسلات. اختار الخدمة اللي بغيتي."),
+        : "مكتبة FINDLY للأفلام والمسلسلات. اختار الخدمة اللي بغيتي."
+    }) || "<b>🎬 FINDLY Movies</b>\\n\\nمكتبة FINDLY للأفلام والمسلسلات.",
     { reply_markup: { inline_keyboard: keyboard } }
   );
 }
