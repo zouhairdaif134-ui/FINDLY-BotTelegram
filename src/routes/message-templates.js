@@ -130,3 +130,25 @@ export async function saveMessageTemplate(env, payload, actor) {
   });
   return { bot_slug: botSlug, template_key: templateKey, value, placeholders: definition.templates[templateKey].placeholders };
 }
+
+export async function getMessageTemplate(env, botSlug, templateKey, variables = {}) {
+  const definition = MESSAGE_TEMPLATE_DEFINITIONS[botSlug]?.templates?.[templateKey];
+  if (!definition) return null;
+  const { data: bot, error: botError } = await getSupabase(env)
+    .from("bots").select("id,name").eq("slug",botSlug).maybeSingle();
+  if (botError) throw botError;
+  if (!bot) return null;
+  const { data: row, error } = await getSupabase(env)
+    .from("bot_settings").select("setting_value").eq("bot_id",bot.id).eq("setting_key","message_templates").maybeSingle();
+  if (error) throw error;
+  const value = typeof row?.setting_value?.[templateKey] === "string"
+    ? row.setting_value[templateKey]
+    : definition.defaultValue;
+  return renderMessageTemplate(value, {
+    bot_name: bot.name || (botSlug === "findly" ? "FINDLY" : "FINDLY Movies"),
+    welcome_text: botSlug === "findly"
+      ? "اختار الخدمة اللي بغيتي من القائمة:"
+      : "اكتشف الأفلام والمسلسلات واختر ما تريد مشاهدته.",
+    ...variables
+  });
+}
