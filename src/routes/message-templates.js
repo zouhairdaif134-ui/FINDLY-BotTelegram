@@ -37,6 +37,24 @@ export const MESSAGE_TEMPLATE_DEFINITIONS = Object.freeze({
 const ALLOWED_TAGS = new Set(["b","strong","i","em","u","ins","s","strike","del","code","pre","a"]);
 const PLACEHOLDER_RE = /\{([a-z_]+)\}/g;
 
+export const MESSAGE_BUTTON_ACTIONS = Object.freeze({
+  findly: [
+    { id: "home", label: "القائمة الرئيسية" },
+    { id: "movies", label: "الأفلام والمسلسلات" },
+    { id: "search", label: "البحث" },
+    { id: "help", label: "المساعدة" }
+  ],
+  movies: [
+    { id: "library", label: "المكتبة" },
+    { id: "categories", label: "التصنيفات" },
+    { id: "added", label: "المضاف حديثاً" },
+    { id: "top", label: "الأعلى تقييماً" },
+    { id: "search", label: "البحث" },
+    { id: "favorites", label: "مكتبتي" },
+    { id: "help", label: "المساعدة" }
+  ]
+});
+
 export function validateMessageTemplate(botSlug, templateKey, value) {
   const definition = MESSAGE_TEMPLATE_DEFINITIONS[botSlug]?.templates?.[templateKey];
   if (!definition) throw new Error("Unsupported bot or message template.");
