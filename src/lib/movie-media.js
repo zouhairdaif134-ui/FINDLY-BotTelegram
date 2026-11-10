@@ -82,3 +82,7 @@ export function getTelegramMediaDelivery(mediaType) {
   };
   return deliveries[mediaType] || null;
 }
+
+export function canDistributeMovieMedia(rightsStatus) {
+  return rightsStatus === "authorized";
+}
