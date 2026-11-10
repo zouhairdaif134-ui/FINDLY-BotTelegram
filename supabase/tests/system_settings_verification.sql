@@ -37,8 +37,8 @@ begin
     raise exception 'Both maintenance switches must default to false';
   end if;
 
-  insert into public.admin_profiles(id,display_name,is_active,updated_at)
-  values(v_admin,'FINDLY Test Owner',true,now());
+  insert into public.admin_profiles(id,display_name,is_active)
+  values(v_admin,'FINDLY Test Owner',true);
   select id into v_owner_role from public.roles where name='owner';
   insert into public.admin_roles(admin_id,role_id) values(v_admin,v_owner_role);
 
