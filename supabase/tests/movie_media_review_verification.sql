@@ -8,6 +8,9 @@ begin
   if to_regclass('public.movie_media_storage_config') is null then
     raise exception 'movie_media_storage_config table was not created';
   end if;
+  if to_regclass('public.movie_distribution_rights') is null then
+    raise exception 'movie_distribution_rights table was not created';
+  end if;
 
   select status into v_status
   from public.movie_media_assets
@@ -29,11 +32,30 @@ begin
     raise exception 'New media must default to pending_review';
   end if;
 
-  select distribution_rights_status into v_rights
-  from public.movie_titles
-  where id = '11111111-1111-4111-8111-111111111111';
+  select status into v_rights
+  from public.movie_distribution_rights
+  where title_id = '11111111-1111-4111-8111-111111111111';
   if v_rights is distinct from 'unverified' then
     raise exception 'Existing titles must default to unverified distribution rights';
+  end if;
+
+  insert into public.movie_titles (
+    id, media_type, normalized_title, title, release_year, metadata_status
+  )
+  values (
+    '33333333-3333-4333-8333-333333333333',
+    'movie',
+    'new-fixture-movie',
+    'New Fixture Movie',
+    2026,
+    'metadata_only'
+  );
+
+  select status into v_rights
+  from public.movie_distribution_rights
+  where title_id = '33333333-3333-4333-8333-333333333333';
+  if v_rights is distinct from 'unverified' then
+    raise exception 'New titles must receive an unverified rights record automatically';
   end if;
 
   select active_storage_chat_id into v_channel
@@ -50,14 +72,25 @@ begin
     raise exception 'Storage config must have RLS enabled';
   end if;
 
+  select c.relrowsecurity into v_rls
+  from pg_class c join pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='public' and c.relname='movie_distribution_rights';
+  if v_rls is distinct from true then
+    raise exception 'Distribution rights must have RLS enabled';
+  end if;
+
   if has_table_privilege('anon', 'public.movie_media_storage_config', 'SELECT')
-     or has_table_privilege('authenticated', 'public.movie_media_storage_config', 'SELECT') then
-    raise exception 'Storage config must not be readable by anon or authenticated';
+     or has_table_privilege('authenticated', 'public.movie_media_storage_config', 'SELECT')
+     or has_table_privilege('anon', 'public.movie_distribution_rights', 'SELECT')
+     or has_table_privilege('authenticated', 'public.movie_distribution_rights', 'SELECT') then
+    raise exception 'Private media configuration and rights must not be readable by end-user roles';
   end if;
 
   if not has_table_privilege('service_role', 'public.movie_media_storage_config', 'SELECT')
-     or not has_table_privilege('service_role', 'public.movie_media_storage_config', 'UPDATE') then
-    raise exception 'service_role must manage storage config';
+     or not has_table_privilege('service_role', 'public.movie_media_storage_config', 'UPDATE')
+     or not has_table_privilege('service_role', 'public.movie_distribution_rights', 'SELECT')
+     or not has_table_privilege('service_role', 'public.movie_distribution_rights', 'UPDATE') then
+    raise exception 'service_role must manage private media configuration and rights';
   end if;
 
   if not exists (
@@ -77,6 +110,15 @@ begin
       and not tgisinternal
   ) then
     raise exception 'Storage config updated_at trigger is missing';
+  end if;
+
+  if not exists (
+    select 1 from pg_trigger
+    where tgrelid='public.movie_titles'::regclass
+      and tgname='movie_distribution_rights_on_movie_insert'
+      and not tgisinternal
+  ) then
+    raise exception 'Automatic distribution-rights default trigger is missing';
   end if;
 end;
 $$;
