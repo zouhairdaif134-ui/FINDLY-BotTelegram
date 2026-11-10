@@ -1297,7 +1297,6 @@ async function handleAIMemoryCommand(env, bot, chatId, userId, command) {
 async function handleAIMemoryCallback(env, bot, chatId, callbackQuery, userId) {
   const data = String(callbackQuery.data || "");
   const supabase = getSupabase(env);
-  await answerCallback(env, bot.slug, callbackQuery.id);
   if (!userId) {
     await sendMessage(env, bot.slug, chatId, "تعذر التحقق من حساب Telegram ديالك.");
     return;
