@@ -171,3 +171,20 @@ test("rejects unsupported media status filters before querying storage", async (
   assert.equal(response.status, 400);
   assert.deepEqual(helpers.permissions, ["media.manage"]);
 });
+
+test("rejects webhook configurations that would disable Watch Bot messages or callbacks", async () => {
+  await assert.rejects(
+    verifyMovieStorageChannel({
+      chatId: "-1001234567890",
+      configuredUsername: "FindlyMovies2026Bot",
+      telegram: async (method) => {
+        if (method === "getMe") return { id: 7001, is_bot: true, username: "FindlyMovies2026Bot" };
+        if (method === "getChat") return { id: -1001234567890, type: "channel", title: "Storage" };
+        if (method === "getWebhookInfo") return { url: "https://worker.example/telegram/movies", allowed_updates: ["channel_post"] };
+        if (method === "getChatMember") return { status: "administrator" };
+        throw new Error("Unexpected Telegram method: " + method);
+      }
+    }),
+    (error) => error.status === 409 && error.code === "TELEGRAM_REQUIRED_UPDATES_DISABLED"
+  );
+});
