@@ -32,6 +32,9 @@ export default function SettingsSection({ fetchApi }) {
   const [buttonsSaving, setButtonsSaving] = useState(false);
   const [buttonsNotice, setButtonsNotice] = useState("");
   const [buttonsError, setButtonsError] = useState("");
+  const [securityAlerts, setSecurityAlerts] = useState(null);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityError, setSecurityError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -76,6 +79,21 @@ export default function SettingsSection({ fetchApi }) {
   }
 
   useEffect(() => { loadIntegrations(); }, []);
+  async function loadSecurityAlerts() {
+    setSecurityLoading(true);
+    setSecurityError("");
+    try {
+      const result = await fetchApi("/api/security/alerts");
+      setSecurityAlerts(result || null);
+    } catch (err) {
+      setSecurityError(err?.message || "تعذر تحميل مؤشرات الأمان.");
+    } finally {
+      setSecurityLoading(false);
+    }
+  }
+
+  useEffect(() => { loadSecurityAlerts(); }, []);
+
 
   const integrationLabels = [
     ["worker", "Cloudflare Worker"],
@@ -355,6 +373,34 @@ export default function SettingsSection({ fetchApi }) {
           })}
         </div>
         {integrations?.checked_at && <small className="settings-admin__timestamp">آخر فحص: {new Date(integrations.checked_at).toLocaleString("ar-MA", { timeZone: "Africa/Casablanca" })} · التوقيت المحلي للمغرب</small>}
+      </section>
+
+      <section className="settings-admin__card">
+        <div className="settings-admin__card-heading">
+          <div><h3>مؤشرات الأمان والتنبيهات</h3><p>مراقبة العمليات الإدارية المسجلة، مع توضيح مصادر المراقبة غير المتاحة.</p></div>
+          <button type="button" className="settings-admin__refresh" onClick={loadSecurityAlerts} disabled={securityLoading}>{securityLoading ? "جارٍ الفحص…" : "تحديث المؤشرات"}</button>
+        </div>
+        {securityError && <div className="settings-admin__alert settings-admin__alert--error" role="alert">{securityError}</div>}
+        {securityAlerts && (
+          <>
+            <div className={"settings-admin__security-alert settings-admin__security-alert--" + (securityAlerts.admin_failure_alert?.level || "clear")}>
+              <strong>{securityAlerts.admin_failure_alert?.level === "warning" ? "تنبيه" : securityAlerts.admin_failure_alert?.level === "notice" ? "ملاحظة" : "الحالة مستقرة"}</strong>
+              <span>{securityAlerts.admin_failure_alert?.message}</span>
+              <small>العمليات الإدارية الفاشلة خلال آخر ساعة: {securityAlerts.audited_admin_failures_last_hour}</small>
+            </div>
+            <div className="settings-admin__integration-list">
+              <div className="settings-admin__integration-row">
+                <span>محاولات تسجيل الدخول الفاشلة<small>{securityAlerts.login_failure_monitoring?.message}</small></span>
+                <strong className="settings-admin__status">غير مفعّل</strong>
+              </div>
+              <div className="settings-admin__integration-row">
+                <span>ارتفاع أخطاء Worker<small>{securityAlerts.worker_error_spike_monitoring?.message}</small></span>
+                <strong className="settings-admin__status">غير متاح</strong>
+              </div>
+            </div>
+            <small className="settings-admin__timestamp">لا يتم إيقاف أي بوت تلقائياً بناءً على هذه المؤشرات.</small>
+          </>
+        )}
       </section>
     </section>
   );
