@@ -103,3 +103,8 @@ export function isAllowedMovieMediaStatusTransition(currentStatus, nextStatus) {
   };
   return Boolean(transitions[currentStatus]?.includes(nextStatus));
 }
+
+
+export function canApproveMovieMediaAsset(asset) {
+  return asset?.media_type === "video";
+}
