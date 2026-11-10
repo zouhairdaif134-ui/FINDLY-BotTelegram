@@ -1321,6 +1321,17 @@ async function processTelegramUpdate(
     if (!media) return { ok: true, media_ignored: true };
 
     const supabase = getSupabase(env);
+    const { data: storageConfig, error: storageConfigError } = await supabase
+      .from("movie_media_storage_config")
+      .select("active_storage_chat_id")
+      .eq("id", 1)
+      .maybeSingle();
+    if (storageConfigError) throw storageConfigError;
+    if (!storageConfig?.active_storage_chat_id ||
+        String(storageConfig.active_storage_chat_id) !== media.chatId) {
+      return { ok: true, media_ignored: true, reason: "inactive_storage_channel" };
+    }
+
     let title = null;
     if (media.titleId) {
       const { data, error: titleError } = await supabase
@@ -1347,7 +1358,7 @@ async function processTelegramUpdate(
     const linkedTitleId = resolveMovieMediaTitleId(media, title);
     if (!linkedTitleId) throw new Error("Resolved movie title ID is missing");
 
-    const { error: mediaError } = await supabase
+    const { data: registeredAsset, error: mediaError } = await supabase
       .from("movie_media_assets")
       .upsert({
         title_id: linkedTitleId,
@@ -1359,25 +1370,27 @@ async function processTelegramUpdate(
         file_size: media.fileSize,
         file_name: media.fileName,
         mime_type: media.mimeType,
-        quality_label: media.quality,
-        status: "active"
-      }, { onConflict: "storage_chat_id,storage_message_id" });
+        quality_label: media.quality
+      }, { onConflict: "storage_chat_id,storage_message_id" })
+      .select("id,status")
+      .single();
     if (mediaError) throw mediaError;
 
-    const { error: titleUpdateError } = await supabase
-      .from("movie_titles")
-      .update({ metadata_status: "authorized_media_available" })
-      .eq("id", linkedTitleId);
-    if (titleUpdateError) throw titleUpdateError;
+    const statusMessage = {
+      pending_review: "تم استلام الملف وإضافته إلى قائمة المراجعة. لن يكون متاحاً للمشاهدة قبل موافقة الإدارة.",
+      active: "هذا الملف مسجل ومفعّل مسبقاً.",
+      inactive: "هذا الملف مسجل مسبقاً لكنه غير مفعّل حالياً.",
+      rejected: "هذا الملف مسجل مسبقاً وسبق رفضه من الإدارة."
+    }[registeredAsset.status] || "تم التحقق من تسجيل الملف.";
 
     await sendMessage(
       env,
       bot.slug,
       media.chatId,
-      "تم تسجيل نسخة " + media.quality + " وربطها بعنوان: <b>" + escapeHtml(title.title) + "</b>.",
+      statusMessage + "\nالعنوان المرتبط: <b>" + escapeHtml(title.title) + "</b>.",
       { reply_to_message_id: media.messageId }
     );
-    return { ok: true, media_registered: true };
+    return { ok: true, media_registered: true, media_status: registeredAsset.status };
   }
 
   const message =
