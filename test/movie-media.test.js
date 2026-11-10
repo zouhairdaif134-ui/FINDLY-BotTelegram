@@ -54,7 +54,7 @@ test("ignores channel posts without a supported media attachment or matching cap
   }), null);
 });
 
-import { getTelegramMediaDelivery, canDistributeMovieMedia } from "../src/lib/movie-media.js";
+import { getTelegramMediaDelivery, canDistributeMovieMedia, isActiveMovieStorageChannel } from "../src/lib/movie-media.js";
 
 test("uses Telegram file_id delivery methods for stored media types", () => {
   assert.deepEqual(getTelegramMediaDelivery("video"), { method: "sendVideo", field: "video" });
@@ -98,4 +98,11 @@ test("distribution rights must be explicitly authorized before media delivery", 
   assert.equal(canDistributeMovieMedia("unverified"), false);
   assert.equal(canDistributeMovieMedia("not_authorized"), false);
   assert.equal(canDistributeMovieMedia(null), false);
+});
+
+test("only the configured active Telegram channel can ingest new media", () => {
+  assert.equal(isActiveMovieStorageChannel("-1001234567890", "-1001234567890"), true);
+  assert.equal(isActiveMovieStorageChannel("-1001234567890", "-1009999999999"), false);
+  assert.equal(isActiveMovieStorageChannel("-1001234567890", null), false);
+  assert.equal(isActiveMovieStorageChannel("-1001234567890", ""), false);
 });
