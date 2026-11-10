@@ -584,6 +584,18 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
     await sendMessage(env, bot.slug, chatId, "هاد النسخة ما بقاتش متاحة. رجع للتفاصيل واختار نسخة أخرى.");
     return;
   }
+  const { data: activeTitle, error: activeTitleError } = await getSupabase(env)
+    .from("movie_titles")
+    .select("id")
+    .eq("id", asset.title_id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (activeTitleError) throw activeTitleError;
+  if (!activeTitle) {
+    await sendMessage(env, bot.slug, chatId, "هاد العنوان ما بقاش متاح.");
+    return;
+  }
+
   const { data: rightsTitle, error: rightsError } = await getSupabase(env)
     .from("movie_distribution_rights")
     .select("status")
