@@ -54,7 +54,7 @@ test("ignores channel posts without a supported media attachment or matching cap
   }), null);
 });
 
-import { getTelegramMediaDelivery } from "../src/lib/movie-media.js";
+import { getTelegramMediaDelivery, canDistributeMovieMedia } from "../src/lib/movie-media.js";
 
 test("uses Telegram file_id delivery methods for stored media types", () => {
   assert.deepEqual(getTelegramMediaDelivery("video"), { method: "sendVideo", field: "video" });
@@ -91,4 +91,11 @@ test("does not link a media caption when the year differs or the match is ambigu
   assert.equal(findMovieMediaTitle([
     { ...wrongYear, release_year: 2025 }, duplicate
   ], media), null);
+});
+
+test("distribution rights must be explicitly authorized before media delivery", () => {
+  assert.equal(canDistributeMovieMedia("authorized"), true);
+  assert.equal(canDistributeMovieMedia("unverified"), false);
+  assert.equal(canDistributeMovieMedia("not_authorized"), false);
+  assert.equal(canDistributeMovieMedia(null), false);
 });
