@@ -145,7 +145,7 @@ jobs:
         run: |
           set -euo pipefail
           PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
-          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "alter table public.admin_profiles add column display_name text not null default 'Administrator', add column is_active boolean not null default true, add column updated_at timestamptz not null default now();"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "alter table public.admin_profiles add column if not exists display_name text not null default 'Administrator', add column if not exists is_active boolean not null default true, add column if not exists updated_at timestamptz not null default now();"
       - name: Apply administrator audit migration for system settings
         run: |
           set -euo pipefail
