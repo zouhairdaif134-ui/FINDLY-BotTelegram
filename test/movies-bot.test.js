@@ -6,7 +6,7 @@ import {
   isMoviesSearchReply,
   parseMovieStartPayload,
   resolveMovieWatchAction,
-  buildMovieMediaCopyPayload,
+  buildMovieMediaDeliveryRequest,
   isMovieDeepLinkBot
 } from "../src/lib/movies-bot.js";
 import { getTelegramToken } from "../src/lib/telegram.js";
@@ -205,29 +205,50 @@ test("direct-watch flow sends a single available asset and asks quality only for
 });
 
 
-test("builds a Telegram copyMessage request from the private storage channel reference", () => {
-  const payload = buildMovieMediaCopyPayload({
-    storage_chat_id: "-1001234567890",
-    storage_message_id: "321",
-    quality_label: "480p",
-    file_id: "must-not-be-used"
-  }, 987654321);
-  assert.deepEqual(payload, {
-    chat_id: 987654321,
-    from_chat_id: "-1001234567890",
-    message_id: 321,
-    caption: "🎬 FINDLY Movies · 480p"
-  });
-});
-
-test("rejects incomplete Telegram storage references instead of falling back to file_id", () => {
-  assert.equal(buildMovieMediaCopyPayload({ file_id: "legacy-file-id" }, 987654321), null);
-  assert.equal(buildMovieMediaCopyPayload({ storage_chat_id: "-100123", storage_message_id: "0" }, 987654321), null);
-});
-
-
 test("accepts movie detail deep links on the Master bot and legacy Watch bot only", () => {
   assert.equal(isMovieDeepLinkBot({ slug: "findly", bot_type: "master" }), true);
   assert.equal(isMovieDeepLinkBot({ slug: "movies", bot_type: "child" }), true);
   assert.equal(isMovieDeepLinkBot({ slug: "other", bot_type: "child" }), false);
+});
+
+
+test("builds a sendVideo request from the Watch Bot's stored Telegram file_id", () => {
+  assert.deepEqual(buildMovieMediaDeliveryRequest({
+    media_type: "video",
+    file_id: "watch-bot-file-id",
+    quality_label: "1080p"
+  }, 987654321), {
+    method: "sendVideo",
+    payload: {
+      chat_id: 987654321,
+      video: "watch-bot-file-id",
+      caption: "🎬 FINDLY Movies · 1080p"
+    }
+  });
+});
+
+test("does not claim an unverified video is streamable", () => {
+  const request = buildMovieMediaDeliveryRequest({ media_type: "video", file_id: "video-id" }, 123);
+  assert.equal(Object.hasOwn(request.payload, "supports_streaming"), false);
+});
+
+test("builds a sendDocument request for media stored as a Telegram document", () => {
+  assert.deepEqual(buildMovieMediaDeliveryRequest({
+    media_type: "document",
+    file_id: "watch-bot-document-id",
+    quality_label: "Original"
+  }, 987654321), {
+    method: "sendDocument",
+    payload: {
+      chat_id: 987654321,
+      document: "watch-bot-document-id",
+      caption: "🎬 FINDLY Movies · Original"
+    }
+  });
+});
+
+test("rejects media delivery requests without a usable Telegram file_id", () => {
+  assert.equal(buildMovieMediaDeliveryRequest({ media_type: "video", file_id: "" }, 987654321), null);
+  assert.equal(buildMovieMediaDeliveryRequest({ media_type: "unknown", file_id: "file-id" }, 987654321), null);
+  assert.equal(buildMovieMediaDeliveryRequest({ media_type: "video", file_id: "file-id" }, null), null);
 });
