@@ -1702,7 +1702,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
         <header className="header">
           <div>
             <h1>
-              {activeSection}
+              {activeSection === "Settings" ? "Paramètres" : activeSection}
             </h1>
 
             <p>
@@ -2159,7 +2159,7 @@ function getSectionDescription(
     "Activity Log":
       "System activity history",
     Settings:
-      "FINDLY system settings",
+      "إعدادات النظام وإدارة وضع الصيانة للبوتين",
     Telegram:
       "Telegram connection, identity and webhook management",
     "Publishing & Sharing":
