@@ -46,8 +46,15 @@ export function validateSystemSettings(payload = {}) {
     throw new Error("Maintenance message must contain 1 to 500 characters.");
   }
 
-  const masterEnabled = Boolean(payload.master_maintenance_enabled);
-  const watchEnabled = Boolean(payload.watch_maintenance_enabled);
+  const masterEnabled = payload.master_maintenance_enabled === undefined
+    ? false
+    : payload.master_maintenance_enabled;
+  const watchEnabled = payload.watch_maintenance_enabled === undefined
+    ? false
+    : payload.watch_maintenance_enabled;
+  if (typeof masterEnabled !== "boolean" || typeof watchEnabled !== "boolean") {
+    throw new Error("Maintenance switches must be boolean values.");
+  }
   if ((masterEnabled || watchEnabled) && !ownerId) {
     throw new Error("Set the owner's Telegram numeric ID before enabling maintenance.");
   }
