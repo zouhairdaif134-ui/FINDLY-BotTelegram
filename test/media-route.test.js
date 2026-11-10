@@ -163,3 +163,11 @@ test("rejects group chats and invalid channel references", async () => {
     /أدخل معرّف القناة الرقمي/
   );
 });
+
+test("rejects unsupported media status filters before querying storage", async () => {
+  const helpers = makeHelpers(() => ({ userId: "99999999-9999-4999-8999-999999999999" }));
+  const path = "/api/media/assets?status=not-a-status";
+  const response = await handleMediaRoute({}, request(path), url(path), helpers);
+  assert.equal(response.status, 400);
+  assert.deepEqual(helpers.permissions, ["media.manage"]);
+});
