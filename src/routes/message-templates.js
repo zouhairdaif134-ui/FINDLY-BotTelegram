@@ -53,18 +53,27 @@ export function validateMessageTemplate(botSlug, templateKey, value) {
     throw new Error("Template contains malformed placeholder braces.");
   }
   const tags = value.match(/<\/?[a-zA-Z][^>]*>/g) || [];
+  const tagStack = [];
   for (const tag of tags) {
-    const match = tag.match(/^<\/?([a-zA-Z]+)/);
-    if (!match || !ALLOWED_TAGS.has(match[1].toLowerCase())) {
+    const match = tag.match(/^<(\/)?([a-zA-Z]+)/);
+    const tagName = match?.[2]?.toLowerCase();
+    const isClosing = Boolean(match?.[1]);
+    if (!tagName || !ALLOWED_TAGS.has(tagName)) {
       throw new Error("Only supported Telegram HTML formatting tags are allowed.");
     }
-    if (match[1].toLowerCase() === "a" && !/^<a\s+href="https:\/\/[^"]+"\s*>$|^<\/a>$/.test(tag)) {
+    if (tagName === "a" && !/^<a\s+href="https:\/\/[^"]+"\s*>$|^<\/a>$/.test(tag)) {
       throw new Error("Links must use a valid HTTPS href.");
     }
-    if (match[1].toLowerCase() !== "a" && !/^<\/?(?:b|strong|i|em|u|ins|s|strike|del|code|pre)>$/.test(tag)) {
+    if (tagName !== "a" && !/^<\/?(?:b|strong|i|em|u|ins|s|strike|del|code|pre)>$/.test(tag)) {
       throw new Error("Formatting tag attributes are not supported.");
     }
+    if (isClosing) {
+      if (tagStack.pop() !== tagName) throw new Error("Telegram HTML tags must be properly nested and closed.");
+    } else {
+      tagStack.push(tagName);
+    }
   }
+  if (tagStack.length) throw new Error("Telegram HTML tags must be properly nested and closed.");
   return value;
 }
 
