@@ -1,5 +1,6 @@
 import { extractTelegramMedia, findMovieMediaTitle, resolveMovieMediaTitleId, isActiveMovieStorageChannel } from "../lib/movie-media.js";
 import { getMaintenanceDecision } from "./system-settings.js";
+import { getMessageTemplate } from "./message-templates.js";
 import { getSupabase } from "../lib/supabase.js";
 import { buildTelegramUserProfile } from "../lib/telegram-user.js";
 import { claimTelegramAdDelivery, buildTelegramAdPayload, recordTelegramAdDelivery } from "../lib/monetization.js";
@@ -511,12 +512,9 @@ async function sendMasterMenu(
     env,
     bot.slug,
     chatId,
-    "<b>" +
-      (bot.icon || "🤖") +
-      " " +
-      bot.name +
-      "</b>\n\n" +
-      "اختار الخدمة اللي بغيتي:",
+    await getMessageTemplate(env, "findly", "start", {
+      bot_name: `${bot.icon || "🤖"} ${bot.name}`
+    }) || ("<b>" + bot.icon + " " + bot.name + "</b>\\n\\nاختار الخدمة اللي بغيتي:"),
     {
       reply_markup: {
         inline_keyboard: keyboard
@@ -859,9 +857,9 @@ async function handleMenuCallback(
       env,
       bot.slug,
       chatId,
-      "<b>ℹ️ المساعدة</b>\n\n" +
-        "استعمل /start باش ترجع للقائمة الرئيسية، " +
-        "واختار الخدمة اللي بغيتي من الأزرار."
+      await getMessageTemplate(env, bot.slug, "help", {
+        bot_name: bot.name
+      }) || "<b>ℹ️ المساعدة</b>\\n\\nاستعمل /start للعودة إلى القائمة الرئيسية."
     );
 
     return;
