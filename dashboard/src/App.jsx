@@ -8,6 +8,7 @@ import MonetizationSection from "./MonetizationSection.jsx";
 import AISection from "./AISection.jsx";
 import MovieQueueSection from "./MovieQueueSection.jsx";
 import MediaReviewSection from "./MediaReviewSection.jsx";
+import SettingsSection from "./SettingsSection.jsx";
 import { buildMovieShareContent, getMovieShareBotUsername } from "../../src/lib/movie-sharing.js";
 import { filterAndSortMovies, paginateMovies, getMovieGenreNames } from "./movie-library.js";
 
@@ -41,7 +42,7 @@ const menuGroups = [
   { icon: "💰", label: "Monetization", items: ["Monetization"] },
   { icon: "✨", label: "AI", items: ["AI"] },
   { icon: "📝", label: "Activity Log", items: ["Activity Log"] },
-  { icon: "⚙️", label: "Settings", items: ["Settings"] },
+  { icon: "⚙️", label: "Paramètres", items: ["Settings"] },
   { icon: "📣", label: "Publishing & Sharing", items: ["Publishing & Sharing"] }
 ];
 
@@ -1701,7 +1702,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
         <header className="header">
           <div>
             <h1>
-              {activeSection}
+              {activeSection === "Settings" ? "Paramètres" : activeSection}
             </h1>
 
             <p>
@@ -1990,7 +1991,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
         )}
 
         {activeSection === "Settings" && (
-          <ComingSoonSection section={activeSection} />
+          <SettingsSection fetchApi={fetchApi} />
         )}
       </main>
 
@@ -2158,7 +2159,7 @@ function getSectionDescription(
     "Activity Log":
       "System activity history",
     Settings:
-      "FINDLY system settings",
+      "إعدادات النظام وإدارة وضع الصيانة للبوتين",
     Telegram:
       "Telegram connection, identity and webhook management",
     "Publishing & Sharing":

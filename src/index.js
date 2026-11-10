@@ -61,6 +61,7 @@ import {
   updateSetting,
   deleteSetting
 } from "./routes/settings.js";
+import { getSystemSettings, updateSystemSettings } from "./routes/system-settings.js";
 import { getAIAdminConfig, saveAIAdminConfig } from "./routes/ai.js";
 
 import {
@@ -1884,6 +1885,18 @@ export default {
             await getMovieReferralAnalytics(env)
           )
         , request);
+      }
+
+      if (url.pathname === "/api/system-settings" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.settings);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await getSystemSettings(env)), request);
+      }
+
+      if (url.pathname === "/api/system-settings" && request.method === "PUT") {
+        const auth = await requirePermission(env, request, PERMISSIONS.settings);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await updateSystemSettings(env, await readJson(request), auth)), request);
       }
 
       if (

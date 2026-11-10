@@ -1,4 +1,5 @@
 import { extractTelegramMedia, findMovieMediaTitle, resolveMovieMediaTitleId, isActiveMovieStorageChannel } from "../lib/movie-media.js";
+import { getMaintenanceDecision } from "./system-settings.js";
 import { getSupabase } from "../lib/supabase.js";
 import { buildTelegramUserProfile } from "../lib/telegram-user.js";
 import { claimTelegramAdDelivery, buildTelegramAdPayload, recordTelegramAdDelivery } from "../lib/monetization.js";
@@ -1058,6 +1059,24 @@ export async function handleTelegramUpdate(
       env,
       botSlug
     );
+
+  const maintenance = await getMaintenanceDecision(env, botSlug, update);
+  if (maintenance.maintenance && !maintenance.allow) {
+    if (update?.callback_query?.id) {
+      await answerCallback(env, bot.slug, update.callback_query.id, String(maintenance.message).slice(0, 200));
+    }
+    const chatId = update?.message?.chat?.id
+      ?? update?.callback_query?.message?.chat?.id
+      ?? update?.edited_message?.chat?.id;
+    if (chatId != null) {
+      const safeMessage = String(maintenance.message)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+      await sendMessage(env, bot.slug, chatId, safeMessage);
+    }
+    return { ok: true, maintenance: true };
+  }
 
   const claim =
     await claimTelegramUpdate(
