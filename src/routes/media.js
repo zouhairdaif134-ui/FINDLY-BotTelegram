@@ -1,6 +1,7 @@
 import { getSupabase } from "../lib/supabase.js";
 import { telegramRequest } from "../lib/telegram.js";
 import { recordAdminEvent, recordAdminFailure } from "../lib/admin-audit.js";
+import { isAllowedMovieMediaStatusTransition } from "../lib/movie-media.js";
 
 const PERMISSION = "media.manage";
 const ASSET_STATUSES = new Set(["pending_review", "active", "inactive", "rejected"]);
@@ -184,13 +185,7 @@ async function updateAssetStatus(env, assetId, nextStatus) {
   if (lookupError) throw lookupError;
   if (!current) throw makeError("الوسيط غير موجود.", 404, "NOT_FOUND");
 
-  const allowedTransitions = {
-    pending_review: ["active", "rejected"],
-    active: ["inactive"],
-    inactive: [],
-    rejected: []
-  };
-  if (!allowedTransitions[current.status]?.includes(nextStatus)) {
+  if (!isAllowedMovieMediaStatusTransition(current.status, nextStatus)) {
     throw makeError("لا يمكن تنفيذ هذا التغيير انطلاقاً من الحالة الحالية.", 409, "INVALID_MEDIA_TRANSITION");
   }
 
