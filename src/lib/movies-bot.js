@@ -12,19 +12,6 @@ export function resolveMovieWatchAction(assets) {
   return { action: "choose_quality", asset: null };
 }
 
-export function buildMovieMediaCopyPayload(asset, chatId) {
-  const messageId = Number(asset?.storage_message_id);
-  if (!chatId || !asset?.storage_chat_id || !Number.isSafeInteger(messageId) || messageId <= 0) {
-    return null;
-  }
-  return {
-    chat_id: chatId,
-    from_chat_id: String(asset.storage_chat_id),
-    message_id: messageId,
-    caption: "🎬 FINDLY Movies · " + String(asset.quality_label || "Original").slice(0, 24)
-  };
-}
-
 export function buildMovieMediaDeliveryRequest(asset, chatId) {
   const deliveries = {
     video: { method: "sendVideo", field: "video" },
@@ -644,8 +631,6 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
   } catch (error) {
     console.error("FINDLY_MOVIE_MEDIA_DELIVERY_FAILED", {
       assetId,
-      storageChatId: asset.storage_chat_id,
-      storageMessageId: asset.storage_message_id,
       deliveryMethod: delivery.method,
       code: error?.code || null,
       status: error?.status || null
