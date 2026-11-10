@@ -391,11 +391,15 @@ export default function SettingsSection({ fetchApi }) {
             <div className="settings-admin__integration-list">
               <div className="settings-admin__integration-row">
                 <span>محاولات تسجيل الدخول الفاشلة<small>{securityAlerts.login_failure_monitoring?.message}</small></span>
-                <strong className="settings-admin__status">غير مفعّل</strong>
+                <strong className="settings-admin__status">{securityAlerts.login_failure_monitoring?.status === "external_only" ? "سجلات خارجية" : "غير متاح"}</strong>
               </div>
               <div className="settings-admin__integration-row">
-                <span>ارتفاع أخطاء Worker<small>{securityAlerts.worker_error_spike_monitoring?.message}</small></span>
-                <strong className="settings-admin__status">غير متاح</strong>
+                <span>أخطاء Worker API (5xx)<small>{securityAlerts.worker_error_spike_monitoring?.message}</small></span>
+                <strong className={"settings-admin__status settings-admin__status--" + (securityAlerts.worker_error_spike_monitoring?.level || "unknown")}>
+                  {securityAlerts.worker_error_spike_monitoring?.status === "monitoring"
+                    ? "آخر ساعة: " + securityAlerts.worker_error_spike_monitoring.count
+                    : "غير متاح"}
+                </strong>
               </div>
             </div>
             <small className="settings-admin__timestamp">لا يتم إيقاف أي بوت تلقائياً بناءً على هذه المؤشرات.</small>

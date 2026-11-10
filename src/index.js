@@ -65,6 +65,7 @@ import { getSystemSettings, updateSystemSettings } from "./routes/system-setting
 import { getMessageTemplates, saveMessageTemplate } from "./routes/message-templates.js";
 import { getIntegrationStatuses } from "./routes/integrations.js";
 import { getSecurityAlerts } from "./routes/security-alerts.js";
+import { recordWorkerError } from "./lib/worker-error-log.js";
 import { getAIAdminConfig, saveAIAdminConfig } from "./routes/ai.js";
 
 import {
@@ -2133,6 +2134,15 @@ export default {
       }
 
       if (error?.code === "TELEGRAM_API_ERROR") {
+        if (typeof ctx?.waitUntil === "function") {
+          ctx.waitUntil(recordWorkerError(env, {
+            path: url?.pathname,
+            method: request?.method,
+            status: 502,
+            code: error?.code,
+            type: error?.name
+          }));
+        }
         return withCors(
           failure(
             "TELEGRAM_API_ERROR",
@@ -2217,6 +2227,16 @@ export default {
             error.status
           )
         , request);
+      }
+
+      if (typeof ctx?.waitUntil === "function") {
+        ctx.waitUntil(recordWorkerError(env, {
+          path: url?.pathname,
+          method: request?.method,
+          status: 500,
+          code: error?.code,
+          type: error?.name
+        }));
       }
 
       return withCors(

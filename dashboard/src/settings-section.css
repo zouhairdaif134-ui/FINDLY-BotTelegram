@@ -6,3 +6,5 @@
 .settings-admin__button-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.settings-admin__button-option{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #e7ebf0;border-radius:9px;font-size:13px}.settings-admin__button-option input{width:18px;height:18px;accent-color:#2563eb}@media(max-width:760px){.settings-admin__button-options{grid-template-columns:1fr}}
 
 .settings-admin__security-alert{display:grid;gap:6px;padding:14px;border-radius:10px;background:#f2f7f4;color:#14532d;font-size:13px}.settings-admin__security-alert--notice{background:#fff8e8;color:#854d0e}.settings-admin__security-alert--warning{background:#fff0f0;color:#991b1b}.settings-admin__security-alert small{font-size:11px;opacity:.8}
+
+.settings-admin__status--clear{background:#e8f7ef;color:#137547}.settings-admin__status--notice{background:#fff4df;color:#975a00}.settings-admin__status--warning{background:#fff0f0;color:#b42318}
