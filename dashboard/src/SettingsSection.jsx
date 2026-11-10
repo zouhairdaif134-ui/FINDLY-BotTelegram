@@ -40,11 +40,10 @@ export default function SettingsSection({ fetchApi }) {
 
   async function save(event) {
     event.preventDefault();
-    const enablingMaintenance =
-      (!settings.master_maintenance_enabled && event.currentTarget.elements.master_maintenance_enabled.checked) ||
-      (!settings.watch_maintenance_enabled && event.currentTarget.elements.watch_maintenance_enabled.checked);
+    const maintenanceWillBeEnabled =
+      Boolean(settings.master_maintenance_enabled || settings.watch_maintenance_enabled);
 
-    if (enablingMaintenance && !window.confirm("تأكيد تفعيل وضع الصيانة؟ سيُمنع المستخدمون العاديون من استعمال البوت المحدد.")) {
+    if (maintenanceWillBeEnabled && !window.confirm("تأكيد حفظ إعدادات الصيانة؟ سيُمنع المستخدمون العاديون من استعمال البوتات المفعّلة للصيانة.")) {
       return;
     }
 
