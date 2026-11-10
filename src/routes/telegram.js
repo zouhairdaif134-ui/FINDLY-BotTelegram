@@ -1339,7 +1339,7 @@ async function processTelegramUpdate(
     recordId
   });
 
-  const channelPost = update.channel_post;
+  const channelPost = update.channel_post || update.edited_channel_post;
   if (bot.slug === "movies" && channelPost) {
     const media = extractTelegramMedia(channelPost);
     if (!media) return { ok: true, media_ignored: true };

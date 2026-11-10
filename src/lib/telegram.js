@@ -236,7 +236,8 @@ export async function setWebhook(
       allowed_updates: [
         "message",
         "callback_query",
-        "channel_post"
+        "channel_post",
+        "edited_channel_post"
       ]
     }
   );
