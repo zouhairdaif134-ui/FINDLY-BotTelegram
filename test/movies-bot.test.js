@@ -244,7 +244,8 @@ test("builds a sendVideo request from the Watch Bot's stored Telegram file_id", 
     payload: {
       chat_id: 987654321,
       video: "watch-bot-file-id",
-      caption: "🎬 FINDLY Movies · 1080p"
+      caption: "🎬 FINDLY Movies · 1080p",
+      supports_streaming: true
     }
   });
 });
