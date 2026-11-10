@@ -1,7 +1,7 @@
 import { getSupabase } from "../lib/supabase.js";
 import { telegramRequest } from "../lib/telegram.js";
 import { recordAdminEvent, recordAdminFailure } from "../lib/admin-audit.js";
-import { isAllowedMovieMediaStatusTransition } from "../lib/movie-media.js";
+import { isAllowedMovieMediaStatusTransition, canApproveMovieMediaAsset } from "../lib/movie-media.js";
 
 const PERMISSION = "media.manage";
 const ASSET_STATUSES = new Set(["pending_review", "active", "inactive", "rejected"]);
@@ -205,11 +205,19 @@ async function updateAssetStatus(env, assetId, nextStatus) {
   const supabase = getSupabase(env);
   const { data: current, error: lookupError } = await supabase
     .from("movie_media_assets")
-    .select("id,title_id,status")
+    .select("id,title_id,status,media_type,mime_type")
     .eq("id", assetId)
     .maybeSingle();
   if (lookupError) throw lookupError;
   if (!current) throw makeError("الوسيط غير موجود.", 404, "NOT_FOUND");
+
+  if (nextStatus === "active" && !canApproveMovieMediaAsset(current)) {
+    throw makeError(
+      "هذا الملف وصل إلى Telegram كملف Document وليس كفيديو قابل للتشغيل داخل Telegram. أعد رفعه من المعرض كفيديو عادي، وليس كملف، ثم راجع النسخة الجديدة.",
+      409,
+      "MOVIE_MEDIA_MUST_BE_TELEGRAM_VIDEO"
+    );
+  }
 
   if (!isAllowedMovieMediaStatusTransition(current.status, nextStatus)) {
     throw makeError("لا يمكن تنفيذ هذا التغيير انطلاقاً من الحالة الحالية.", 409, "INVALID_MEDIA_TRANSITION");
