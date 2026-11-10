@@ -37,3 +37,16 @@ test("adds Telegram-declared video dimensions and duration without claiming code
   assert.match(videoMetadataMigration, /codec compatibility remains unknown/i);
   assert.doesNotMatch(videoMetadataMigration, /file_id\s*=|status\s*=\s*'authorized'/i);
 });
+
+
+const mediaTitleProtectionMigration = readFileSync(
+  new URL("../supabase/migrations/20261110211000_protect_movie_media_from_title_deletion.sql", import.meta.url),
+  "utf8"
+);
+
+test("prevents deleting catalog titles from cascading into Telegram media references", () => {
+  assert.match(mediaTitleProtectionMigration, /drop constraint if exists movie_media_assets_title_id_fkey/i);
+  assert.match(mediaTitleProtectionMigration, /foreign key \(title_id\)/i);
+  assert.match(mediaTitleProtectionMigration, /references public\.movie_titles\(id\)\s+on delete restrict/i);
+  assert.doesNotMatch(mediaTitleProtectionMigration, /on delete cascade/i);
+});
