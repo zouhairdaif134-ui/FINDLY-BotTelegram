@@ -174,7 +174,7 @@ async function listAssets(env, status) {
   }
   let query = getSupabase(env)
     .from("movie_media_assets")
-    .select("id,title_id,storage_message_id,media_type,file_size,file_name,mime_type,quality_label,status,created_at,movie_titles(title,release_year,media_type)")
+    .select("id,title_id,storage_message_id,media_type,file_size,file_name,mime_type,video_width,video_height,duration_seconds,quality_label,status,created_at,movie_titles(title,release_year,media_type)")
     .order("created_at", { ascending: false })
     .limit(100);
   if (status && status !== "all") query = query.eq("status", status);
