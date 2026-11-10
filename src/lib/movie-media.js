@@ -86,3 +86,7 @@ export function getTelegramMediaDelivery(mediaType) {
 export function canDistributeMovieMedia(rightsStatus) {
   return rightsStatus === "authorized";
 }
+
+export function isActiveMovieStorageChannel(messageChatId, activeStorageChatId) {
+  return Boolean(activeStorageChatId) && String(messageChatId) === String(activeStorageChatId);
+}
