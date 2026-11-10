@@ -26,7 +26,6 @@ export function buildMovieMediaDeliveryRequest(asset, chatId) {
     [delivery.field]: fileId,
     caption: "🎬 FINDLY Movies · " + String(asset?.quality_label || "Original").slice(0, 24)
   };
-  if (asset.media_type === "video") payload.supports_streaming = true;
   return { method: delivery.method, payload };
 }
 export const MOVIE_PAGE_SIZE = 10;
@@ -590,7 +589,7 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
   }
   const { data: asset, error } = await getSupabase(env)
     .from("movie_media_assets")
-    .select("title_id,media_type,file_id,quality_label")
+    .select("title_id,media_type,file_id,file_size,mime_type,quality_label")
     .eq("id", assetId)
     .eq("status", "active")
     .maybeSingle();
@@ -632,6 +631,9 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
     console.error("FINDLY_MOVIE_MEDIA_DELIVERY_FAILED", {
       assetId,
       deliveryMethod: delivery.method,
+      mediaType: asset.media_type || null,
+      mimeType: asset.mime_type || null,
+      fileSize: Number.isSafeInteger(asset.file_size) ? asset.file_size : null,
       code: error?.code || null,
       status: error?.status || null
     });
