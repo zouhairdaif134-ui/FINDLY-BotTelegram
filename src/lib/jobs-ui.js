@@ -265,7 +265,6 @@ export async function handleJobsCallback(env, bot, chatId, callbackQuery) {
     return;
   }
   if (data.startsWith("jobs:city:")) {
-    await answerCallback(env, bot.slug, callbackQuery.id);
     const cityIndexValue = Number(data.slice("jobs:city:".length));
     const cities = await loadCities(env);
     const city =
@@ -276,7 +275,6 @@ export async function handleJobsCallback(env, bot, chatId, callbackQuery) {
     return;
   }
   if (data.startsWith("jobs:page:")) {
-    await answerCallback(env, bot.slug, callbackQuery.id);
     const parts = data.split(":");
     const page = Number(parts[2]);
     const cityIndexValue = parts[3] === "" ? -1 : Number(parts[3]);
@@ -296,7 +294,6 @@ export async function handleJobsCallback(env, bot, chatId, callbackQuery) {
     return;
   }
   if (data.startsWith("jobs:detail:")) {
-    await answerCallback(env, bot.slug, callbackQuery.id);
     const parts = data.split(":");
     const jobId = parts[2];
     const page = Number(parts[3]) || 0;
