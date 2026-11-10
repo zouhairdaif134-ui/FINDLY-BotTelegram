@@ -51,7 +51,7 @@ test("maintenance allows the configured owner by numeric ID and denies another u
   };
   const env = mockEnv(settings);
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(JSON.stringify({ data: settings, error: null }), {
+  globalThis.fetch = async () => new Response(JSON.stringify([settings]), {
     status: 200,
     headers: { "Content-Type": "application/json" }
   });
