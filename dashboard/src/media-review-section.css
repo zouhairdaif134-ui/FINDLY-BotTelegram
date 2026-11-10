@@ -1,0 +1,40 @@
+.media-review-panel{display:flex;flex-direction:column;gap:22px}
+.media-review-header,.media-storage-heading,.media-assets-toolbar,.media-asset-topline{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.media-review-eyebrow{display:block;color:var(--muted,#7b8493);font-size:11px;font-weight:800;letter-spacing:.12em;margin-bottom:6px}
+.media-review-header h2{margin:0 0 7px;font-size:24px}
+.media-review-header p,.media-storage-heading p,.media-assets-toolbar p{margin:0;color:var(--muted,#7b8493);line-height:1.7}
+.media-storage-card,.media-asset-card{background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:16px;padding:18px}
+.media-storage-heading h3,.media-assets-toolbar h3{margin:0 0 6px;font-size:18px}
+.media-storage-state{white-space:nowrap;border-radius:999px;padding:6px 10px;background:#eef7f0;color:#267342;font-size:12px;font-weight:700}
+.media-current-channel{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0;padding:14px;border-radius:12px;background:var(--surface-muted,#f7f8fa)}
+.media-current-channel div,.media-asset-details div,.media-rights-row>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.media-current-channel small,.media-asset-details small,.media-rights-row small{color:var(--muted,#7b8493);font-size:12px}
+.media-current-channel strong,.media-asset-details strong,.media-rights-row strong{overflow-wrap:anywhere;font-size:13px}
+.media-channel-form{display:flex;align-items:flex-end;gap:12px}
+.media-channel-form label{display:flex;flex:1;flex-direction:column;gap:7px;min-width:0}
+.media-channel-form label span,.media-filter span{font-size:13px;font-weight:700}
+.media-channel-form input,.media-filter select{width:100%;min-height:42px;padding:9px 12px;border:1px solid var(--border,#d8dde5);border-radius:10px;background:var(--surface,#fff);color:inherit}
+.media-channel-actions{display:flex;gap:8px;flex-wrap:wrap}
+.media-channel-verified{display:flex;flex-direction:column;gap:5px;margin-top:14px;padding:12px;border:1px solid #b7dfc4;background:#f1faf4;border-radius:10px;color:#236b3b}
+.media-channel-verified span{font-size:12px}
+.media-storage-note{margin:14px 0 0;color:var(--muted,#7b8493);font-size:12px;line-height:1.7}
+.media-assets-section{display:flex;flex-direction:column;gap:14px}
+.media-filter{display:flex;align-items:center;gap:8px}
+.media-filter select{min-width:150px}
+.media-assets-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.media-asset-card{display:flex;flex-direction:column;gap:15px}
+.media-asset-topline h4{margin:0 0 5px;font-size:17px}
+.media-asset-topline p{margin:0;color:var(--muted,#7b8493);font-size:12px}
+.media-asset-status{white-space:nowrap;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700;background:#f2f3f5;color:#4b5563}
+.media-asset-status.status-pending_review{background:#fff5df;color:#8a5a00}
+.media-asset-status.status-active{background:#eaf7ee;color:#23723d}
+.media-asset-status.status-rejected{background:#fff0f0;color:#a33131}
+.media-asset-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:13px;border-radius:12px;background:var(--surface-muted,#f7f8fa)}
+.media-rights-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:12px;border-top:1px solid var(--border,#e5e7eb)}
+.media-rights-row .rights-authorized{color:#23723d}
+.media-rights-row .rights-not_authorized{color:#a33131}
+.media-rights-row .rights-unverified{color:#8a5a00}
+.media-asset-actions{display:flex;gap:8px;flex-wrap:wrap}
+.danger-button{border:1px solid #e4b7b7;background:#fff5f5;color:#9f2e2e;border-radius:9px;padding:9px 13px;font-weight:700;cursor:pointer}
+.media-empty-state{padding:30px 16px;border:1px dashed var(--border,#d8dde5);border-radius:14px;text-align:center;color:var(--muted,#7b8493)}
+@media(max-width:760px){.media-assets-list{grid-template-columns:1fr}.media-channel-form{align-items:stretch;flex-direction:column}.media-channel-actions{width:100%}.media-channel-actions button{flex:1}.media-review-header,.media-storage-heading,.media-assets-toolbar{flex-direction:column}.media-current-channel{grid-template-columns:1fr}.media-filter{width:100%;justify-content:space-between}.media-filter select{flex:1;min-width:0}}
