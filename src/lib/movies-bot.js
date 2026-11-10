@@ -475,7 +475,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   const supabase = getSupabase(env);
   const { data: title, error } = await supabase
     .from("movie_titles")
-    .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,full_plot_summary,poster_path,metadata_status,distribution_rights_status")
+    .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,full_plot_summary,poster_path,metadata_status")
     .eq("id", titleId)
     .eq("status", "active")
     .maybeSingle();
@@ -485,6 +485,14 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     await sendMessage(env, bot.slug, chatId, "هاد العنوان ما بقاش متاح.");
     return;
   }
+
+  const { data: titleRights, error: titleRightsError } = await supabase
+    .from("movie_distribution_rights")
+    .select("status")
+    .eq("title_id", title.id)
+    .maybeSingle();
+  if (titleRightsError) throw titleRightsError;
+  title.distribution_rights_status = titleRights?.status || "unverified";
 
   const { data: genreLinks, error: genreError } = await supabase
     .from("movie_title_genres")
@@ -577,13 +585,12 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
     return;
   }
   const { data: rightsTitle, error: rightsError } = await getSupabase(env)
-    .from("movie_titles")
-    .select("distribution_rights_status")
-    .eq("id", asset.title_id)
-    .eq("status", "active")
+    .from("movie_distribution_rights")
+    .select("status")
+    .eq("title_id", asset.title_id)
     .maybeSingle();
   if (rightsError) throw rightsError;
-  if (!canDistributeMovieMedia(rightsTitle?.distribution_rights_status)) {
+  if (!canDistributeMovieMedia(rightsTitle?.status)) {
     await sendMessage(env, bot.slug, chatId, "المشاهدة غير متاحة حالياً.");
     return;
   }
@@ -617,7 +624,7 @@ async function sendMovieTitleMedia(env, bot, chatId, titleId) {
   const supabase = getSupabase(env);
   const { data: title, error: titleError } = await supabase
     .from("movie_titles")
-    .select("id,distribution_rights_status")
+    .select("id")
     .eq("id", titleId)
     .eq("status", "active")
     .maybeSingle();
@@ -626,7 +633,13 @@ async function sendMovieTitleMedia(env, bot, chatId, titleId) {
     await sendMessage(env, bot.slug, chatId, "هاد العنوان ما بقاش متاح.");
     return;
   }
-  if (!canDistributeMovieMedia(title.distribution_rights_status)) {
+  const { data: titleRights, error: titleRightsError } = await supabase
+    .from("movie_distribution_rights")
+    .select("status")
+    .eq("title_id", title.id)
+    .maybeSingle();
+  if (titleRightsError) throw titleRightsError;
+  if (!canDistributeMovieMedia(titleRights?.status)) {
     await sendMessage(env, bot.slug, chatId, "المشاهدة غير متاحة حالياً.");
     return;
   }
