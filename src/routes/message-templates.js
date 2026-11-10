@@ -137,16 +137,20 @@ export async function getMessageTemplates(env) {
   });
 }
 
+export function validateMessageButtons(botSlug, selected) {
+  const allowed = new Set((MESSAGE_BUTTON_ACTIONS[botSlug] || []).map((item) => item.id));
+  if (!Array.isArray(selected) || selected.length > 8 || selected.some((item) => typeof item !== "string" || !allowed.has(item)) || new Set(selected).size !== selected.length) {
+    throw new Error("Buttons must use unique predefined actions for the selected bot.");
+  }
+  return selected;
+}
+
 export async function saveMessageTemplate(env, payload, actor) {
   const botSlug = String(payload?.bot_slug || "");
   const templateKey = String(payload?.template_key || "");
   const definition = MESSAGE_TEMPLATE_DEFINITIONS[botSlug];
   if (templateKey === "buttons") {
-    const allowed = new Set((MESSAGE_BUTTON_ACTIONS[botSlug] || []).map((item) => item.id));
-    const selected = payload?.value;
-    if (!Array.isArray(selected) || selected.length > 8 || selected.some((item) => typeof item !== "string" || !allowed.has(item)) || new Set(selected).size !== selected.length) {
-      throw new Error("Buttons must use unique predefined actions for the selected bot.");
-    }
+    const selected = validateMessageButtons(botSlug, payload?.value);
     const { data: bot, error: botError } = await getSupabase(env).from("bots").select("id").eq("slug",botSlug).maybeSingle();
     if (botError) throw botError;
     if (!bot) throw new Error("Bot configuration was not found.");
