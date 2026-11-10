@@ -31,6 +31,10 @@ export async function getIntegrationStatuses(env) {
       results.tmdb = { ...statusOf(false, "TMDB API key is not configured"), checked_at: checkedAt };
       return;
     }
+    if (env.TMDB_NONCOMMERCIAL_DEVELOPMENT !== "true" && env.TMDB_COMMERCIAL_LICENSE_APPROVED !== "true") {
+      results.tmdb = { status: "disabled", label: "TMDB access is disabled by the current licensing gate", checked_at: checkedAt };
+      return;
+    }
     try {
       const response = await fetch("https://api.themoviedb.org/3/configuration", {
         headers: { Authorization: "Bearer " + env.TMDB_API_KEY, Accept: "application/json" },
