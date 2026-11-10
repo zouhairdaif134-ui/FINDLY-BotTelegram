@@ -1,7 +1,7 @@
 import { getSupabase } from "./supabase.js";
 import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
 import { canDistributeMovieMedia } from "./movie-media.js";
-import { getMessageTemplate } from "../routes/message-templates.js";
+import { getMessageTemplate, getMessageButtons } from "../routes/message-templates.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -223,6 +223,13 @@ export async function showMoviesHome(env, bot, chatId) {
   ];
 
   if (bot.slug !== "findly") {
+    const configuredButtons = await getMessageButtons(env, "movies");
+    if (configuredButtons.length) {
+      keyboard.splice(0, keyboard.length, ...configuredButtons.map((item) => [{
+        text: item.label,
+        callback_data: "movies:" + item.id + (["library","added","top","favorites"].includes(item.id) ? ":0" : "")
+      }]));
+    }
     const master = await getMasterBot(env);
     const username = master?.telegram_username?.replace(/^@/, "");
     if (username) keyboard.push([{ text: "🏠 FINDLY الرئيسي", url: "https://t.me/" + username }]);
