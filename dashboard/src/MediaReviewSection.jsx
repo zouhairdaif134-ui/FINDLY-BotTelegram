@@ -46,8 +46,9 @@ export default function MediaReviewSection({ fetchApi }) {
     try {
       setChannelLoading(true);
       const result = await fetchApi("/api/media/storage-channel");
-      setStorageChannel(result || null);
-      setChannelInput(result?.active_storage_chat_id || "");
+      const config = result && !Array.isArray(result) ? result : null;
+      setStorageChannel(config);
+      setChannelInput(config?.active_storage_chat_id || "");
       setTestedChannel(null);
     } catch (e) {
       setError(e.message || "تعذر تحميل إعدادات قناة التخزين.");
@@ -291,7 +292,7 @@ export default function MediaReviewSection({ fetchApi }) {
                     <strong className={"rights-" + rightsStatus}>{RIGHTS_LABELS[rightsStatus] || rightsStatus}</strong>
                   </div>
                   {rightsStatus === "authorized"
-                    ? <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "not_authorized")}>إلغاء اعتماد الحقوق</button>
+                    ? <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "not_authorized")}>تسجيل عدم التصريح بالتوزيع</button>
                     : <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "authorized")}>تأكيد حقوق التوزيع</button>}
                 </div>
 
