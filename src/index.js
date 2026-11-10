@@ -62,6 +62,7 @@ import {
   deleteSetting
 } from "./routes/settings.js";
 import { getSystemSettings, updateSystemSettings } from "./routes/system-settings.js";
+import { getMessageTemplates, saveMessageTemplate } from "./routes/message-templates.js";
 import { getAIAdminConfig, saveAIAdminConfig } from "./routes/ai.js";
 
 import {
@@ -1897,6 +1898,18 @@ export default {
         const auth = await requirePermission(env, request, PERMISSIONS.settings);
         if (auth.response) return withCors(auth.response, request);
         return withCors(success(await updateSystemSettings(env, await readJson(request), auth)), request);
+      }
+
+      if (url.pathname === "/api/message-templates" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.settings);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await getMessageTemplates(env)), request);
+      }
+
+      if (url.pathname === "/api/message-templates" && request.method === "PUT") {
+        const auth = await requirePermission(env, request, PERMISSIONS.settings);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await saveMessageTemplate(env, await readJson(request), auth)), request);
       }
 
       if (
