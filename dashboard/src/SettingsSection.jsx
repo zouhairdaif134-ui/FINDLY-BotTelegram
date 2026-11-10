@@ -25,6 +25,9 @@ export default function SettingsSection({ fetchApi }) {
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateError, setTemplateError] = useState("");
   const [templateNotice, setTemplateNotice] = useState("");
+  const [integrations, setIntegrations] = useState(null);
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
+  const [integrationsError, setIntegrationsError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -55,6 +58,29 @@ export default function SettingsSection({ fetchApi }) {
   }
 
   useEffect(() => { loadTemplates(); }, []);
+  async function loadIntegrations() {
+    setIntegrationsLoading(true);
+    setIntegrationsError("");
+    try {
+      const result = await fetchApi("/api/integrations/status");
+      setIntegrations(result || null);
+    } catch (err) {
+      setIntegrationsError(err?.message || "تعذر فحص التكاملات.");
+    } finally {
+      setIntegrationsLoading(false);
+    }
+  }
+
+  useEffect(() => { loadIntegrations(); }, []);
+
+  const integrationLabels = [
+    ["worker", "Cloudflare Worker"],
+    ["supabase", "Supabase Database"],
+    ["tmdb", "TMDB"],
+    ["telegram_master", "Telegram · Master Bot"],
+    ["telegram_watch", "Telegram · Watch Bot"]
+  ];
+
 
   const activeTemplate = messageTemplates.find((item) => item.bot_slug === selectedBot)?.templates?.[selectedTemplate];
 
@@ -251,6 +277,28 @@ export default function SettingsSection({ fetchApi }) {
             </div>
           </form>
         )}
+      </section>
+
+      <section className="settings-admin__card">
+        <div className="settings-admin__card-heading">
+          <div><h3>حالة التكاملات والخدمات</h3><p>فحص مباشر من الخادم، دون عرض مفاتيح API أو بيانات سرية.</p></div>
+          <button type="button" className="settings-admin__refresh" onClick={loadIntegrations} disabled={integrationsLoading}>{integrationsLoading ? "جارٍ الفحص…" : "فحص الآن"}</button>
+        </div>
+        {integrationsError && <div className="settings-admin__alert settings-admin__alert--error" role="alert">{integrationsError}</div>}
+        <div className="settings-admin__integration-list">
+          {integrationLabels.map(([key, label]) => {
+            const item = integrations?.[key];
+            const status = item?.status || "unknown";
+            const statusLabel = status === "healthy" || status === "connected" ? "متصل" : status === "disabled" ? "معطّل حسب السياسة" : status === "error" ? "خطأ" : "غير معروف";
+            return (
+              <div className="settings-admin__integration-row" key={key}>
+                <span>{label}<small>{item?.label || "لم يتم الفحص بعد"}</small></span>
+                <strong className={"settings-admin__status settings-admin__status--" + status}>{statusLabel}</strong>
+              </div>
+            );
+          })}
+        </div>
+        {integrations?.checked_at && <small className="settings-admin__timestamp">آخر فحص: {new Date(integrations.checked_at).toLocaleString("ar-MA", { timeZone: "Africa/Casablanca" })} · التوقيت المحلي للمغرب</small>}
       </section>
     </section>
   );
