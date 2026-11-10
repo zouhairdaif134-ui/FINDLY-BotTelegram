@@ -23,3 +23,17 @@ test("keeps video bytes out of the database and stores Telegram file references 
   assert.match(migration, /comment on table public\.movie_media_assets/i);
   assert.doesNotMatch(migration, /bytea|large object/i);
 });
+
+
+const videoMetadataMigration = readFileSync(
+  new URL("../supabase/migrations/20261110191000_movie_media_video_metadata.sql", import.meta.url),
+  "utf8"
+);
+
+test("adds Telegram-declared video dimensions and duration without claiming codec compatibility", () => {
+  assert.match(videoMetadataMigration, /add column if not exists video_width integer/i);
+  assert.match(videoMetadataMigration, /add column if not exists video_height integer/i);
+  assert.match(videoMetadataMigration, /add column if not exists duration_seconds integer/i);
+  assert.match(videoMetadataMigration, /codec compatibility remains unknown/i);
+  assert.doesNotMatch(videoMetadataMigration, /file_id\s*=|status\s*=\s*'authorized'/i);
+});

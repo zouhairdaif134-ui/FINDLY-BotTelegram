@@ -22,6 +22,15 @@ function formatFileSize(value) {
   return Math.round(bytes / 1024) + " KB";
 }
 
+function formatDuration(value) {
+  const seconds = Number(value);
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) return "غير متوفر";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  return [hours, minutes, remainder].map((part) => String(part).padStart(2, "0")).join(":");
+}
+
 function formatDate(value) {
   if (!value) return "—";
   const date = new Date(value);
@@ -283,10 +292,13 @@ export default function MediaReviewSection({ fetchApi }) {
                   <div><small>الجودة</small><strong>{asset.quality_label || "Original"}</strong></div>
                   <div><small>نوع الملف</small><strong>{asset.media_type || "—"}</strong></div>
                   <div><small>الحجم</small><strong>{formatFileSize(asset.file_size)}</strong></div>
+                  <div><small>الدقة المسجلة</small><strong>{asset.video_width && asset.video_height ? asset.video_width + " × " + asset.video_height : "غير متوفرة"}</strong></div>
+                  <div><small>المدة</small><strong>{formatDuration(asset.duration_seconds)}</strong></div>
                   <div><small>اسم الملف</small><strong dir="auto">{asset.file_name || "غير متوفر"}</strong></div>
                   <div><small>رسالة التخزين</small><strong>{asset.storage_message_id}</strong></div>
                   <div><small>تاريخ التسجيل</small><strong>{formatDate(asset.created_at)}</strong></div>
                 </div>
+                <p className="media-storage-note">معلومات الدقة والمدة مصدرها Telegram فقط. ترميز الفيديو (Codec) والتوافق مع المشغّل ما زالا غير مفحوصين.</p>
 
                 <div className="media-rights-row">
                   <div>

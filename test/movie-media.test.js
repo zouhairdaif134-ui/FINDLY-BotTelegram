@@ -38,11 +38,46 @@ test("extracts video metadata from a channel post without downloading the file",
     fileSize: 734003200,
     fileName: "film.mp4",
     mimeType: "video/mp4",
+    videoWidth: null,
+    videoHeight: null,
+    durationSeconds: null,
     titleId: "550e8400-e29b-41d4-a716-446655440000",
     title: null,
     releaseYear: null,
     quality: "720p"
   });
+});
+
+test("extracts Telegram video dimensions and duration for playback diagnostics", () => {
+  const media = extractTelegramMedia({
+    message_id: 322,
+    chat: { id: -1001234567890 },
+    caption: "FINDLY:550e8400-e29b-41d4-a716-446655440000 | 1080p",
+    video: {
+      file_id: "video-file-id",
+      file_unique_id: "video-unique-id",
+      file_size: 734003200,
+      mime_type: "video/mp4",
+      width: 1920,
+      height: 1080,
+      duration: 7200
+    }
+  });
+  assert.equal(media.videoWidth, 1920);
+  assert.equal(media.videoHeight, 1080);
+  assert.equal(media.durationSeconds, 7200);
+});
+
+test("does not invent video metadata when Telegram omits dimensions or duration", () => {
+  const media = extractTelegramMedia({
+    message_id: 323,
+    chat: { id: -1001234567890 },
+    caption: "FINDLY:550e8400-e29b-41d4-a716-446655440000 | Original",
+    video: { file_id: "video-file-id", file_unique_id: "video-unique-id" }
+  });
+  assert.equal(media.videoWidth, null);
+  assert.equal(media.videoHeight, null);
+  assert.equal(media.durationSeconds, null);
 });
 
 test("ignores channel posts without a supported media attachment or matching caption", () => {
