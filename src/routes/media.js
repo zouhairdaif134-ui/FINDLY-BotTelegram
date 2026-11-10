@@ -253,7 +253,7 @@ export async function handleMediaRoute(env, request, url, helpers) {
       return send(helpers, request, await readStorageConfig(getSupabase(env)));
     }
 
-    if (resource === "storage-channel" && parts.length === 2 && action === "test" && request.method === "POST") {
+    if (resource === "storage-channel" && parts.length === 2 && id === "test" && request.method === "POST") {
       const body = await helpers.readJson(request);
       const verified = await verifyConfiguredStorageChannel(env, body?.chat_id);
       return send(helpers, request, verified);
