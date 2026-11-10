@@ -14,8 +14,8 @@ test("connect, status check and disconnect target the selected Telegram bot", ()
 
   assert.equal(
     selectedBotEndpointCalls.length,
-    3,
-    "all three webhook actions must use telegramBotSlug"
+    4,
+    "all webhook API calls must use telegramBotSlug"
   );
 
   assert.doesNotMatch(
