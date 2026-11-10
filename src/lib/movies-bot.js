@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase.js";
-import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
+import { sendMessage, sendPhoto, telegramRequest } from "./telegram.js";
 import { canDistributeMovieMedia } from "./movie-media.js";
 import { getMessageTemplate, getMessageButtons } from "../routes/message-templates.js";
 
@@ -872,7 +872,6 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   if (bot.slug !== "findly" && bot.slug !== "movies") return false;
   const parsed = parseMoviesCallback(callbackQuery?.data);
   if (!parsed) return false;
-  await answerCallback(env, bot.slug, callbackQuery.id);
   const telegramUserId = callbackQuery.from?.id;
 
   if (parsed.action === "home") await showMoviesHome(env, bot, chatId);

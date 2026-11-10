@@ -752,7 +752,6 @@ async function handleMenuCallback(
   if (moviesHandled) return;
   if (callbackQuery.data?.startsWith("findly:")) {
     const action = callbackQuery.data.slice("findly:".length);
-    await answerCallback(env, bot.slug, callbackQuery.id);
     if (action === "home") {
       await sendMasterMenu(env, bot, chatId, callbackQuery.from);
     } else if (action === "movies") {
@@ -774,7 +773,6 @@ async function handleMenuCallback(
 
   if (callbackQuery.data?.startsWith("menuback:")) {
     const target = callbackQuery.data.slice("menuback:".length);
-    await answerCallback(env, bot.slug, callbackQuery.id);
     await sendMenuLevel(env, bot, chatId, target === "root" ? null : target);
     return;
   }
@@ -816,22 +814,7 @@ async function handleMenuCallback(
     throw error;
   }
 
-  if (!item) {
-    await answerCallback(
-      env,
-      bot.slug,
-      callbackQuery.id,
-      "هاد الاختيار ما بقاش متاح."
-    );
-
-    return;
-  }
-
-  await answerCallback(
-    env,
-    bot.slug,
-    callbackQuery.id
-  );
+  if (!item) return;
 
   await recordAnalytics(
     env,
@@ -1088,9 +1071,6 @@ export async function handleTelegramUpdate(
 
   const maintenance = await getMaintenanceDecision(env, botSlug, update);
   if (maintenance.maintenance && !maintenance.allow) {
-    if (update?.callback_query?.id) {
-      await answerCallback(env, bot.slug, update.callback_query.id, String(maintenance.message).slice(0, 200));
-    }
     const chatId = update?.message?.chat?.id
       ?? update?.callback_query?.message?.chat?.id
       ?? update?.edited_message?.chat?.id;
@@ -1312,7 +1292,6 @@ async function handleAIMemoryCommand(env, bot, chatId, userId, command) {
 async function handleAIMemoryCallback(env, bot, chatId, callbackQuery, userId) {
   const data = String(callbackQuery.data || "");
   const supabase = getSupabase(env);
-  await answerCallback(env, bot.slug, callbackQuery.id);
   if (!userId) {
     await sendMessage(env, bot.slug, chatId, "تعذر التحقق من حساب Telegram ديالك.");
     return;
