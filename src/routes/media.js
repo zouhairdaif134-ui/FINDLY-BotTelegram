@@ -165,13 +165,30 @@ async function listAssets(env, status) {
   }
   let query = getSupabase(env)
     .from("movie_media_assets")
-    .select("id,title_id,storage_message_id,media_type,file_size,file_name,mime_type,quality_label,status,created_at,movie_titles(title,release_year,media_type,distribution_rights_status)")
+    .select("id,title_id,storage_message_id,media_type,file_size,file_name,mime_type,quality_label,status,created_at,movie_titles(title,release_year,media_type)")
     .order("created_at", { ascending: false })
     .limit(100);
   if (status && status !== "all") query = query.eq("status", status);
   const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+  const assets = data || [];
+  if (!assets.length) return assets;
+
+  const titleIds = [...new Set(assets.map((asset) => asset.title_id).filter(Boolean))];
+  const { data: rightsRows, error: rightsError } = await getSupabase(env)
+    .from("movie_distribution_rights")
+    .select("title_id,status")
+    .in("title_id", titleIds);
+  if (rightsError) throw rightsError;
+  const rightsByTitle = new Map((rightsRows || []).map((row) => [row.title_id, row.status]));
+
+  return assets.map((asset) => ({
+    ...asset,
+    movie_titles: {
+      ...(asset.movie_titles || {}),
+      distribution_rights_status: rightsByTitle.get(asset.title_id) || "unverified"
+    }
+  }));
 }
 
 async function updateAssetStatus(env, assetId, nextStatus) {
@@ -209,21 +226,34 @@ async function updateDistributionRights(env, titleId, body, auth) {
     throw makeError("خاص تأكد العملية صراحةً قبل تغيير حالة حقوق التوزيع.");
   }
 
+  const supabase = getSupabase(env);
+  const { data: title, error: titleError } = await supabase
+    .from("movie_titles")
+    .select("id,title")
+    .eq("id", titleId)
+    .maybeSingle();
+  if (titleError) throw titleError;
+  if (!title) throw makeError("العنوان غير موجود.", 404, "NOT_FOUND");
+
   const reviewedAt = status === "unverified" ? null : new Date().toISOString();
   const reviewedBy = status === "unverified" ? null : auth.userId;
-  const { data, error } = await getSupabase(env)
-    .from("movie_titles")
-    .update({
-      distribution_rights_status: status,
-      distribution_rights_reviewed_at: reviewedAt,
-      distribution_rights_reviewed_by: reviewedBy
-    })
-    .eq("id", titleId)
-    .select("id,title,distribution_rights_status,distribution_rights_reviewed_at")
-    .maybeSingle();
+  const { data: rights, error } = await supabase
+    .from("movie_distribution_rights")
+    .upsert({
+      title_id: titleId,
+      status,
+      reviewed_at: reviewedAt,
+      reviewed_by: reviewedBy
+    }, { onConflict: "title_id" })
+    .select("title_id,status,reviewed_at")
+    .single();
   if (error) throw error;
-  if (!data) throw makeError("العنوان غير موجود.", 404, "NOT_FOUND");
-  return data;
+  return {
+    id: title.id,
+    title: title.title,
+    distribution_rights_status: rights.status,
+    distribution_rights_reviewed_at: rights.reviewed_at
+  };
 }
 
 export async function handleMediaRoute(env, request, url, helpers) {
