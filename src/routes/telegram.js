@@ -773,7 +773,7 @@ async function handleMenuCallback(
 
   if (callbackQuery.data?.startsWith("menuback:")) {
     const target = callbackQuery.data.slice("menuback:".length);
-      await sendMenuLevel(env, bot, chatId, target === "root" ? null : target);
+    await sendMenuLevel(env, bot, chatId, target === "root" ? null : target);
     return;
   }
 
@@ -814,10 +814,7 @@ async function handleMenuCallback(
     throw error;
   }
 
-  if (!item) {
-
-    return;
-  }
+  if (!item) return;
 
   await recordAnalytics(
     env,
@@ -1074,8 +1071,6 @@ export async function handleTelegramUpdate(
 
   const maintenance = await getMaintenanceDecision(env, botSlug, update);
   if (maintenance.maintenance && !maintenance.allow) {
-    if (update?.callback_query?.id) {
-    }
     const chatId = update?.message?.chat?.id
       ?? update?.callback_query?.message?.chat?.id
       ?? update?.edited_message?.chat?.id;
