@@ -1,5 +1,4 @@
 import { getSupabase } from "../lib/supabase.js";
-import { recordAdminEvent } from "../lib/admin-audit.js";
 
 const DEFAULTS = Object.freeze({
   id: 1,
@@ -67,31 +66,15 @@ export function validateSystemSettings(payload = {}) {
 export async function updateSystemSettings(env, payload, actor) {
   if (!actor?.userId) throw new Error("Authenticated administrator is required.");
   const updates = validateSystemSettings(payload);
-  const supabase = getSupabase(env);
-  const { data, error } = await supabase
-    .from("system_settings")
-    .upsert({
-      id: 1,
-      ...updates,
-      updated_by: actor.userId,
-      updated_at: new Date().toISOString()
-    }, { onConflict: "id" })
-    .select(SELECT)
-    .single();
-  if (error) throw error;
-
-  await recordAdminEvent(env, actor, {
-    action: "settings.system.update",
-    entityType: "system_settings",
-    entityId: null,
-    details: {
-      changed_fields: Object.keys(updates),
-      master_maintenance_enabled: updates.master_maintenance_enabled,
-      watch_maintenance_enabled: updates.watch_maintenance_enabled
-    }
+  const { data, error } = await getSupabase(env).rpc("admin_audit_update_system_settings", {
+    p_actor_id: actor.userId,
+    p_owner_telegram_user_id: updates.owner_telegram_user_id,
+    p_maintenance_message: updates.maintenance_message,
+    p_master_maintenance_enabled: updates.master_maintenance_enabled,
+    p_watch_maintenance_enabled: updates.watch_maintenance_enabled
   });
-
-  return normalizeSettings(data);
+  if (error) throw error;
+  return normalizeSettings(data?.settings);
 }
 
 export async function getMaintenanceDecision(env, botSlug, update) {
