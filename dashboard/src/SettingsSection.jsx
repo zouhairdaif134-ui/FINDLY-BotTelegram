@@ -17,6 +17,14 @@ export default function SettingsSection({ fetchApi }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [messageTemplates, setMessageTemplates] = useState([]);
+  const [selectedBot, setSelectedBot] = useState("findly");
+  const [selectedTemplate, setSelectedTemplate] = useState("start");
+  const [templateValue, setTemplateValue] = useState("");
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateError, setTemplateError] = useState("");
+  const [templateNotice, setTemplateNotice] = useState("");
 
   async function load() {
     setLoading(true);
@@ -33,6 +41,56 @@ export default function SettingsSection({ fetchApi }) {
   }
 
   useEffect(() => { load(); }, []);
+  async function loadTemplates() {
+    setTemplateLoading(true);
+    setTemplateError("");
+    try {
+      const rows = await fetchApi("/api/message-templates");
+      setMessageTemplates(rows || []);
+    } catch (err) {
+      setTemplateError(err?.message || "تعذر تحميل قوالب الرسائل.");
+    } finally {
+      setTemplateLoading(false);
+    }
+  }
+
+  useEffect(() => { loadTemplates(); }, []);
+
+  const activeTemplate = messageTemplates.find((item) => item.bot_slug === selectedBot)?.templates?.[selectedTemplate];
+
+  useEffect(() => {
+    if (activeTemplate) setTemplateValue(activeTemplate.value);
+  }, [selectedBot, selectedTemplate, messageTemplates]);
+
+  async function saveTemplate(event) {
+    event.preventDefault();
+    setTemplateSaving(true);
+    setTemplateError("");
+    setTemplateNotice("");
+    try {
+      await fetchApi("/api/message-templates", {
+        method: "PUT",
+        body: JSON.stringify({ bot_slug: selectedBot, template_key: selectedTemplate, value: templateValue })
+      });
+      await loadTemplates();
+      setTemplateNotice("تم حفظ القالب وتسجيل التغيير في سجل النشاط.");
+    } catch (err) {
+      setTemplateError(err?.message || "تعذر حفظ القالب.");
+    } finally {
+      setTemplateSaving(false);
+    }
+  }
+
+  function restoreTemplateDefault() {
+    if (!activeTemplate) return;
+    setTemplateValue(activeTemplate.default_value);
+    setTemplateNotice("تمت استعادة النص الافتراضي في المحرر. اضغط حفظ القالب لتطبيقه.");
+  }
+
+  const previewText = templateValue
+    .replaceAll("{bot_name}", selectedBot === "findly" ? "🤖 FINDLY" : "🎬 FINDLY Movies")
+    .replaceAll("{welcome_text}", selectedBot === "findly" ? "اختار الخدمة اللي بغيتي من القائمة:" : "اكتشف الأفلام والمسلسلات واختر ما تريد مشاهدته.");
+
 
   function update(field, value) {
     setSettings((current) => ({ ...current, [field]: value }));
@@ -152,6 +210,48 @@ export default function SettingsSection({ fetchApi }) {
           </section>
         </form>
       )}
+
+      <section className="settings-admin__card">
+        <div className="settings-admin__card-heading">
+          <div><h3>قوالب رسائل البوتين</h3><p>تحرير رسائل البداية والمساعدة بشكل مستقل لكل بوت.</p></div>
+          <span className="settings-admin__tag">Telegram HTML</span>
+        </div>
+        {templateError && <div className="settings-admin__alert settings-admin__alert--error" role="alert">{templateError}</div>}
+        {templateNotice && <div className="settings-admin__alert settings-admin__alert--success" role="status">{templateNotice}</div>}
+        {templateLoading ? <div className="settings-admin__loading">جارٍ تحميل القوالب…</div> : (
+          <form onSubmit={saveTemplate} className="settings-admin__template-form">
+            <div className="settings-admin__grid settings-admin__grid--two">
+              <label className="settings-admin__field">
+                <span>البوت</span>
+                <select value={selectedBot} onChange={(e) => setSelectedBot(e.target.value)}>
+                  <option value="findly">Master Bot</option>
+                  <option value="movies">Watch Bot</option>
+                </select>
+              </label>
+              <label className="settings-admin__field">
+                <span>نوع الرسالة</span>
+                <select value={selectedTemplate} onChange={(e) => setSelectedTemplate(e.target.value)}>
+                  <option value="start">رسالة البداية</option>
+                  <option value="help">رسالة المساعدة</option>
+                </select>
+              </label>
+            </div>
+            <label className="settings-admin__field">
+              <span>نص الرسالة</span>
+              <textarea rows={6} maxLength={1800} value={templateValue} onChange={(e) => setTemplateValue(e.target.value)} />
+              <small>المتغيرات المسموح بها: {activeTemplate?.placeholders?.map((name) => "{" + name + "}").join("، ") || "لا توجد"} · يدعم Telegram HTML الأساسي.</small>
+            </label>
+            <div className="settings-admin__preview">
+              <strong>معاينة تقريبية</strong>
+              <div dir="auto">{previewText}</div>
+            </div>
+            <div className="settings-admin__footer">
+              <button type="submit" disabled={templateSaving || !activeTemplate}>{templateSaving ? "جارٍ الحفظ…" : "حفظ القالب"}</button>
+              <button type="button" className="settings-admin__restore" onClick={restoreTemplateDefault} disabled={!activeTemplate}>استعادة الافتراضي</button>
+            </div>
+          </form>
+        )}
+      </section>
     </section>
   );
 }
