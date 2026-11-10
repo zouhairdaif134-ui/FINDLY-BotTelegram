@@ -124,3 +124,19 @@ jobs:
           set -euo pipefail
           PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
           docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/movie_media_verification.sql
+
+      - name: Seed pre-existing active media for the review migration
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/movie_media_review_fixture.sql
+      - name: Apply media review and storage-channel migration
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261110090000_movie_media_review_storage.sql
+      - name: Verify media review defaults, channel preservation and permissions
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/movie_media_review_verification.sql

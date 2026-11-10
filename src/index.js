@@ -53,6 +53,7 @@ import {
 import { getAnalytics, getMovieReferralAnalytics } from "./routes/analytics.js";
 import { getActivity } from "./routes/activity.js";
 import { handleMonetizationRoute } from "./routes/monetization.js";
+import { handleMediaRoute } from "./routes/media.js";
 import { recordAdminEvent } from "./lib/admin-audit.js";
 import {
   getSettings,
@@ -2020,6 +2021,15 @@ export default {
           )
         , request);
       }
+
+      const mediaResponse = await handleMediaRoute(env, request, url, {
+        requirePermission,
+        readJson,
+        withCors,
+        success,
+        failure
+      });
+      if (mediaResponse) return mediaResponse;
 
       const monetizationResponse = await handleMonetizationRoute(env, request, url, {
         requirePermission,

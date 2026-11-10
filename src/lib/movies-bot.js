@@ -1,5 +1,6 @@
 import { getSupabase } from "./supabase.js";
 import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
+import { canDistributeMovieMedia } from "./movie-media.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -485,6 +486,14 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     return;
   }
 
+  const { data: titleRights, error: titleRightsError } = await supabase
+    .from("movie_distribution_rights")
+    .select("status")
+    .eq("title_id", title.id)
+    .maybeSingle();
+  if (titleRightsError) throw titleRightsError;
+  title.distribution_rights_status = titleRights?.status || "unverified";
+
   const { data: genreLinks, error: genreError } = await supabase
     .from("movie_title_genres")
     .select("movie_genres(name)")
@@ -514,7 +523,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     .limit(10);
   if (mediaError) throw mediaError;
   const availableMediaAssets = (mediaAssets || []).filter((asset) => buildMovieMediaCopyPayload(asset, chatId));
-  title.media_available = availableMediaAssets.length > 0;
+  title.media_available = canDistributeMovieMedia(title.distribution_rights_status) && availableMediaAssets.length > 0;
 
   const keyboard = [];
   if (userId) {
@@ -566,13 +575,35 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
   }
   const { data: asset, error } = await getSupabase(env)
     .from("movie_media_assets")
-    .select("storage_chat_id,storage_message_id,quality_label")
+    .select("title_id,storage_chat_id,storage_message_id,quality_label")
     .eq("id", assetId)
     .eq("status", "active")
     .maybeSingle();
   if (error) throw error;
   if (!asset) {
     await sendMessage(env, bot.slug, chatId, "هاد النسخة ما بقاتش متاحة. رجع للتفاصيل واختار نسخة أخرى.");
+    return;
+  }
+  const { data: activeTitle, error: activeTitleError } = await getSupabase(env)
+    .from("movie_titles")
+    .select("id")
+    .eq("id", asset.title_id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (activeTitleError) throw activeTitleError;
+  if (!activeTitle) {
+    await sendMessage(env, bot.slug, chatId, "هاد العنوان ما بقاش متاح.");
+    return;
+  }
+
+  const { data: rightsTitle, error: rightsError } = await getSupabase(env)
+    .from("movie_distribution_rights")
+    .select("status")
+    .eq("title_id", asset.title_id)
+    .maybeSingle();
+  if (rightsError) throw rightsError;
+  if (!canDistributeMovieMedia(rightsTitle?.status)) {
+    await sendMessage(env, bot.slug, chatId, "المشاهدة غير متاحة حالياً.");
     return;
   }
   const payload = buildMovieMediaCopyPayload(asset, chatId);
@@ -612,6 +643,16 @@ async function sendMovieTitleMedia(env, bot, chatId, titleId) {
   if (titleError) throw titleError;
   if (!title) {
     await sendMessage(env, bot.slug, chatId, "هاد العنوان ما بقاش متاح.");
+    return;
+  }
+  const { data: titleRights, error: titleRightsError } = await supabase
+    .from("movie_distribution_rights")
+    .select("status")
+    .eq("title_id", title.id)
+    .maybeSingle();
+  if (titleRightsError) throw titleRightsError;
+  if (!canDistributeMovieMedia(titleRights?.status)) {
+    await sendMessage(env, bot.slug, chatId, "المشاهدة غير متاحة حالياً.");
     return;
   }
 

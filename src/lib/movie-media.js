@@ -82,3 +82,21 @@ export function getTelegramMediaDelivery(mediaType) {
   };
   return deliveries[mediaType] || null;
 }
+
+export function canDistributeMovieMedia(rightsStatus) {
+  return rightsStatus === "authorized";
+}
+
+export function isActiveMovieStorageChannel(messageChatId, activeStorageChatId) {
+  return Boolean(activeStorageChatId) && String(messageChatId) === String(activeStorageChatId);
+}
+
+export function isAllowedMovieMediaStatusTransition(currentStatus, nextStatus) {
+  const transitions = {
+    pending_review: ["active", "rejected"],
+    active: ["inactive"],
+    inactive: [],
+    rejected: []
+  };
+  return Boolean(transitions[currentStatus]?.includes(nextStatus));
+}
