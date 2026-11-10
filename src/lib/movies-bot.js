@@ -1,6 +1,7 @@
 import { getSupabase } from "./supabase.js";
 import { sendMessage, sendPhoto, answerCallback, telegramRequest } from "./telegram.js";
 import { canDistributeMovieMedia } from "./movie-media.js";
+import { getMessageTemplate } from "../routes/message-templates.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -231,10 +232,12 @@ export async function showMoviesHome(env, bot, chatId) {
     env,
     bot.slug,
     chatId,
-    "<b>🎬 FINDLY Movies</b>\n\n" +
-      (bot.slug === "findly"
+    await getMessageTemplate(env, bot.slug === "findly" ? "findly" : "movies", "start", {
+      bot_name: "🎬 FINDLY Movies",
+      welcome_text: bot.slug === "findly"
         ? "اكتشف الأفلام والمسلسلات، وشوف التفاصيل والتقييمات قبل المشاهدة."
-        : "مكتبة FINDLY للأفلام والمسلسلات. اختار الخدمة اللي بغيتي."),
+        : "مكتبة FINDLY للأفلام والمسلسلات. اختار الخدمة اللي بغيتي."
+    }) || "<b>🎬 FINDLY Movies</b>\\n\\nمكتبة FINDLY للأفلام والمسلسلات.",
     { reply_markup: { inline_keyboard: keyboard } }
   );
 }
@@ -863,16 +866,10 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   else if (parsed.action === "categories") await sendMoviesCategories(env, bot, chatId);
   else if (parsed.action === "yearprompt") await showMoviesYearPrompt(env, bot, chatId);
   else if (parsed.action === "help") {
-    await sendMessage(env, bot.slug, chatId,
-      "<b>ℹ️ مساعدة FINDLY Movies</b>\n\n" +
-      "• دخل للمكتبة واختار الكل أو الأفلام أو المسلسلات.\n" +
-      "• صفّي حسب التصنيف أو سنة الإصدار، ورتّب حسب تاريخ الإضافة أو الإصدار أو التقييم أو الاسم.\n" +
-      "• تنقّل بين الصفحات أو اختار رقم الصفحة مباشرة.\n" +
-      "• استعمل البحث باسم الفيلم أو المسلسل.\n" +
-      "• افتح أي عنوان لعرض التفاصيل وإضافته للمفضلة.\n" +
-      "• المسلسلات تعرض المواسم والحلقات المسجلة.\n\n" +
-      "المشاهدة داخل Telegram لا تتفعل إلا للمحتوى المرخّص والمجهز للتسليم."
-    );
+    const helpText = await getMessageTemplate(env, bot.slug === "findly" ? "findly" : "movies", "help", {
+      bot_name: "FINDLY Movies"
+    });
+    await sendMessage(env, bot.slug, chatId, helpText || "<b>ℹ️ مساعدة FINDLY Movies</b>\\n\\nاستعمل البحث أو المكتبة لاكتشاف المحتوى.");
   }
   else if (parsed.action === "filters") await sendMoviesFilterMenu(env, bot, chatId, parsed);
   else if (parsed.action === "filtergenres") await sendMoviesFilterGenres(env, bot, chatId, parsed);
