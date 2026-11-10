@@ -43,7 +43,7 @@ begin
     id, media_type, normalized_title, title, release_year, metadata_status
   )
   values (
-    '33333333-3333-4333-8333-333333333333',
+    '44444444-4444-4444-8444-444444444444',
     'movie',
     'new-fixture-movie',
     'New Fixture Movie',
@@ -53,7 +53,7 @@ begin
 
   select status into v_rights
   from public.movie_distribution_rights
-  where title_id = '33333333-3333-4333-8333-333333333333';
+  where title_id = '44444444-4444-4444-8444-444444444444';
   if v_rights is distinct from 'unverified' then
     raise exception 'New titles must receive an unverified rights record automatically';
   end if;
