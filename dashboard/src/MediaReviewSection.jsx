@@ -298,7 +298,13 @@ export default function MediaReviewSection({ fetchApi }) {
                   <div><small>رسالة التخزين</small><strong>{asset.storage_message_id}</strong></div>
                   <div><small>تاريخ التسجيل</small><strong>{formatDate(asset.created_at)}</strong></div>
                 </div>
-                <p className="media-storage-note">معلومات الدقة والمدة مصدرها Telegram فقط. ترميز الفيديو (Codec) والتوافق مع المشغّل ما زالا غير مفحوصين.</p>
+                {asset.media_type === "video"
+                  ? <p className="media-storage-note">وصل هذا الملف إلى Telegram كفيديو. تأكد من أنه يشتغل داخل Telegram قبل تفعيله؛ معلومات الدقة والمدة لا تثبت توافق الترميز.</p>
+                  : <div className="auth-error" role="alert">
+                      <strong>هذا الملف غير قابل للتشغيل داخل مشغل Telegram</strong>
+                      <p>تم استقباله كـ {asset.media_type === "document" ? "Document" : asset.media_type || "نوع غير معروف"}، وسيتم إرساله للمستخدم كملف للتنزيل. لا يمكن تفعيله للمشاهدة.</p>
+                      <p>الحل المجاني: أعد رفعه من معرض الهاتف كفيديو عادي (Video)، وليس كـ File/Document. إذا ظهر خيار الجودة أو الضغط في Telegram، استعمله حتى يعيد Telegram ترميز الفيديو.</p>
+                    </div>}
 
                 <div className="media-rights-row">
                   <div>
@@ -312,7 +318,7 @@ export default function MediaReviewSection({ fetchApi }) {
                 </div>
 
                 {asset.status === "pending_review" && <div className="media-asset-actions">
-                  <button className="primary-button" type="button" disabled={busy} onClick={() => reviewAsset(asset, "approve")}>{busy ? "جارٍ التنفيذ..." : "موافقة وتفعيل الملف"}</button>
+                  <button className="primary-button" type="button" disabled={busy || asset.media_type !== "video"} onClick={() => reviewAsset(asset, "approve")}>{busy ? "جارٍ التنفيذ..." : "موافقة وتفعيل الملف"}</button>
                   <button className="danger-button" type="button" disabled={busy} onClick={() => reviewAsset(asset, "reject")}>رفض الملف</button>
                 </div>}
                 {asset.status === "active" && <div className="media-asset-actions">
