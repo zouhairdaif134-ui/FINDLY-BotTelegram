@@ -140,3 +140,24 @@ jobs:
           set -euo pipefail
           PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
           docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/movie_media_review_verification.sql
+
+      - name: Prepare administrator audit schema for system settings tests
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "alter table public.admin_profiles add column display_name text not null default 'Administrator', add column is_active boolean not null default true, add column updated_at timestamptz not null default now();"
+      - name: Apply administrator audit migration for system settings
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261106000400_admin_audit_logs.sql
+      - name: Apply FINDLY system settings migration
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261111000100_system_settings.sql
+      - name: Verify system settings defaults, permissions and audited maintenance changes
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/system_settings_verification.sql
