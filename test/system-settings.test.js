@@ -23,6 +23,13 @@ test("maintenance cannot be enabled before an owner numeric Telegram ID is confi
   );
 });
 
+test("maintenance switches reject string values instead of coercing them", () => {
+  assert.throws(
+    () => validateSystemSettings({ owner_telegram_user_id: "123456789", master_maintenance_enabled: "false" }),
+    /must be boolean/i
+  );
+});
+
 test("owner Telegram ID is validated as a positive safe integer string", () => {
   assert.equal(
     validateSystemSettings({ owner_telegram_user_id: "123456789" }).owner_telegram_user_id,
@@ -75,7 +82,7 @@ test("maintenance is isolated by bot and ignores channel-only updates", async ()
   };
   const env = mockEnv(settings);
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(JSON.stringify({ data: settings, error: null }), {
+  globalThis.fetch = async () => new Response(JSON.stringify([settings]), {
     status: 200,
     headers: { "Content-Type": "application/json" }
   });
