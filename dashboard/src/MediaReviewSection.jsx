@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import "./media-review-section.css";
 
 const STATUS_LABELS = {
-  pending_review: "قيد المراجعة",
   active: "مفعّل",
   inactive: "متوقف",
   rejected: "مرفوض"
@@ -140,7 +139,6 @@ export default function MediaReviewSection({ fetchApi }) {
 
   async function reviewAsset(asset, action) {
     const prompts = {
-      reject: "هل تؤكد رفض هذا الملف؟ سيبقى مرجع الملف محفوظاً ولن يتم حذفه من Telegram.",
       deactivate: "هل تؤكد إيقاف هذه النسخة عن المشاهدة؟ لن يتم حذف الملف من Telegram."
     };
     if (prompts[action] && !window.confirm(prompts[action])) return;
@@ -263,7 +261,6 @@ export default function MediaReviewSection({ fetchApi }) {
           <label className="media-filter">
             <span>الحالة</span>
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="pending_review">قيد المراجعة</option>
               <option value="active">مفعّلة</option>
               <option value="inactive">متوقفة</option>
               <option value="rejected">مرفوضة</option>
@@ -317,10 +314,6 @@ export default function MediaReviewSection({ fetchApi }) {
                   {rightsStatus !== "unverified" && <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "unverified")}>إعادة التحقق لاحقاً</button>}
                 </div>
 
-                {asset.status === "pending_review" && <div className="media-asset-actions">
-                  <button className="primary-button" type="button" disabled={busy || asset.media_type !== "video"} onClick={() => reviewAsset(asset, "approve")}>{busy ? "جارٍ التنفيذ..." : "موافقة وتفعيل الملف"}</button>
-                  <button className="danger-button" type="button" disabled={busy} onClick={() => reviewAsset(asset, "reject")}>رفض الملف</button>
-                </div>}
                 {asset.status === "active" && <div className="media-asset-actions">
                   <button className="secondary-button" type="button" disabled={busy} onClick={() => reviewAsset(asset, "deactivate")}>إيقاف هذه النسخة</button>
                 </div>}
