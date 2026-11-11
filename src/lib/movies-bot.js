@@ -254,7 +254,7 @@ export async function showMoviesHome(env, bot, chatId) {
       welcome_text: bot.slug === "findly"
         ? "اكتشف الأفلام والمسلسلات، وشوف التفاصيل والتقييمات قبل المشاهدة."
         : "مكتبة FINDLY للأفلام والمسلسلات. اختار الخدمة اللي بغيتي."
-    }) || "<b>🎬 FINDLY Movies</b>\\n\\nمكتبة FINDLY للأفلام والمسلسلات.",
+    }) || "<b>🎬 FINDLY Movies</b>\n\nمكتبة FINDLY للأفلام والمسلسلات.",
     { reply_markup: { inline_keyboard: keyboard } }
   );
 }
@@ -729,8 +729,8 @@ async function sendWatchTitle(env, bot, chatId, titleId) {
     title.media_type === "series" ? "مسلسل" : "فيلم",
     title.runtime_minutes ? title.runtime_minutes + " دقيقة" : null
   ].filter(Boolean).join(" · ");
-  const message = heading + (meta ? "\\n" + escapeHtml(meta) : "") +
-    (playable.length ? "\\n\\nاختار الجودة باش تبدأ المشاهدة." : "\\n\\nما كايناش نسخة متاحة للمشاهدة حالياً.");
+  const message = heading + (meta ? "\n" + escapeHtml(meta) : "") +
+    (playable.length ? "\n\nاختار الجودة باش تبدأ المشاهدة." : "\n\nما كايناش نسخة متاحة للمشاهدة حالياً.");
   await sendMessage(env, bot.slug, chatId, message, {
     parse_mode: "HTML",
     ...(keyboard.length ? { reply_markup: { inline_keyboard: keyboard } } : {})
@@ -975,7 +975,7 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
     const helpText = await getMessageTemplate(env, bot.slug === "findly" ? "findly" : "movies", "help", {
       bot_name: "FINDLY Movies"
     });
-    await sendMessage(env, bot.slug, chatId, helpText || "<b>ℹ️ مساعدة FINDLY Movies</b>\\n\\nاستعمل البحث أو المكتبة لاكتشاف المحتوى.");
+    await sendMessage(env, bot.slug, chatId, helpText || "<b>ℹ️ مساعدة FINDLY Movies</b>\n\nاستعمل البحث أو المكتبة لاكتشاف المحتوى.");
   }
   else if (parsed.action === "filters") await sendMoviesFilterMenu(env, bot, chatId, parsed);
   else if (parsed.action === "filtergenres") await sendMoviesFilterGenres(env, bot, chatId, parsed);
@@ -1022,7 +1022,7 @@ export async function handleMoviesStart(env, bot, chatId, startPayload, telegram
         ? { reply_markup: { inline_keyboard: [[{ text: "1️⃣ ابدأ مع FINDLY Master", url: "https://t.me/" + username }]] } }
         : {};
       await sendMessage(env, bot.slug, chatId,
-        "<b>خاصك تبدأ أولاً مع FINDLY Master</b>\\n\\nافتح البوت الرئيسي واضغط Start، ومن بعد رجع للفيلم واضغط على زر المشاهدة.",
+        "<b>خاصك تبدأ أولاً مع FINDLY Master</b>\n\nافتح البوت الرئيسي واضغط Start، ومن بعد رجع للفيلم واضغط على زر المشاهدة.",
         keyboard
       );
       return;
@@ -1043,7 +1043,7 @@ export async function handleMoviesStart(env, bot, chatId, startPayload, telegram
     }
     if (!welcomeAlreadySent) {
       await sendMessage(env, bot.slug, chatId,
-        "<b>🎬 مرحباً بك في FINDLY Watch</b>\\n\\nهاد البوت مخصص للمشاهدة فقط. اختار الفيلم من FINDLY Master وغادي نفتح ليك النسخ المتاحة."
+        "<b>🎬 مرحباً بك في FINDLY Watch</b>\n\nهاد البوت مخصص للمشاهدة فقط. اختار الفيلم من FINDLY Master وغادي نفتح ليك النسخ المتاحة."
       );
       if (internalUserId && bot.id) {
         const { error: welcomeInsertError } = await getSupabase(env)
@@ -1062,7 +1062,7 @@ export async function handleMoviesStart(env, bot, chatId, startPayload, telegram
       return;
     }
     await sendMessage(env, bot.slug, chatId,
-      "<b>🎬 FINDLY Watch</b>\\n\\nاختار الفيلم من FINDLY Master واضغط على زر المشاهدة باش نفتح ليك نفس الفيلم."
+      "<b>🎬 FINDLY Watch</b>\n\nاختار الفيلم من FINDLY Master واضغط على زر المشاهدة باش نفتح ليك نفس الفيلم."
     );
     return;
   }
