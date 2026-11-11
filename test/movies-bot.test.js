@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   normalizeMovieSearch,
   parseMoviesCallback,
@@ -202,7 +203,7 @@ test("parses direct-watch movie deep links without changing legacy movie links",
 });
 
 test("Watch Bot deep-link flow is a title-details step, not automatic video delivery", () => {
-  const source = require("node:fs").readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
   assert.match(source, /await sendTitle\(env, bot, chatId, payload\.titleId, telegramUserId\)/);
   assert.doesNotMatch(source, /if \(payload\.action === "watch"\) \{\\s*await sendMovieTitleMedia/);
 });
