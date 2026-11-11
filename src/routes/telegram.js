@@ -1403,8 +1403,20 @@ async function processTelegramUpdate(
       .single();
     if (mediaError) throw mediaError;
 
+    // Uploading to the private storage channel is the owner's assertion
+    // that this title is cleared for distribution. No separate dashboard step.
+    const { error: rightsError } = await supabase
+      .from("movie_distribution_rights")
+      .upsert({
+        title_id: linkedTitleId,
+        status: "authorized",
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: null
+      }, { onConflict: "title_id" });
+    if (rightsError) throw rightsError;
+
     const statusMessage = registeredAsset.status === "active"
-      ? "تم ربط الملف بالعنوان وتفعيله تلقائياً."
+      ? "تم ربط الملف بالعنوان وتفعيله تلقائياً، وأصبح متاحاً للمشاهدة."
       : "تم تسجيل الملف، لكن حالته الحالية لا تسمح بعرضه للمشاهدة.";
 
     await sendMessage(

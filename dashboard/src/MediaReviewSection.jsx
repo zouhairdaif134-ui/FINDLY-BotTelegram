@@ -7,12 +7,6 @@ const STATUS_LABELS = {
   rejected: "مرفوض"
 };
 
-const RIGHTS_LABELS = {
-  unverified: "غير متحققة",
-  authorized: "تم التحقق",
-  not_authorized: "غير مصرح بالتوزيع"
-};
-
 function formatFileSize(value) {
   const bytes = Number(value);
   if (!Number.isFinite(bytes) || bytes <= 0) return "غير متوفر";
@@ -163,33 +157,6 @@ export default function MediaReviewSection({ fetchApi }) {
     }
   }
 
-  async function updateRights(asset, status) {
-    const title = asset.movie_titles?.title || "هذا العنوان";
-    const prompt = status === "authorized"
-      ? "هل تؤكد أنك تحققت من امتلاك FINDLY لحقوق توزيع «" + title + "»؟ بعد التأكيد يمكن إظهار خيار المشاهدة."
-      : status === "not_authorized"
-        ? "هل تؤكد أن توزيع «" + title + "» غير مصرح به؟ سيتم إيقاف المشاهدة."
-        : "هل تريد إعادة حالة حقوق توزيع «" + title + "» إلى غير متحققة؟ سيبقى خيار المشاهدة متوقفاً.";
-    if (!window.confirm(prompt)) return;
-
-    try {
-      setActionId(asset.id);
-      setError("");
-      const result = await fetchApi("/api/media/titles/" + asset.title_id + "/rights", {
-        method: "POST",
-        body: JSON.stringify({ status, confirmation: true })
-      });
-      setNotice(result.audit_logged === false
-        ? "تم تحديث حالة الحقوق، لكن تعذر تسجيل العملية في سجل النشاط."
-        : status === "authorized" ? "تم تأكيد حقوق التوزيع لهذا العنوان."
-          : "تم تسجيل أن التوزيع غير مصرح به.");
-      await loadAssets();
-    } catch (e) {
-      setError(e.message || "تعذر تحديث حالة حقوق التوزيع.");
-    } finally {
-      setActionId("");
-    }
-  }
 
   const currentChannelTitle = storageChannel?.active_channel_title || "اسم القناة غير متوفر";
   const activeChannelId = storageChannel?.active_storage_chat_id || "لم يتم تعيين قناة";
@@ -200,7 +167,7 @@ export default function MediaReviewSection({ fetchApi }) {
         <div>
           <span className="media-review-eyebrow">FINDLY MEDIA CONTROL</span>
           <h2>إدارة الوسائط والتخزين</h2>
-          <p>الملفات الواردة من Telegram كتتربط بالعنوان وكتتفعّل تلقائياً؛ حقوق التوزيع كتظل مستقلة.</p>
+          <p>أي ملف كترفعو للقناة الخاصة كيتربط بالعنوان وكيولي متاح للمشاهدة تلقائياً. الرفع كيعني أنك كتأكد توفر حق التوزيع.</p>
         </div>
         <button className="secondary-button" type="button" onClick={() => { loadChannel(); loadAssets(); }} disabled={loading || channelLoading}>
           تحديث البيانات
@@ -256,7 +223,7 @@ export default function MediaReviewSection({ fetchApi }) {
         <div className="media-assets-toolbar">
           <div>
             <h3>ملفات الوسائط</h3>
-            <p>الملفات الجديدة كتولي متاحة تقنياً مباشرة بعد الربط؛ المشاهدة كتظل مرتبطة بحالة حقوق التوزيع.</p>
+            <p>الملفات الجديدة كتولي متاحة للمشاهدة مباشرة بعد الربط، بلا خطوة إضافية فاللوحة.</p>
           </div>
           <label className="media-filter">
             <span>الحالة</span>
@@ -274,7 +241,6 @@ export default function MediaReviewSection({ fetchApi }) {
           <div className="media-assets-list">
             {assets.map((asset) => {
               const title = asset.movie_titles || {};
-              const rightsStatus = title.distribution_rights_status || "unverified";
               const busy = actionId === asset.id;
               return <article className="media-asset-card" key={asset.id}>
                 <div className="media-asset-topline">
@@ -302,17 +268,6 @@ export default function MediaReviewSection({ fetchApi }) {
                       <p>تم استقباله كـ {asset.media_type === "document" ? "Document" : asset.media_type || "نوع غير معروف"}، وسيتم إرساله للمستخدم كملف للتنزيل. لا يمكن تفعيله للمشاهدة.</p>
                       <p>الحل المجاني: أعد رفعه من معرض الهاتف كفيديو عادي (Video)، وليس كـ File/Document. إذا ظهر خيار الجودة أو الضغط في Telegram، استعمله حتى يعيد Telegram ترميز الفيديو.</p>
                     </div>}
-
-                <div className="media-rights-row">
-                  <div>
-                    <small>حقوق التوزيع</small>
-                    <strong className={"rights-" + rightsStatus}>{RIGHTS_LABELS[rightsStatus] || rightsStatus}</strong>
-                  </div>
-                  {rightsStatus === "authorized"
-                    ? <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "not_authorized")}>تسجيل عدم التصريح بالتوزيع</button>
-                    : <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "authorized")}>تأكيد حقوق التوزيع</button>}
-                  {rightsStatus !== "unverified" && <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "unverified")}>إعادة التحقق لاحقاً</button>}
-                </div>
 
                 {asset.status === "active" && <div className="media-asset-actions">
                   <button className="secondary-button" type="button" disabled={busy} onClick={() => reviewAsset(asset, "deactivate")}>إيقاف هذه النسخة</button>
