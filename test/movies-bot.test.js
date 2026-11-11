@@ -186,6 +186,11 @@ test("rejects invalid movie deep links and unknown attribution sources", () => {
 });
 
 
+test("Master movie section exposes separate movie and series choices", () => {
+  assert.deepEqual(parseMoviesCallback("movies:films:0"), { action: "films", page: 0 });
+  assert.deepEqual(parseMoviesCallback("movies:series:0"), { action: "series", page: 0 });
+});
+
 test("parses direct-watch movie deep links without changing legacy movie links", () => {
   const id = "550e8400-e29b-41d4-a716-446655440000";
   assert.deepEqual(parseMovieStartPayload("movie_" + id + "_watch"), {
@@ -194,6 +199,12 @@ test("parses direct-watch movie deep links without changing legacy movie links",
   assert.deepEqual(parseMovieStartPayload("movie_" + id), {
     titleId: id, source: null
   });
+});
+
+test("Watch Bot deep-link flow is a title-details step, not automatic video delivery", () => {
+  const source = require("node:fs").readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
+  assert.match(source, /await sendTitle\(env, bot, chatId, payload\.titleId, telegramUserId\)/);
+  assert.doesNotMatch(source, /if \(payload\.action === "watch"\) \{\\s*await sendMovieTitleMedia/);
 });
 
 test("direct-watch flow sends a single available asset and asks quality only for multiple assets", () => {
