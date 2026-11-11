@@ -537,7 +537,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
   title.media_available = canDistributeMovieMedia(title.distribution_rights_status) && availableMediaAssets.length > 0;
 
   const keyboard = [];
-  if (userId) {
+  if (userId && bot.slug === "findly") {
     keyboard.push([{
       text: isFavorite ? "💔 إزالة من مكتبتي" : "❤️ أضف إلى مكتبتي",
       callback_data: "movies:favorite:" + title.id
@@ -563,14 +563,20 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
       }]);
     }
   }
-  if (title.full_plot_summary) {
+  if (title.full_plot_summary && bot.slug === "findly") {
     keyboard.push([{ text: "📖 قراءة الملخص الكامل (حرق الأحداث)", callback_data: "movies:plot:" + title.id }]);
   }
-  if (title.media_type === "series") {
+  if (title.media_type === "series" && bot.slug === "findly") {
     keyboard.push([{ text: "📚 المواسم والحلقات", callback_data: "movies:seasons:" + title.id }]);
   }
 
-  keyboard.push([{ text: "⬅️ رجوع للقائمة", callback_data: "movies:home" }]);
+  if (bot.slug === "movies") {
+    const master = await getMasterBot(env);
+    const username = master?.telegram_username?.replace(/^@/, "");
+    if (username) keyboard.push([{ text: "⬅️ الرجوع إلى FINDLY", url: "https://t.me/" + username }]);
+  } else {
+    keyboard.push([{ text: "⬅️ رجوع للقائمة", callback_data: "movies:home" }]);
+  }
 
   const caption = buildTitleCaption(title);
   await sendTitleCard(env, bot.slug, chatId, title.poster_path, caption, {
