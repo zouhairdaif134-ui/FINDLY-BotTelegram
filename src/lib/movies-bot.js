@@ -210,21 +210,18 @@ function titleButton(title) {
 }
 
 export async function showMoviesHome(env, bot, chatId) {
-  const keyboard = [
-    [
-      { text: "📚 المكتبة", callback_data: "movies:library:0" },
-      { text: "🗂️ التصنيفات", callback_data: "movies:categories" }
-    ],
-    [
-      { text: "🆕 المضاف حديثاً", callback_data: "movies:added:0" },
-      { text: "⭐ الأعلى تقييماً", callback_data: "movies:top:0" }
-    ],
-    [
-      { text: "🔎 البحث", callback_data: "movies:search" },
-      { text: "❤️ مكتبتي", callback_data: "movies:favorites:0" }
-    ],
-    [{ text: "ℹ️ المساعدة", callback_data: "movies:help" }]
-  ];
+  const keyboard = bot.slug === "findly"
+    ? [
+        [{ text: "🎬 الأفلام", callback_data: "movies:films:0" }],
+        [{ text: "📺 المسلسلات", callback_data: "movies:series:0" }]
+      ]
+    : [
+        [{ text: "📚 المكتبة", callback_data: "movies:library:0" }],
+        [{ text: "🗂️ التصنيفات", callback_data: "movies:categories" }],
+        [{ text: "🆕 المضاف حديثاً", callback_data: "movies:added:0" }, { text: "⭐ الأعلى تقييماً", callback_data: "movies:top:0" }],
+        [{ text: "🔎 البحث", callback_data: "movies:search" }, { text: "❤️ مكتبتي", callback_data: "movies:favorites:0" }],
+        [{ text: "ℹ️ المساعدة", callback_data: "movies:help" }]
+      ];
 
   if (bot.slug !== "findly") {
     const configuredButtons = await getMessageButtons(env, "movies");
@@ -920,11 +917,21 @@ export function parseMovieStartPayload(startPayload) {
 export async function handleMoviesStart(env, bot, chatId, startPayload, telegramUserId) {
   const payload = parseMovieStartPayload(startPayload);
   if (payload) {
-    if (payload.action === "watch") {
-      await sendMovieTitleMedia(env, bot, chatId, payload.titleId);
-    } else {
-      await sendTitle(env, bot, chatId, payload.titleId, telegramUserId);
-    }
+    // Watch Bot receives the selected title and shows its synopsis + quality buttons.
+    // The user explicitly presses a quality button before the video is delivered.
+    await sendTitle(env, bot, chatId, payload.titleId, telegramUserId);
+    return;
+  }
+  if (bot.slug === "movies") {
+    const master = await getMasterBot(env);
+    const username = master?.telegram_username?.replace(/^@/, "");
+    const keyboard = username
+      ? { reply_markup: { inline_keyboard: [[{ text: "🏠 فتح FINDLY الرئيسي", url: "https://t.me/" + username }]] } }
+      : {};
+    await sendMessage(env, bot.slug, chatId,
+      "<b>🎬 FINDLY Watch</b>\\n\\nدخل من زر المشاهدة فالفيلم اللي اخترتي فبوت FINDLY الرئيسي باش نفتح ليك نفس العنوان.",
+      keyboard
+    );
     return;
   }
   await showMoviesHome(env, bot, chatId);
