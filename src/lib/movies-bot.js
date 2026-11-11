@@ -1027,10 +1027,35 @@ export async function handleMoviesStart(env, bot, chatId, startPayload, telegram
       );
       return;
     }
-    if (isNewBotUser) {
+    const internalUserId = await getInternalUserId(env, telegramUserId);
+    let welcomeAlreadySent = false;
+    if (internalUserId && bot.id) {
+      const { data: welcomeEvent, error: welcomeLookupError } = await getSupabase(env)
+        .from("analytics_events")
+        .select("id")
+        .eq("user_id", internalUserId)
+        .eq("bot_id", bot.id)
+        .eq("event_type", "watch_welcome_sent")
+        .limit(1)
+        .maybeSingle();
+      if (welcomeLookupError) throw welcomeLookupError;
+      welcomeAlreadySent = Boolean(welcomeEvent);
+    }
+    if (!welcomeAlreadySent) {
       await sendMessage(env, bot.slug, chatId,
         "<b>🎬 مرحباً بك في FINDLY Watch</b>\\n\\nهاد البوت مخصص للمشاهدة فقط. اختار الفيلم من FINDLY Master وغادي نفتح ليك النسخ المتاحة."
       );
+      if (internalUserId && bot.id) {
+        const { error: welcomeInsertError } = await getSupabase(env)
+          .from("analytics_events")
+          .insert({
+            user_id: internalUserId,
+            bot_id: bot.id,
+            event_type: "watch_welcome_sent",
+            event_data: { source: "watch_bot_first_verified_entry" }
+          });
+        if (welcomeInsertError) throw welcomeInsertError;
+      }
     }
     if (payload?.action === "watch") {
       await sendWatchTitle(env, bot, chatId, payload.titleId);
