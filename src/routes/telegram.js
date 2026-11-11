@@ -1536,7 +1536,7 @@ async function processTelegramUpdate(
         };
       }
     }
-    if (isMovieDeepLinkBot(bot)) {
+    if (isMovieDeepLinkBot(bot) && (bot.slug !== "findly" || Boolean(startPayload))) {
       const referral = parseMovieStartPayload(startPayload);
       if (referral?.source) {
         await recordAnalytics(env, bot, telegramUser, "movie_referral_start", {
