@@ -42,7 +42,7 @@ export default function MediaReviewSection({ fetchApi }) {
   const [storageChannel, setStorageChannel] = useState(null);
   const [channelInput, setChannelInput] = useState("");
   const [testedChannel, setTestedChannel] = useState(null);
-  const [statusFilter, setStatusFilter] = useState("pending_review");
+  const [statusFilter, setStatusFilter] = useState("active");
   const [loading, setLoading] = useState(true);
   const [channelLoading, setChannelLoading] = useState(true);
   const [testing, setTesting] = useState(false);
@@ -201,8 +201,8 @@ export default function MediaReviewSection({ fetchApi }) {
       <header className="media-review-header">
         <div>
           <span className="media-review-eyebrow">FINDLY MEDIA CONTROL</span>
-          <h2>مراجعة الوسائط والتخزين</h2>
-          <p>راجع الملفات الواردة من Telegram قبل تفعيلها، وتحقق من حقوق التوزيع بشكل مستقل.</p>
+          <h2>إدارة الوسائط والتخزين</h2>
+          <p>الملفات الواردة من Telegram كتتربط بالعنوان وكتتفعّل تلقائياً؛ حقوق التوزيع كتظل مستقلة.</p>
         </div>
         <button className="secondary-button" type="button" onClick={() => { loadChannel(); loadAssets(); }} disabled={loading || channelLoading}>
           تحديث البيانات
@@ -258,7 +258,7 @@ export default function MediaReviewSection({ fetchApi }) {
         <div className="media-assets-toolbar">
           <div>
             <h3>ملفات الوسائط</h3>
-            <p>الملفات الجديدة تبقى قيد المراجعة حتى توافق عليها الإدارة.</p>
+            <p>الملفات الجديدة كتولي متاحة تقنياً مباشرة بعد الربط؛ المشاهدة كتظل مرتبطة بحالة حقوق التوزيع.</p>
           </div>
           <label className="media-filter">
             <span>الحالة</span>
