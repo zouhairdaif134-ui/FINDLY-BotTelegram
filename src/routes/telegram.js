@@ -1396,18 +1396,16 @@ async function processTelegramUpdate(
         video_width: media.videoWidth,
         video_height: media.videoHeight,
         duration_seconds: media.durationSeconds,
-        quality_label: media.quality
+        quality_label: media.quality,
+        status: "active"
       }, { onConflict: "storage_chat_id,storage_message_id" })
       .select("id,status")
       .single();
     if (mediaError) throw mediaError;
 
-    const statusMessage = {
-      pending_review: "تم استلام الملف وإضافته إلى قائمة المراجعة. لن يكون متاحاً للمشاهدة قبل موافقة الإدارة.",
-      active: "هذا الملف مسجل ومفعّل مسبقاً.",
-      inactive: "هذا الملف مسجل مسبقاً لكنه غير مفعّل حالياً.",
-      rejected: "هذا الملف مسجل مسبقاً وسبق رفضه من الإدارة."
-    }[registeredAsset.status] || "تم التحقق من تسجيل الملف.";
+    const statusMessage = registeredAsset.status === "active"
+      ? "تم ربط الملف بالعنوان وتفعيله تلقائياً."
+      : "تم تسجيل الملف، لكن حالته الحالية لا تسمح بعرضه للمشاهدة.";
 
     await sendMessage(
       env,
@@ -1536,7 +1534,7 @@ async function processTelegramUpdate(
         };
       }
     }
-    if (isMovieDeepLinkBot(bot)) {
+    if (isMovieDeepLinkBot(bot) && (bot.slug !== "findly" || Boolean(startPayload))) {
       const referral = parseMovieStartPayload(startPayload);
       if (referral?.source) {
         await recordAnalytics(env, bot, telegramUser, "movie_referral_start", {

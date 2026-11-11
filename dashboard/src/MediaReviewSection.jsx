@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import "./media-review-section.css";
 
 const STATUS_LABELS = {
-  pending_review: "قيد المراجعة",
   active: "مفعّل",
   inactive: "متوقف",
   rejected: "مرفوض"
@@ -42,7 +41,7 @@ export default function MediaReviewSection({ fetchApi }) {
   const [storageChannel, setStorageChannel] = useState(null);
   const [channelInput, setChannelInput] = useState("");
   const [testedChannel, setTestedChannel] = useState(null);
-  const [statusFilter, setStatusFilter] = useState("pending_review");
+  const [statusFilter, setStatusFilter] = useState("active");
   const [loading, setLoading] = useState(true);
   const [channelLoading, setChannelLoading] = useState(true);
   const [testing, setTesting] = useState(false);
@@ -140,7 +139,6 @@ export default function MediaReviewSection({ fetchApi }) {
 
   async function reviewAsset(asset, action) {
     const prompts = {
-      reject: "هل تؤكد رفض هذا الملف؟ سيبقى مرجع الملف محفوظاً ولن يتم حذفه من Telegram.",
       deactivate: "هل تؤكد إيقاف هذه النسخة عن المشاهدة؟ لن يتم حذف الملف من Telegram."
     };
     if (prompts[action] && !window.confirm(prompts[action])) return;
@@ -201,8 +199,8 @@ export default function MediaReviewSection({ fetchApi }) {
       <header className="media-review-header">
         <div>
           <span className="media-review-eyebrow">FINDLY MEDIA CONTROL</span>
-          <h2>مراجعة الوسائط والتخزين</h2>
-          <p>راجع الملفات الواردة من Telegram قبل تفعيلها، وتحقق من حقوق التوزيع بشكل مستقل.</p>
+          <h2>إدارة الوسائط والتخزين</h2>
+          <p>الملفات الواردة من Telegram كتتربط بالعنوان وكتتفعّل تلقائياً؛ حقوق التوزيع كتظل مستقلة.</p>
         </div>
         <button className="secondary-button" type="button" onClick={() => { loadChannel(); loadAssets(); }} disabled={loading || channelLoading}>
           تحديث البيانات
@@ -258,12 +256,11 @@ export default function MediaReviewSection({ fetchApi }) {
         <div className="media-assets-toolbar">
           <div>
             <h3>ملفات الوسائط</h3>
-            <p>الملفات الجديدة تبقى قيد المراجعة حتى توافق عليها الإدارة.</p>
+            <p>الملفات الجديدة كتولي متاحة تقنياً مباشرة بعد الربط؛ المشاهدة كتظل مرتبطة بحالة حقوق التوزيع.</p>
           </div>
           <label className="media-filter">
             <span>الحالة</span>
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="pending_review">قيد المراجعة</option>
               <option value="active">مفعّلة</option>
               <option value="inactive">متوقفة</option>
               <option value="rejected">مرفوضة</option>
@@ -317,10 +314,6 @@ export default function MediaReviewSection({ fetchApi }) {
                   {rightsStatus !== "unverified" && <button className="secondary-button" type="button" disabled={busy} onClick={() => updateRights(asset, "unverified")}>إعادة التحقق لاحقاً</button>}
                 </div>
 
-                {asset.status === "pending_review" && <div className="media-asset-actions">
-                  <button className="primary-button" type="button" disabled={busy || asset.media_type !== "video"} onClick={() => reviewAsset(asset, "approve")}>{busy ? "جارٍ التنفيذ..." : "موافقة وتفعيل الملف"}</button>
-                  <button className="danger-button" type="button" disabled={busy} onClick={() => reviewAsset(asset, "reject")}>رفض الملف</button>
-                </div>}
                 {asset.status === "active" && <div className="media-asset-actions">
                   <button className="secondary-button" type="button" disabled={busy} onClick={() => reviewAsset(asset, "deactivate")}>إيقاف هذه النسخة</button>
                 </div>}
