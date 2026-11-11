@@ -8,7 +8,8 @@ import {
   parseMovieStartPayload,
   resolveMovieWatchAction,
   buildMovieMediaDeliveryRequest,
-  isMovieDeepLinkBot
+  isMovieDeepLinkBot,
+  buildMasterWatchButton
 } from "../src/lib/movies-bot.js";
 import { getTelegramToken } from "../src/lib/telegram.js";
 
@@ -263,4 +264,14 @@ test("rejects media delivery requests without a usable Telegram file_id", () => 
   assert.equal(buildMovieMediaDeliveryRequest({ media_type: "video", file_id: "" }, 987654321), null);
   assert.equal(buildMovieMediaDeliveryRequest({ media_type: "unknown", file_id: "file-id" }, 987654321), null);
   assert.equal(buildMovieMediaDeliveryRequest({ media_type: "video", file_id: "file-id" }, null), null);
+});
+
+
+test("Master always shows the Watch Bot entry for a published title, even before media is uploaded", () => {
+  const titleId = "550e8400-e29b-41d4-a716-446655440000";
+  assert.deepEqual(buildMasterWatchButton("@FindlyMovies2026Bot", titleId), {
+    text: "▶️ مشاهدة الآن",
+    url: "https://t.me/FindlyMovies2026Bot?start=movie_" + titleId + "_watch"
+  });
+  assert.equal(buildMasterWatchButton("", titleId), null);
 });

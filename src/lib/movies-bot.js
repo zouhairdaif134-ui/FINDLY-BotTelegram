@@ -198,6 +198,15 @@ async function getInternalUserId(env, telegramUserId) {
   return data?.id || null;
 }
 
+export function buildMasterWatchButton(username, titleId) {
+  const normalizedUsername = String(username || "").replace(/^@/, "").trim();
+  if (!normalizedUsername || !UUID_RE.test(titleId || "")) return null;
+  return {
+    text: "▶️ مشاهدة الآن",
+    url: "https://t.me/" + normalizedUsername + "?start=movie_" + titleId + "_watch"
+  };
+}
+
 function titleButton(title) {
   const safeTitle = Array.from(String(title.title || "بدون عنوان")).slice(0, 55).join("");
   const year = title.release_year ? " (" + title.release_year + ")" : "";
@@ -543,7 +552,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
       callback_data: "movies:favorite:" + title.id
     }]);
   }
-  if (title.media_available && bot.slug === "findly") {
+  if (bot.slug === "findly") {
     const { data: moviesBot, error: moviesBotError } = await supabase
       .from("bots")
       .select("telegram_username")
@@ -551,10 +560,8 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
       .eq("is_active", true)
       .maybeSingle();
     if (moviesBotError) throw moviesBotError;
-    const username = moviesBot?.telegram_username?.replace(/^@/, "");
-    if (username) {
-      keyboard.push([{ text: "▶️ مشاهدة الآن", url: "https://t.me/" + username + "?start=movie_" + title.id + "_watch" }]);
-    }
+    const watchButton = buildMasterWatchButton(moviesBot?.telegram_username, title.id);
+    if (watchButton) keyboard.push([watchButton]);
   } else if (title.media_available && bot.slug === "movies") {
     for (const asset of availableMediaAssets) {
       keyboard.push([{
