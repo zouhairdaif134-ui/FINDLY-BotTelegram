@@ -397,7 +397,7 @@ async function saveTelegramUser(
     botId: bot.id
   });
 
-  return user;
+  return { ...user, is_new_bot_user: !existingRelation };
 }
 
 async function recordAnalytics(

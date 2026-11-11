@@ -653,6 +653,90 @@ async function sendMovieMedia(env, bot, chatId, assetId) {
   }
 }
 
+async function hasStartedMasterBot(env, telegramUserId) {
+  if (!telegramUserId) return false;
+  const supabase = getSupabase(env);
+  const { data: user, error: userError } = await supabase
+    .from("telegram_users")
+    .select("id")
+    .eq("telegram_user_id", String(telegramUserId))
+    .maybeSingle();
+  if (userError) throw userError;
+  if (!user?.id) return false;
+
+  const { data: master, error: masterError } = await supabase
+    .from("bots")
+    .select("id")
+    .eq("slug", "findly")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (masterError) throw masterError;
+  if (!master?.id) return false;
+
+  const { data: relation, error: relationError } = await supabase
+    .from("user_bots")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .eq("bot_id", master.id)
+    .maybeSingle();
+  if (relationError) throw relationError;
+  return Boolean(relation);
+}
+
+async function sendWatchTitle(env, bot, chatId, titleId) {
+  if (!UUID_RE.test(titleId || "")) {
+    await sendMessage(env, bot.slug, chatId, "رابط المشاهدة غير صالح.");
+    return;
+  }
+  const supabase = getSupabase(env);
+  const { data: title, error: titleError } = await supabase
+    .from("movie_titles")
+    .select("id,title,media_type,release_year,runtime_minutes")
+    .eq("id", titleId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (titleError) throw titleError;
+  if (!title) {
+    await sendMessage(env, bot.slug, chatId, "هاد الفيلم ما بقاش متاح للمشاهدة.");
+    return;
+  }
+
+  const { data: rights, error: rightsError } = await supabase
+    .from("movie_distribution_rights")
+    .select("status")
+    .eq("title_id", title.id)
+    .maybeSingle();
+  if (rightsError) throw rightsError;
+
+  const { data: assets, error: assetsError } = await supabase
+    .from("movie_media_assets")
+    .select("id,quality_label,media_type,file_id")
+    .eq("title_id", title.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (assetsError) throw assetsError;
+
+  const playable = canDistributeMovieMedia(rights?.status)
+    ? (assets || []).filter((asset) => buildMovieMediaDeliveryRequest(asset, chatId))
+    : [];
+  const keyboard = playable.map((asset) => [{
+    text: "▶️ مشاهدة · " + String(asset.quality_label || "Original").slice(0, 24),
+    callback_data: "movies:watch:" + asset.id
+  }]);
+  const heading = "<b>🎬 " + escapeHtml(title.title) + (title.release_year ? " (" + title.release_year + ")" : "") + "</b>";
+  const meta = [
+    title.media_type === "series" ? "مسلسل" : "فيلم",
+    title.runtime_minutes ? title.runtime_minutes + " دقيقة" : null
+  ].filter(Boolean).join(" · ");
+  const message = heading + (meta ? "\\n" + escapeHtml(meta) : "") +
+    (playable.length ? "\\n\\nاختار الجودة باش تبدأ المشاهدة." : "\\n\\nما كايناش نسخة متاحة للمشاهدة حالياً.");
+  await sendMessage(env, bot.slug, chatId, message, {
+    parse_mode: "HTML",
+    ...(keyboard.length ? { reply_markup: { inline_keyboard: keyboard } } : {})
+  });
+}
+
 async function sendMovieTitleMedia(env, bot, chatId, titleId) {
   if (bot.slug !== "movies" || !UUID_RE.test(titleId || "")) {
     await sendMessage(env, bot.slug, chatId, "رابط المشاهدة غير صالح.");
@@ -927,24 +1011,38 @@ export function parseMovieStartPayload(startPayload) {
   };
 }
 
-export async function handleMoviesStart(env, bot, chatId, startPayload, telegramUserId) {
+export async function handleMoviesStart(env, bot, chatId, startPayload, telegramUserId, isNewBotUser = false) {
   const payload = parseMovieStartPayload(startPayload);
-  if (payload) {
-    // Watch Bot receives the selected title and shows its synopsis + quality buttons.
-    // The user explicitly presses a quality button before the video is delivered.
-    await sendTitle(env, bot, chatId, payload.titleId, telegramUserId);
-    return;
-  }
   if (bot.slug === "movies") {
     const master = await getMasterBot(env);
     const username = master?.telegram_username?.replace(/^@/, "");
-    const keyboard = username
-      ? { reply_markup: { inline_keyboard: [[{ text: "🏠 فتح FINDLY الرئيسي", url: "https://t.me/" + username }]] } }
-      : {};
+    const masterStarted = await hasStartedMasterBot(env, telegramUserId);
+    if (!masterStarted) {
+      const keyboard = username
+        ? { reply_markup: { inline_keyboard: [[{ text: "1️⃣ ابدأ مع FINDLY Master", url: "https://t.me/" + username }]] } }
+        : {};
+      await sendMessage(env, bot.slug, chatId,
+        "<b>خاصك تبدأ أولاً مع FINDLY Master</b>\\n\\nافتح البوت الرئيسي واضغط Start، ومن بعد رجع للفيلم واضغط على زر المشاهدة.",
+        keyboard
+      );
+      return;
+    }
+    if (isNewBotUser) {
+      await sendMessage(env, bot.slug, chatId,
+        "<b>🎬 مرحباً بك في FINDLY Watch</b>\\n\\nهاد البوت مخصص للمشاهدة فقط. اختار الفيلم من FINDLY Master وغادي نفتح ليك النسخ المتاحة."
+      );
+    }
+    if (payload?.action === "watch") {
+      await sendWatchTitle(env, bot, chatId, payload.titleId);
+      return;
+    }
     await sendMessage(env, bot.slug, chatId,
-      "<b>🎬 FINDLY Watch</b>\\n\\nدخل من زر المشاهدة فالفيلم اللي اخترتي فبوت FINDLY الرئيسي باش نفتح ليك نفس العنوان.",
-      keyboard
+      "<b>🎬 FINDLY Watch</b>\\n\\nاختار الفيلم من FINDLY Master واضغط على زر المشاهدة باش نفتح ليك نفس الفيلم."
     );
+    return;
+  }
+  if (payload) {
+    await sendTitle(env, bot, chatId, payload.titleId, telegramUserId);
     return;
   }
   await showMoviesHome(env, bot, chatId);

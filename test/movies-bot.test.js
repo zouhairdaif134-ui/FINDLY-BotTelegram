@@ -275,3 +275,18 @@ test("Master always shows the Watch Bot entry for a published title, even before
   });
   assert.equal(buildMasterWatchButton("", titleId), null);
 });
+
+
+test("Watch Bot start flow requires Master start and never routes watch payload through synopsis details", () => {
+  const source = readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
+  assert.match(source, /hasStartedMasterBot/);
+  assert.match(source, /sendWatchTitle\(env, bot, chatId, payload\.titleId\)/);
+  assert.match(source, /خاصك تبدأ أولاً مع FINDLY Master/);
+  assert.match(source, /هاد البوت مخصص للمشاهدة فقط/);
+  assert.doesNotMatch(source, /Watch Bot receives the selected title and shows its synopsis/);
+});
+
+test("Watch Bot new-user flag is returned only when a bot relation is first created", () => {
+  const source = readFileSync(new URL("../src/routes/telegram.js", import.meta.url), "utf8");
+  assert.match(source, /is_new_bot_user: !existingRelation/);
+});
