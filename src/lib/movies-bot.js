@@ -729,8 +729,8 @@ async function sendWatchTitle(env, bot, chatId, titleId) {
     title.media_type === "series" ? "مسلسل" : "فيلم",
     title.runtime_minutes ? title.runtime_minutes + " دقيقة" : null
   ].filter(Boolean).join(" · ");
-  const message = heading + (meta ? "\\n" + escapeHtml(meta) : "") +
-    (playable.length ? "\\n\\nاختار الجودة باش تبدأ المشاهدة." : "\\n\\nما كايناش نسخة متاحة للمشاهدة حالياً.");
+  const message = heading + (meta ? "\n" + escapeHtml(meta) : "") +
+    (playable.length ? "\n\\nاختار الجودة باش تبدأ المشاهدة." : "\n\\nما كايناش نسخة متاحة للمشاهدة حالياً.");
   await sendMessage(env, bot.slug, chatId, message, {
     parse_mode: "HTML",
     ...(keyboard.length ? { reply_markup: { inline_keyboard: keyboard } } : {})
