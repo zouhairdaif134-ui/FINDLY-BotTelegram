@@ -152,6 +152,7 @@ function App() {
   const [activeSection, setActiveSection] =
     useState("Overview");
   const [expandedMenuGroup, setExpandedMenuGroup] = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [telegramBotSlug, setTelegramBotSlug] = useState("findly");
 const [telegramLoading, setTelegramLoading] = useState(false);
 const [telegramStatus, setTelegramStatus] = useState("Not connected");
@@ -1661,7 +1662,15 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      {mobileNavOpen && (
+        <button
+          className="sidebar-backdrop"
+          type="button"
+          aria-label="إغلاق القائمة"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+      <aside className={"sidebar" + (mobileNavOpen ? " mobile-open" : "")}>
         <div className="brand">
           <div className="brand-icon">
             F
@@ -1707,7 +1716,10 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
                         className={"nav-subitem " + (activeSection === item ? "active" : "")}
                         type="button"
                         aria-current={activeSection === item ? "page" : undefined}
-                        onClick={() => setActiveSection(item)}
+                        onClick={() => {
+                          setActiveSection(item);
+                          setMobileNavOpen(false);
+                        }}
                       >
                         {sectionLabels[item] || item}
                       </button>
@@ -1738,7 +1750,17 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
 
       <main className="main">
         <header className="header">
-          <div>
+          <div className="header-title-row">
+            <button
+              className="mobile-menu-button"
+              type="button"
+              aria-label="فتح القائمة"
+              aria-expanded={mobileNavOpen}
+              onClick={() => setMobileNavOpen((open) => !open)}
+            >
+              ☰
+            </button>
+            <div>
             <h1>
               {sectionLabels[activeSection] || activeSection}
             </h1>
@@ -1748,6 +1770,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
                 activeSection
               )}
             </p>
+            </div>
           </div>
 
           <div className="header-actions">
