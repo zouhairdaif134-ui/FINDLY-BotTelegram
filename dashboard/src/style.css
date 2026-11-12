@@ -47,8 +47,9 @@ select:disabled {
 .sidebar {
   width: 250px;
   min-height: 100vh;
-  background: #111827;
-  color: white;
+  background: #ffffff;
+  color: #172033;
+  border-left: 1px solid #e5e7eb;
   padding: 22px 14px;
   display: flex;
   flex-direction: column;
@@ -70,8 +71,8 @@ select:disabled {
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: white;
-  color: #111827;
+  background: #eef2ff;
+  color: #27346b;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -90,7 +91,7 @@ select:disabled {
 
 .brand span {
   margin-top: 2px;
-  color: #9ca3af;
+  color: #64748b;
   font-size: 11px;
   letter-spacing: 1.5px;
 }
@@ -105,7 +106,7 @@ nav {
   width: 100%;
   border: 0;
   background: transparent;
-  color: #d1d5db;
+  color: #475569;
   padding: 11px 12px;
   border-radius: 9px;
   display: flex;
@@ -117,8 +118,8 @@ nav {
 
 .nav-item:hover,
 .nav-item.active {
-  background: #374151;
-  color: white;
+  background: #eef2ff;
+  color: #27346b;
 }
 
 .admin-navigation {
@@ -149,7 +150,7 @@ nav {
 }
 
 .nav-group-chevron {
-  color: #9ca3af;
+  color: #64748b;
   font-size: 16px;
   line-height: 1;
 }
@@ -160,7 +161,7 @@ nav {
   gap: 3px;
   margin: 0 14px 5px 0;
   padding: 4px 10px 4px 0;
-  border-right: 1px solid #4b5563;
+  border-right: 1px solid #e2e8f0;
 }
 
 .nav-subitem {
@@ -168,7 +169,7 @@ nav {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: #9ca3af;
+  color: #64748b;
   padding: 9px 12px;
   text-align: right;
   font: inherit;
@@ -179,12 +180,12 @@ nav {
 
 .nav-subitem:hover,
 .nav-subitem.active {
-  background: #263244;
-  color: #fff;
+  background: #f1f5f9;
+  color: #172033;
 }
 
 .nav-subitem.active {
-  box-shadow: inset -2px 0 0 #60a5fa;
+  box-shadow: inset -2px 0 0 #4f46e5;
 }
 
 .sidebar-footer {
@@ -192,7 +193,7 @@ nav {
 }
 
 .owner-badge {
-  border-top: 1px solid #374151;
+  border-top: 1px solid #e5e7eb;
   padding: 17px 10px 4px;
   display: flex;
   align-items: center;
@@ -209,7 +210,7 @@ nav {
 }
 
 .owner-badge small {
-  color: #9ca3af;
+  color: #64748b;
   margin-top: 2px;
   font-size: 10px;
 }
