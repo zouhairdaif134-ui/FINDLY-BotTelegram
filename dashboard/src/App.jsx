@@ -32,19 +32,57 @@ const API_URL =
   (isPagesPreview ? PREVIEW_API_URL : PRODUCTION_API_URL);
 
 const menuGroups = [
-  { icon: "🏠", label: "Overview", items: ["Overview"] },
-  { icon: "🤖", label: "Bots & Telegram", items: ["Bots", "Telegram"] },
-  { icon: "🎬", label: "Movies & Categories", items: ["Movies", "Media Review", "Movie Queue", "Published", "Movie Categories", "Review", "Categories"] },
-  { icon: "🗂️", label: "Menus & Content", items: ["Menus", "Content"] },
-  { icon: "👥", label: "Users & Admins", items: ["Users", "Admins"] },
-  { icon: "🔔", label: "Notifications", items: ["Notifications"] },
-  { icon: "📊", label: "Analytics", items: ["Analytics"] },
-  { icon: "💰", label: "Monetization", items: ["Monetization"] },
-  { icon: "✨", label: "AI", items: ["AI"] },
-  { icon: "📝", label: "Activity Log", items: ["Activity Log"] },
-  { icon: "⚙️", label: "Paramètres", items: ["Settings"] },
-  { icon: "📣", label: "Publishing & Sharing", items: ["Publishing & Sharing"] }
+  { icon: "🏠", label: "الرئيسية", items: ["Overview"] },
+  {
+    icon: "🎬",
+    label: "مكتبة المحتوى",
+    items: ["Movies", "Published", "Media Review", "Movie Queue", "Review", "Movie Categories", "Publishing & Sharing"]
+  },
+  {
+    icon: "🤖",
+    label: "البوتات",
+    items: ["Bots", "Telegram", "Menus", "Content"]
+  },
+  {
+    icon: "👥",
+    label: "المستخدمون",
+    items: ["Users", "Admins", "Notifications"]
+  },
+  {
+    icon: "📊",
+    label: "التقارير",
+    items: ["Analytics", "Activity Log"]
+  },
+  {
+    icon: "⚙️",
+    label: "النظام والإعدادات",
+    items: ["AI", "Monetization", "Settings", "Categories"]
+  }
 ];
+
+const sectionLabels = {
+  Overview: "الرئيسية",
+  Movies: "الأفلام والمسلسلات",
+  Published: "العناوين المنشورة",
+  "Media Review": "الوسائط والتخزين",
+  "Movie Queue": "طابور المعالجة",
+  Review: "مراجعة العناوين",
+  "Movie Categories": "تصنيفات الأفلام",
+  "Publishing & Sharing": "النشر والمشاركة",
+  Bots: "البوتات",
+  Telegram: "اتصال Telegram",
+  Menus: "قوائم البوتات",
+  Content: "محتوى البوتات",
+  Users: "المستخدمون",
+  Admins: "المشرفون والصلاحيات",
+  Notifications: "الإشعارات",
+  Analytics: "الإحصائيات",
+  "Activity Log": "سجل العمليات",
+  AI: "إعدادات الذكاء الاصطناعي",
+  Monetization: "الإعلانات والربح",
+  Settings: "إعدادات النظام",
+  Categories: "التصنيفات العامة"
+};
 
 const emptyBot = {
   name: "",
@@ -1671,7 +1709,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
                         aria-current={activeSection === item ? "page" : undefined}
                         onClick={() => setActiveSection(item)}
                       >
-                        {item}
+                        {sectionLabels[item] || item}
                       </button>
                     ))}
                   </div>
@@ -1702,7 +1740,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
         <header className="header">
           <div>
             <h1>
-              {activeSection === "Settings" ? "Paramètres" : activeSection}
+              {sectionLabels[activeSection] || activeSection}
             </h1>
 
             <p>
