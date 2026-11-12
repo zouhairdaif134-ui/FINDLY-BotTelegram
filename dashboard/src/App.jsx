@@ -1701,6 +1701,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
                     } else {
                       setActiveSection(group.items[0]);
                       setExpandedMenuGroup("");
+                      setMobileNavOpen(false);
                     }
                   }}
                 >
@@ -1761,15 +1762,15 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
               ☰
             </button>
             <div>
-            <h1>
-              {sectionLabels[activeSection] || activeSection}
-            </h1>
+              <h1>
+                {sectionLabels[activeSection] || activeSection}
+              </h1>
 
-            <p>
-              {getSectionDescription(
-                activeSection
-              )}
-            </p>
+              <p>
+                {getSectionDescription(
+                  activeSection
+                )}
+              </p>
             </div>
           </div>
 
