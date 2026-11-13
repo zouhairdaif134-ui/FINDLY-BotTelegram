@@ -109,6 +109,7 @@ export async function sendPhoto(env, botSlug, chatId, photoUrl, options = {}) {
       if (options.caption) form.append("caption", options.caption);
       if (options.parse_mode) form.append("parse_mode", options.parse_mode);
       if (options.reply_markup) form.append("reply_markup", JSON.stringify(options.reply_markup));
+      if (options.reply_markup) form.append("reply_markup", JSON.stringify(options.reply_markup));
       const response = await fetch("https://api.telegram.org/bot" + token + "/sendPhoto", { method: "POST", body: form });
       const data = await response.json();
       if (!data.ok) { const error = new Error(data.description || "Telegram photo upload failed"); error.code = "TELEGRAM_API_ERROR"; error.status = response.status; throw error; }
