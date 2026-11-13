@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase.js";
-import { sendMessage, sendPhoto, telegramRequest } from "./telegram.js";
+import { sendMessage, sendPhoto, sendMediaGroup, telegramRequest } from "./telegram.js";
 import { canDistributeMovieMedia } from "./movie-media.js";
 import { getMessageTemplate, getMessageButtons } from "../routes/message-templates.js";
 
@@ -28,7 +28,7 @@ export function buildMovieMediaDeliveryRequest(asset, chatId) {
   };
   return { method: delivery.method, payload };
 }
-export const MOVIE_PAGE_SIZE = 10;
+export const MOVIE_PAGE_SIZE = 4;
 const SEARCH_PROMPT = "🔎 بحث FINDLY Movies";
 const YEAR_PROMPT = "📅 سنة إصدار FINDLY";
 
@@ -232,6 +232,34 @@ function titleButton(title) {
       kind + " · " + safeTitle + year,
     callback_data: "movies:title:" + title.id
   };
+}
+
+export function buildMoviePosterAlbum(titles) {
+  return (Array.isArray(titles) ? titles : [])
+    .filter((title) => {
+      try {
+        const url = new URL(title?.poster_path || "");
+        return url.protocol === "https:" && url.hostname === "image.tmdb.org" && url.pathname.startsWith("/t/p/");
+      } catch {
+        return false;
+      }
+    })
+    .slice(0, MOVIE_PAGE_SIZE)
+    .map((title) => ({
+      type: "photo",
+      media: title.poster_path,
+      caption: buildMoviePosterCard(title).caption,
+      parse_mode: "HTML"
+    }));
+}
+
+export function buildMoviePosterKeyboard(titles) {
+  const buttons = (Array.isArray(titles) ? titles : []).map(titleButton);
+  const rows = [];
+  for (let index = 0; index < buttons.length; index += 2) {
+    rows.push(buttons.slice(index, index + 2));
+  }
+  return rows;
 }
 
 export async function showMoviesHome(env, bot, chatId) {
@@ -445,8 +473,8 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
                     : action === "filter" ? "نتائج الفلترة" : "المكتبة";
 
   const keyboard = [];
-  const titleButtons = (data || []).filter((title) => !title.poster_path).map(titleButton);
-  for (let index = 0; index < titleButtons.length; index += 2) keyboard.push(titleButtons.slice(index, index + 2));
+  const titleButtons = buildMoviePosterKeyboard(data || []);
+  keyboard.push(...titleButtons);
   const pageCallback = (nextPage) => {
     if (action === "search") return "movies:search:" + nextPage + ":" + encodeSearchCallback(searchTerm);
     if (action === "genre") return "movies:genre:" + genreSlug + ":" + nextPage;
@@ -493,12 +521,12 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
     "<i>حتى 10 عناوين في كل صفحة</i>\n\n" + body
   );
 
-  for (const title of data || []) {
-    if (!title.poster_path) continue;
-    const card = buildMoviePosterCard(title);
-    await sendTitleCard(env, bot.slug, chatId, title.poster_path, card.caption, {
-      parse_mode: "HTML",
-      reply_markup: card.reply_markup
+  const posterAlbum = buildMoviePosterAlbum(data || []);
+  if (posterAlbum.length >= 2) {
+    await sendMediaGroup(env, bot.slug, chatId, posterAlbum);
+  } else if (posterAlbum.length === 1) {
+    await sendTitleCard(env, bot.slug, chatId, posterAlbum[0].media, posterAlbum[0].caption, {
+      parse_mode: "HTML"
     });
   }
 
