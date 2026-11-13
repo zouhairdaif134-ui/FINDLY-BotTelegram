@@ -121,6 +121,16 @@ export async function sendPhoto(env, botSlug, chatId, photoUrl, options = {}) {
     throw new Error("Movie poster delivery failed. File upload: " + (uploadError?.message || "unavailable") + ". URL fallback: " + (fallbackError?.message || "unavailable"));
   }
 }
+export async function sendMediaGroup(env, botSlug, chatId, media) {
+  if (!Array.isArray(media) || media.length < 2 || media.length > 10) {
+    throw new Error("Telegram media groups require between 2 and 10 items");
+  }
+  return telegramRequest(env, botSlug, "sendMediaGroup", {
+    chat_id: chatId,
+    media
+  });
+}
+
 export async function sendMessage(
   env,
   botSlug,
