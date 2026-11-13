@@ -207,6 +207,22 @@ export function buildMasterWatchButton(username, titleId) {
   };
 }
 
+export function buildMoviePosterCard(title) {
+  const safeTitle = escapeHtml(Array.from(String(title?.title || "بدون عنوان")).slice(0, 180).join(""));
+  const year = title?.release_year ? " · " + title.release_year : "";
+  const rating = title?.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : "⭐ بدون تقييم";
+  const kind = title?.media_type === "series" ? "مسلسل" : "فيلم";
+  return {
+    caption: "<b>" + safeTitle + "</b>" + escapeHtml(year) + "\n" + escapeHtml(kind + " · " + rating),
+    reply_markup: {
+      inline_keyboard: [[{
+        text: "📖 عرض التفاصيل",
+        callback_data: "movies:title:" + title.id
+      }]]
+    }
+  };
+}
+
 function titleButton(title) {
   const safeTitle = Array.from(String(title.title || "بدون عنوان")).slice(0, 55).join("");
   const year = title.release_year ? " (" + title.release_year + ")" : "";
@@ -365,7 +381,7 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
   const supabase = getSupabase(env);
   let query = supabase
     .from("movie_titles")
-    .select("id,title,original_title,media_type,release_year,release_date,rating,overview,metadata_status", { count: "exact" })
+    .select("id,title,original_title,media_type,release_year,release_date,rating,overview,poster_path,metadata_status", { count: "exact" })
     .eq("status", "active");
 
   if (action === "films") query = query.eq("media_type", "movie");
@@ -429,7 +445,7 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
                     : action === "filter" ? "نتائج الفلترة" : "المكتبة";
 
   const keyboard = [];
-  const titleButtons = (data || []).map(titleButton);
+  const titleButtons = (data || []).filter((title) => !title.poster_path).map(titleButton);
   for (let index = 0; index < titleButtons.length; index += 2) keyboard.push(titleButtons.slice(index, index + 2));
   const pageCallback = (nextPage) => {
     if (action === "search") return "movies:search:" + nextPage + ":" + encodeSearchCallback(searchTerm);
@@ -474,9 +490,23 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
   await sendMessage(env, bot.slug, chatId,
     "<b>🎞️ " + heading + "</b>\n" +
     "<i>عرض " + rangeStart + "–" + rangeEnd + " من " + total + "</i>\n" +
-    "<i>حتى 10 عناوين في كل صفحة</i>\n\n" + body,
-    { reply_markup: { inline_keyboard: keyboard } }
+    "<i>حتى 10 عناوين في كل صفحة</i>\n\n" + body
   );
+
+  for (const title of data || []) {
+    if (!title.poster_path) continue;
+    const card = buildMoviePosterCard(title);
+    await sendTitleCard(env, bot.slug, chatId, title.poster_path, card.caption, {
+      parse_mode: "HTML",
+      reply_markup: card.reply_markup
+    });
+  }
+
+  if (keyboard.length) {
+    await sendMessage(env, bot.slug, chatId, "اختار الفيلم أو استعمل أدوات البحث والتنقل:", {
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  }
 }
 
 export async function sendTitleCard(env, botSlug, chatId, posterPath, caption, options = {}) {

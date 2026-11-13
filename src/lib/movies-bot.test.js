@@ -104,7 +104,7 @@ test("Movies webhook secret is isolated from the Master webhook secret", () => {
   );
 });
 
-import { buildTitleCaption } from "./movies-bot.js";
+import { buildTitleCaption, buildMoviePosterCard } from "./movies-bot.js";
 
 test("builds a single photo caption with movie metadata and a Telegram-safe overview", () => {
   const caption = buildTitleCaption({
@@ -138,4 +138,23 @@ test("truncates long overview without exceeding Telegram photo caption limit", (
   assert.ok(caption.replace(/<[^>]*>/g, "").length <= 1024);
   assert.ok(caption.includes("…"));
   assert.doesNotMatch(caption, /المشاهدة داخل FINDLY غير متاحة|المشاهدة متاحة/);
+});
+
+
+test("builds a poster card that opens the existing movie details callback", () => {
+  const card = buildMoviePosterCard({
+    id: "550e8400-e29b-41d4-a716-446655440000",
+    title: "Bad Romance: The Vicky White Story",
+    release_year: 2023,
+    media_type: "movie",
+    rating: 7.4
+  });
+
+  assert.match(card.caption, /Bad Romance: The Vicky White Story/);
+  assert.match(card.caption, /2023/);
+  assert.match(card.caption, /7\.4\/10/);
+  assert.deepEqual(card.reply_markup.inline_keyboard[0][0], {
+    text: "📖 عرض التفاصيل",
+    callback_data: "movies:title:550e8400-e29b-41d4-a716-446655440000"
+  });
 });
