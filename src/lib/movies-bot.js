@@ -213,7 +213,7 @@ export function buildMoviePosterCard(title) {
   const rating = title?.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : "⭐ بدون تقييم";
   const kind = title?.media_type === "series" ? "مسلسل" : "فيلم";
   return {
-    caption: "<b>" + safeTitle + "</b>" + escapeHtml(year) + "\\n" + escapeHtml(kind + " · " + rating),
+    caption: "<b>" + safeTitle + "</b>" + escapeHtml(year) + "\n" + escapeHtml(kind + " · " + rating),
     reply_markup: {
       inline_keyboard: [[{
         text: "📖 عرض التفاصيل",
@@ -488,9 +488,9 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
     const rangeStart = total ? from + 1 : 0;
   const rangeEnd = Math.min(from + (data?.length || 0), total);
   await sendMessage(env, bot.slug, chatId,
-    "<b>🎞️ " + heading + "</b>\\n" +
-    "<i>عرض " + rangeStart + "–" + rangeEnd + " من " + total + "</i>\\n" +
-    "<i>حتى 10 عناوين في كل صفحة</i>\\n\\n" + body
+    "<b>🎞️ " + heading + "</b>\n" +
+    "<i>عرض " + rangeStart + "–" + rangeEnd + " من " + total + "</i>\n" +
+    "<i>حتى 10 عناوين في كل صفحة</i>\n\n" + body
   );
 
   for (const title of data || []) {
