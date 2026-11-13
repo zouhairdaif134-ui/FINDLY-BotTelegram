@@ -518,7 +518,7 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
   await sendMessage(env, bot.slug, chatId,
     "<b>🎞️ " + heading + "</b>\n" +
     "<i>عرض " + rangeStart + "–" + rangeEnd + " من " + total + "</i>\n" +
-    "<i>حتى 10 عناوين في كل صفحة</i>\n\n" + body
+    "<i>حتى 4 عناوين في كل صفحة</i>\n\n" + body
   );
 
   const posterAlbum = buildMoviePosterAlbum(data || []);
