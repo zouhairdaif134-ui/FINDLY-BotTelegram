@@ -152,7 +152,7 @@ test("builds a poster card that opens the existing movie details callback", () =
 
   assert.match(card.caption, /Bad Romance: The Vicky White Story/);
   assert.match(card.caption, /2023/);
-  assert.match(card.caption, /7\\.4\\/10/);
+  assert.match(card.caption, /7\.4\/10/);
   assert.deepEqual(card.reply_markup.inline_keyboard[0][0], {
     text: "📖 عرض التفاصيل",
     callback_data: "movies:title:550e8400-e29b-41d4-a716-446655440000"
