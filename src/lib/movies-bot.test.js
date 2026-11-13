@@ -42,8 +42,8 @@ test("parses Library and Categories navigation callbacks", () => {
   assert.equal(parseMoviesCallback("movies:genre:bad_slug:0"), null);
 });
 
-test("uses ten titles per Telegram library page", () => {
-  assert.equal(MOVIE_PAGE_SIZE, 10);
+test("uses four titles per Telegram library page", () => {
+  assert.equal(MOVIE_PAGE_SIZE, 4);
 });
 
 test("parses compact combined library filters and keeps page state", () => {
