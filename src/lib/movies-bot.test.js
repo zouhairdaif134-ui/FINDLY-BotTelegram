@@ -5,7 +5,9 @@ import {
   parseMoviesCallback,
   isMoviesSearchReply,
   isMoviesYearReply,
-  MOVIE_PAGE_SIZE
+  MOVIE_PAGE_SIZE,
+  buildMoviePosterAlbum,
+  buildMoviePosterKeyboard
 } from "./movies-bot.js";
 import { getTelegramToken, getTelegramWebhookSecret } from "./telegram.js";
 
@@ -157,4 +159,40 @@ test("builds a poster card that opens the existing movie details callback", () =
     text: "📖 عرض التفاصيل",
     callback_data: "movies:title:550e8400-e29b-41d4-a716-446655440000"
   });
+});
+
+
+test("uses four titles per visual poster page", () => {
+  assert.equal(MOVIE_PAGE_SIZE, 4);
+});
+
+test("builds one Telegram media album from up to four matching movie posters", () => {
+  const titles = Array.from({ length: 4 }, (_, index) => ({
+    id: "550e8400-e29b-41d4-a716-44665544000" + index,
+    title: "Movie " + (index + 1),
+    release_year: 2026,
+    media_type: "movie",
+    rating: 8.1,
+    poster_path: "https://image.tmdb.org/t/p/w500/poster-" + index + ".jpg"
+  }));
+  const album = buildMoviePosterAlbum(titles);
+
+  assert.equal(album.length, 4);
+  assert.ok(album.every((item) => item.type === "photo" && item.parse_mode === "HTML"));
+  assert.match(album[0].caption, /Movie 1/);
+  assert.equal(album[3].media, titles[3].poster_path);
+});
+
+test("builds two-column detail buttons for every title in the poster album", () => {
+  const titles = Array.from({ length: 4 }, (_, index) => ({
+    id: "550e8400-e29b-41d4-a716-44665544000" + index,
+    title: "Movie " + (index + 1),
+    media_type: "movie"
+  }));
+  const keyboard = buildMoviePosterKeyboard(titles);
+
+  assert.equal(keyboard.length, 2);
+  assert.equal(keyboard[0].length, 2);
+  assert.equal(keyboard[1].length, 2);
+  assert.equal(keyboard[1][1].callback_data, "movies:title:550e8400-e29b-41d4-a716-446655440003");
 });
