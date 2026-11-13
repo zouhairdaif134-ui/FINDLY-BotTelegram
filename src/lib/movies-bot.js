@@ -207,6 +207,22 @@ export function buildMasterWatchButton(username, titleId) {
   };
 }
 
+export function buildMoviePosterCard(title) {
+  const safeTitle = escapeHtml(Array.from(String(title?.title || "بدون عنوان")).slice(0, 180).join(""));
+  const year = title?.release_year ? " · " + title.release_year : "";
+  const rating = title?.rating != null ? "⭐ " + Number(title.rating).toFixed(1) + "/10" : "⭐ بدون تقييم";
+  const kind = title?.media_type === "series" ? "مسلسل" : "فيلم";
+  return {
+    caption: "<b>" + safeTitle + "</b>" + escapeHtml(year) + "\\n" + escapeHtml(kind + " · " + rating),
+    reply_markup: {
+      inline_keyboard: [[{
+        text: "📖 عرض التفاصيل",
+        callback_data: "movies:title:" + title.id
+      }]]
+    }
+  };
+}
+
 function titleButton(title) {
   const safeTitle = Array.from(String(title.title || "بدون عنوان")).slice(0, 55).join("");
   const year = title.release_year ? " (" + title.release_year + ")" : "";
