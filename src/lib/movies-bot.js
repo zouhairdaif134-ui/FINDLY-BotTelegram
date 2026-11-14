@@ -271,7 +271,7 @@ export function buildMoviesMiniAppButton(url) {
 }
 
 export async function showMoviesHome(env, bot, chatId) {
-  const miniAppButton = bot.slug === "findly" ? buildMoviesMiniAppButton(env.FINDLY_MINIAPP_URL) : null;
+  const miniAppButton = bot.slug === "findly" && Number(chatId) > 0 ? buildMoviesMiniAppButton(env.FINDLY_MINIAPP_URL) : null;
   const keyboard = bot.slug === "findly"
     ? (miniAppButton
       ? [[miniAppButton]]
