@@ -206,4 +206,5 @@ test("builds a secure Telegram Mini App launch button for the Master Bot", () =>
   });
   assert.equal(buildMoviesMiniAppButton("http://example.com"), null);
   assert.equal(buildMoviesMiniAppButton("javascript:alert(1)"), null);
+  assert.equal(buildMoviesMiniAppButton(""), null);
 });
