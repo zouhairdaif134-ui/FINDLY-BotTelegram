@@ -273,11 +273,12 @@ export function buildMoviesMiniAppButton(url) {
 export async function showMoviesHome(env, bot, chatId) {
   const miniAppButton = bot.slug === "findly" ? buildMoviesMiniAppButton(env.FINDLY_MINIAPP_URL) : null;
   const keyboard = bot.slug === "findly"
-    ? [
-        ...(miniAppButton ? [[miniAppButton]] : []),
-        [{ text: "🎬 الأفلام", callback_data: "movies:films:0" }],
-        [{ text: "📺 المسلسلات", callback_data: "movies:series:0" }]
-      ]
+    ? (miniAppButton
+      ? [[miniAppButton]]
+      : [
+          [{ text: "🎬 الأفلام", callback_data: "movies:films:0" }],
+          [{ text: "📺 المسلسلات", callback_data: "movies:series:0" }]
+        ])
     : [
         [{ text: "📚 المكتبة", callback_data: "movies:library:0" }],
         [{ text: "🗂️ التصنيفات", callback_data: "movies:categories" }],
