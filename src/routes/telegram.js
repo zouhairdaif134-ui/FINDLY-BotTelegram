@@ -492,7 +492,7 @@ async function sendMasterMenu(
     ) {
       button.url = item.action_value;
     } else {
-      const miniAppButton = bot.slug === "findly" && item.action_value === "movies"
+      const miniAppButton = bot.slug === "findly" && Number(chatId) > 0 && item.action_value === "movies"
         ? buildMoviesMiniAppButton(env.FINDLY_MINIAPP_URL)
         : null;
       if (miniAppButton) button.web_app = miniAppButton.web_app;
@@ -504,7 +504,7 @@ async function sendMasterMenu(
   const configuredButtons = await getMessageButtons(env, "findly");
   if (configuredButtons.length) {
     keyboard.splice(0, keyboard.length, ...configuredButtons.map((item) => {
-      const miniAppButton = bot.slug === "findly" && item.id === "movies"
+      const miniAppButton = bot.slug === "findly" && Number(chatId) > 0 && item.id === "movies"
         ? buildMoviesMiniAppButton(env.FINDLY_MINIAPP_URL)
         : null;
       return [{
