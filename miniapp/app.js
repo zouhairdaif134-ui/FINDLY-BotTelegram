@@ -2,7 +2,7 @@
   const tg = window.Telegram?.WebApp;
   const app = document.getElementById("app");
   const toast = document.getElementById("toast");
-  const state = { titles: [], genres: [], favoriteIds: new Set(), tab: "home", query: "", genre: "", activeTitle: null, details: null, loading: true };
+  const state = { titles: [], genres: [], favoriteIds: new Set(), tab: "home", query: "", genre: "", activeTitle: null, details: null, showFullPlot: false, loading: true };
   const initData = tg?.initData || "";
 
   if (tg) {
@@ -89,7 +89,7 @@
     else if (state.tab === "genre") renderGrid("حسب التصنيف", state.titles.filter(x => (x.genres || []).includes(state.genreName)));
   }
   async function openDetails(id) {
-    try { state.activeTitle = id; render(); state.details = await api("details", { title_id: id }); render(); }
+    try { state.activeTitle = id; state.showFullPlot = false; render(); state.details = await api("details", { title_id: id }); render(); }
     catch (error) { state.activeTitle = null; notify(error.message); render(); }
   }
   function renderDetails() {
@@ -100,7 +100,7 @@
     const providers = (t.providers || []).map(p => '<a class="provider" href="' + esc(p.provider_url) + '" target="_blank" rel="noopener noreferrer">' + esc(p.provider) + ' · ' + esc(p.availability_type) + ' · ' + esc(p.region_code) + ' ↗</a>').join("");
     const seasons = (state.details.seasons || []).map(s => '<div class="season"><b>' + esc(s.name || ("الموسم " + s.season_number)) + '</b><div class="episode">' + (s.episodes || []).map(e => esc("الحلقة " + e.episode_number + " — " + (e.name || "بدون عنوان"))).join("<br>") + '</div></div>').join("");
     app.innerHTML = '<section class="detail"><div class="detail-hero" style="background-image:url(&quot;' + esc(image) + '&quot;)"><button class="detail-close" data-close>×</button></div><div class="detail-body"><div class="eyebrow">' + (t.media_type === "series" ? "FINDLY SERIES" : "FINDLY MOVIE") + '</div><h1>' + esc(t.title) + '</h1><div class="meta"><span>' + esc(meta(t)) + '</span>' + (t.rating != null ? '<span class="rating">★ ' + Number(t.rating).toFixed(1) + '/10</span>' : "") + '</div><p class="description">' + esc(t.overview || "لا يتوفر ملخص قصير لهذا العنوان حالياً.") + '</p><div class="actions">' + (t.watch_url ? '<button class="primary-btn" data-watch="' + esc(t.id) + '">▶ المشاهدة عبر FINDLY</button>' : '<button class="secondary-btn" disabled>المشاهدة غير متاحة حالياً</button>') + '<button class="secondary-btn" data-favorite="' + esc(t.id) + '">' + (favorite ? "♥ إزالة من مكتبتي" : "♡ أضف إلى مكتبتي") + '</button></div>' +
-      (t.full_plot_summary ? '<section class="detail-section"><button class="secondary-btn" data-plot>عرض الملخص الكامل (قد يتضمن حرقاً)</button><p id="full-plot" class="description" hidden>' + esc(t.full_plot_summary) + '</p></section>' : "") +
+      (t.has_full_plot_summary ? '<section class="detail-section"><button class="secondary-btn" data-plot>عرض الملخص الكامل (قد يتضمن حرقاً)</button>' + (t.full_plot_summary ? '<p id="full-plot" class="description" ' + (state.showFullPlot ? '' : 'hidden') + '>' + esc(t.full_plot_summary) + '</p>' : '') + '</section>' : "") +
       (t.genres?.length ? '<section class="detail-section"><h3>التصنيفات</h3><div class="meta">' + t.genres.map(esc).join(" · ") + '</div></section>' : "") +
       (seasons ? '<section class="detail-section"><h3>المواسم والحلقات</h3>' + seasons + '</section>' : "") +
       (providers ? '<section class="detail-section"><h3>مصادر المشاهدة المتاحة</h3>' + providers + '</section>' : "") + '</div></section>';
@@ -118,7 +118,19 @@
     if (button.dataset.watch) { const title = state.details?.title; const url = title?.watch_url || state.titles.find(t => t.id === button.dataset.watch)?.watch_url; if (url) tg?.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank", "noopener"); else return openDetails(button.dataset.watch); return; }
     if (button.dataset.favorite) return toggleFavorite(button.dataset.favorite);
     if (button.dataset.close !== undefined) { state.activeTitle = null; state.details = null; render(); return; }
-    if (button.dataset.plot !== undefined) { const plot = document.getElementById("full-plot"); if (plot) plot.hidden = !plot.hidden; return; }
+    if (button.dataset.plot !== undefined) {
+      if (!state.details?.title?.full_plot_summary) {
+        try {
+          state.details = await api("details", { title_id: state.activeTitle, include_full_plot: true });
+          state.showFullPlot = true;
+          render();
+        } catch (error) { notify(error.message); }
+      } else {
+        state.showFullPlot = !state.showFullPlot;
+        render();
+      }
+      return;
+    }
     if (button.dataset.view) return goTab(button.dataset.view);
     if (button.dataset.genre) { state.genre = button.dataset.genre; state.genreName = state.genres.find(g => g.slug === state.genre)?.name || ""; state.tab = "genre"; render(); return; }
   });
