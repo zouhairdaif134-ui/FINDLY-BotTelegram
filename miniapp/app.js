@@ -1,3 +1,4 @@
+import { tmdbImageUrl } from "/tmdb-image-url.js";
 (() => {
   const tg = window.Telegram?.WebApp;
   const app = document.getElementById("app");
@@ -12,17 +13,8 @@
   }
 
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[char]));
-  const imageUrl = (value) => {
-    try { const u = new URL(String(value || "")); return u.protocol === "https:" && u.hostname === "image.tmdb.org" && u.pathname.startsWith("/t/p/") ? u.href : ""; } catch { return ""; }
-  };
-  const poster = (title, size = "w342") => {
-    const raw = imageUrl(title.poster_path);
-    return raw ? raw.replace("/t/p/", "/t/p/" + size + "/") : "";
-  };
-  const backdrop = (title) => {
-    const raw = imageUrl(title.backdrop_path);
-    return raw ? raw.replace("/t/p/", "/t/p/w1280/") : poster(title, "w500");
-  };
+  const poster = (title) => tmdbImageUrl(title.poster_path, "w342");
+  const backdrop = (title) => tmdbImageUrl(title.backdrop_path, "w1280") || tmdbImageUrl(title.poster_path, "w500");
   const notify = (message) => {
     toast.textContent = message; toast.classList.add("show");
     clearTimeout(notify.timer); notify.timer = setTimeout(() => toast.classList.remove("show"), 2200);
