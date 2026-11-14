@@ -9,7 +9,7 @@ import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-2";
   if (tg) {
     tg.ready();
     tg.expand();
-    try { tg.setHeaderColor("#0B0B0F"); tg.setBackgroundColor("#0B0B0F"); } catch {}
+    try { tg.setHeaderColor("#090a0d"); tg.setBackgroundColor("#090a0d"); } catch {}
   }
 
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[char]));
