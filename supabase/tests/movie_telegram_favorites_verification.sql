@@ -19,7 +19,12 @@ begin
      or has_table_privilege('authenticated', 'public.movie_telegram_favorites', 'SELECT') then
     raise exception 'Client roles must not read Telegram favorites directly';
   end if;
-  if not has_table_privilege('service_role', 'public.movie_telegram_favorites', 'SELECT,INSERT,UPDATE,DELETE') then
+  if not (
+    has_table_privilege('service_role', 'public.movie_telegram_favorites', 'SELECT')
+    and has_table_privilege('service_role', 'public.movie_telegram_favorites', 'INSERT')
+    and has_table_privilege('service_role', 'public.movie_telegram_favorites', 'UPDATE')
+    and has_table_privilege('service_role', 'public.movie_telegram_favorites', 'DELETE')
+  ) then
     raise exception 'service_role must have access to Telegram favorites';
   end if;
 end;
