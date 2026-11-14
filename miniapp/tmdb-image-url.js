@@ -3,7 +3,7 @@ const ALLOWED_SIZES = new Set(["w92", "w154", "w185", "w342", "w500", "w780", "w
 export function tmdbImageUrl(value, size = "w342") {
   if (!ALLOWED_SIZES.has(size)) return "";
   const raw = String(value || "").trim();
-  if (!raw) return "";
+  if (!raw || raw.includes("..") || raw.includes("\\\\")) return "";
   let pathname;
   try {
     if (raw.startsWith("https://")) {
