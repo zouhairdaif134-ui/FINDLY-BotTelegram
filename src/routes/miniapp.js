@@ -24,7 +24,7 @@ export function parseCatalogPagination(body = {}) {
 }
 
 export function truncateOverview(value, maxLength = 160) {
-  const text = String(value || "").replace(/\\s+/g, " ").trim();
+  const text = String(value || "").replace(/\s+/g, " ").trim();
   if (text.length <= maxLength) return text;
   return text.slice(0, Math.max(1, maxLength - 1)).trimEnd() + "…";
 }
@@ -180,7 +180,7 @@ async function getCatalog(env, userId, body) {
   const supabase = getSupabase(env);
   const { limit, offset } = parseCatalogPagination(body);
   const type = ["movie", "series"].includes(body.media_type) ? body.media_type : null;
-  const search = String(body.query || "").trim().replace(/[\\u0000-\\u001f%_*]/g, " ").slice(0, 80).trim();
+  const search = String(body.query || "").trim().replace(/[\u0000-\u001f%_*]/g, " ").slice(0, 80).trim();
   const genre = String(body.genre || "").trim().slice(0, 40);
   const favoritesOnly = body.favorites_only === true;
   const sort = body.sort === "top" ? "rating" : body.sort === "release" ? "release_date" : "created_at";
