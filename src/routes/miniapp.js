@@ -99,9 +99,10 @@ async function decorateTitles(supabase, titles, telegramUserId) {
     supabase.from("movie_title_genres").select("title_id,movie_genres(name,slug)").in("title_id", ids),
     supabase.from("movie_distribution_rights").select("title_id,status").in("title_id", ids).eq("status", "authorized"),
     supabase.from("movie_media_assets").select("title_id,id,file_id,media_type").in("title_id", ids).eq("status", "active"),
-    supabase.from("movie_telegram_favorites").select("title_id").eq("telegram_user_id", telegramUserId)
+    supabase.from("movie_telegram_favorites").select("title_id").eq("telegram_user_id", telegramUserId),
+    supabase.from("bots").select("telegram_username").eq("slug", "movies").eq("is_active", true).maybeSingle()
   ]);
-  for (const result of [genreResult, rightsResult, mediaResult, favoritesResult]) if (result.error) throw result.error;
+  for (const result of [genreResult, rightsResult, mediaResult, favoritesResult, watchBotResult]) if (result.error) throw result.error;
 
   const genresByTitle = new Map();
   for (const row of genreResult.data || []) {
@@ -111,14 +112,20 @@ async function decorateTitles(supabase, titles, telegramUserId) {
   const authorized = new Set((rightsResult.data || []).map((row) => row.title_id));
   const hasActiveMedia = new Set((mediaResult.data || []).filter((row) => row.file_id && ["video", "document"].includes(row.media_type)).map((row) => row.title_id));
   const favoriteIds = (favoritesResult.data || []).map((row) => row.title_id);
+  const watchUsername = String(watchBotResult.data?.telegram_username || "").replace(/^@/, "");
+  const validWatchUsername = /^[a-zA-Z0-9_]{5,32}$/.test(watchUsername);
 
   return {
-    titles: (titles || []).map((title) => ({
-      ...title,
-      genres: genresByTitle.get(title.id) || [],
-      is_favorite: favoriteIds.includes(title.id),
-      watch_available: authorized.has(title.id) && hasActiveMedia.has(title.id)
-    })),
+    titles: (titles || []).map((title) => {
+      const watchAvailable = authorized.has(title.id) && hasActiveMedia.has(title.id);
+      return {
+        ...title,
+        genres: genresByTitle.get(title.id) || [],
+        is_favorite: favoriteIds.includes(title.id),
+        watch_available: watchAvailable && validWatchUsername,
+        watch_url: watchAvailable && validWatchUsername ? "https://t.me/" + watchUsername + "?start=movie_" + title.id + "_watch" : null
+      };
+    }),
     favoriteIds
   };
 }
