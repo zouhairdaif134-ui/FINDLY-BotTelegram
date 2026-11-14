@@ -95,7 +95,7 @@ async function decorateTitles(supabase, titles, telegramUserId) {
   const ids = (titles || []).map((title) => title.id);
   if (!ids.length) return { titles: [], favoriteIds: [] };
 
-  const [genreResult, rightsResult, mediaResult, favoritesResult] = await Promise.all([
+  const [genreResult, rightsResult, mediaResult, favoritesResult, watchBotResult] = await Promise.all([
     supabase.from("movie_title_genres").select("title_id,movie_genres(name,slug)").in("title_id", ids),
     supabase.from("movie_distribution_rights").select("title_id,status").in("title_id", ids).eq("status", "authorized"),
     supabase.from("movie_media_assets").select("title_id,id,file_id,media_type").in("title_id", ids).eq("status", "active"),
