@@ -29,7 +29,8 @@ import {
   parseMovieStartPayload,
   isMovieDeepLinkBot,
   showMoviesHome,
-  showMoviesSearchPrompt
+  showMoviesSearchPrompt,
+  buildMoviesMiniAppButton
 } from "../lib/movies-bot.js";
 
 async function getBot(
@@ -491,17 +492,28 @@ async function sendMasterMenu(
     ) {
       button.url = item.action_value;
     } else {
-      button.callback_data = `menu:${item.id}`;
+      const miniAppButton = bot.slug === "findly" && item.action_value === "movies"
+        ? buildMoviesMiniAppButton(env.FINDLY_MINIAPP_URL)
+        : null;
+      if (miniAppButton) button.web_app = miniAppButton.web_app;
+      else button.callback_data = `menu:${item.id}`;
     }
 
     return [button];
   });
   const configuredButtons = await getMessageButtons(env, "findly");
   if (configuredButtons.length) {
-    keyboard.splice(0, keyboard.length, ...configuredButtons.map((item) => [{
-      text: item.label,
-      callback_data: "findly:" + item.id
-    }]));
+    keyboard.splice(0, keyboard.length, ...configuredButtons.map((item) => {
+      const miniAppButton = bot.slug === "findly" && item.id === "movies"
+        ? buildMoviesMiniAppButton(env.FINDLY_MINIAPP_URL)
+        : null;
+      return [{
+        text: item.label,
+        ...(miniAppButton
+          ? { web_app: miniAppButton.web_app }
+          : { callback_data: "findly:" + item.id })
+      }];
+    }));
   }
 
   await recordAnalytics(
