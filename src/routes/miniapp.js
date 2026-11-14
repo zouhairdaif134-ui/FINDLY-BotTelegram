@@ -165,7 +165,7 @@ async function getCatalog(env, userId, body) {
   });
 }
 
-async function getTitleDetails(env, userId, titleId) {
+async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
   if (!UUID_RE.test(titleId || "")) return json({ ok: false, error: "INVALID_TITLE_ID" }, 400);
   const supabase = getSupabase(env);
   const { data: title, error } = await supabase.from("movie_titles")
@@ -213,7 +213,9 @@ async function getTitleDetails(env, userId, titleId) {
   return json({
     ok: true,
     title: {
-      ...title,
+      ...Object.fromEntries(Object.entries(title).filter(([key]) => key !== "full_plot_summary")),
+      ...(includeFullPlot ? { full_plot_summary: title.full_plot_summary || null } : {}),
+      has_full_plot_summary: Boolean(title.full_plot_summary),
       genres: (genreResult.data || []).map((row) => row.movie_genres?.name).filter(Boolean),
       is_favorite: Boolean(favoriteResult.data),
       watch_available: Boolean(watchUrl),
@@ -247,7 +249,7 @@ export async function handleMiniAppRoute(env, request, url) {
     const auth = await authenticate(env, body);
     if (auth.error) return json({ ok: false, error: auth.error }, auth.status);
     if (match[1] === "catalog") return await getCatalog(env, auth.userId, body);
-    if (match[1] === "details") return await getTitleDetails(env, auth.userId, body.title_id);
+    if (match[1] === "details") return await getTitleDetails(env, auth.userId, body.title_id, body.include_full_plot === true);
     if (match[1] === "favorite") {
       if (!UUID_RE.test(body.title_id || "") || !["add", "remove"].includes(body.action)) {
         return json({ ok: false, error: "INVALID_FAVORITE_REQUEST" }, 400);
