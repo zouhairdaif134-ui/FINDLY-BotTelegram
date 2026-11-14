@@ -4,7 +4,7 @@ const PLATFORMS=["facebook","whatsapp","x","telegram","instagram","link","copy_c
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function trustedImage(value,size="w1280"){try{const u=new URL(String(value||""));if(u.protocol!=="https:"||u.hostname!=="image.tmdb.org")return null;const m=u.pathname.match(/^\/t\/p\/[^/]+\/(.+)$/);if(!m)return null;u.pathname="/t/p/"+size+"/"+m[1];return u.href;}catch{return null;}}
 export function getMovieShareBotUsername(bots){const master=Array.isArray(bots)?bots.find(b=>b?.slug==="findly"&&b?.is_active!==false):null;return master?.telegram_username||"";}
-export function getMovieShareImageUrl(movie){return trustedImage(movie?.backdrop_path,"w1280")||trustedImage(movie?.poster_path,"w780");}
+export function getMovieShareImageUrl(movie){return trustedImage(movie?.poster_path,"w780")||trustedImage(movie?.backdrop_path,"w1280");}
 export function buildMovieShareContent(movie,username,platform,shareOrigin="https://findly-v3-api.berrchidcity99.workers.dev"){
  if(!movie||movie.status!=="active")throw new Error("Only published movies can be shared");
  const bot=String(username||"").replace(/^@/,"").trim();if(!USER_RE.test(bot))throw new Error("A valid FINDLY Master bot username is required");
