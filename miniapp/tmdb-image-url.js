@@ -15,8 +15,8 @@ export function tmdbImageUrl(value, size = "w342") {
       pathname = raw;
     }
   } catch { return ""; }
-  const sizedPath = pathname.match(/^\\/t\\/p\\/(?:w\\d+|original)\\/(.+)$/);
-  const imagePath = sizedPath ? sizedPath[1] : pathname.replace(/^\\/+/, "");
-  if (!imagePath || imagePath.includes("..") || imagePath.includes("\\\\")) return "";
+  const sizedPath = pathname.match(/^\/t\/p\/(?:w\d+|original)\/(.+)$/);
+  const imagePath = sizedPath ? sizedPath[1] : pathname.replace(/^\/+/, "");
+  if (!imagePath || imagePath.includes("..") || imagePath.includes("\\")) return "";
   return "https://image.tmdb.org/t/p/" + size + "/" + imagePath;
 }
