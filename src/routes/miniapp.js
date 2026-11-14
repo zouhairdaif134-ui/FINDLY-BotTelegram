@@ -70,17 +70,17 @@ async function authenticate(env, body) {
   if (!verified) return { error: "INVALID_TELEGRAM_SESSION", status: 401 };
 
   const user = verified.user;
-  const { error } = await getSupabase(env).from("telegram_users").upsert({
+  const { data: savedUser, error } = await getSupabase(env).from("telegram_users").upsert({
     telegram_user_id: String(user.id),
     username: user.username || null,
     first_name: user.first_name || null,
     last_name: user.last_name || null,
     language_code: user.language_code || null,
     is_bot: false,
-    is_active: true,
     last_seen_at: new Date().toISOString()
-  }, { onConflict: "telegram_user_id" });
+  }, { onConflict: "telegram_user_id" }).select("is_active").single();
   if (error) throw error;
+  if (savedUser?.is_active === false) return { error: "USER_ACCESS_DISABLED", status: 403 };
   return { userId: String(user.id) };
 }
 
