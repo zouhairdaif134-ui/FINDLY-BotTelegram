@@ -424,7 +424,7 @@ export default {
         }
 
         const requestedSource = url.searchParams.get("source");
-        const source = ["facebook", "whatsapp", "x", "telegram", "instagram", "link"].includes(requestedSource)
+        const source = ["facebook", "whatsapp", "x", "telegram", "instagram", "link", "copy_caption"].includes(requestedSource)
           ? requestedSource
           : "facebook";
         const { data: bot, error: botError } = await getSupabase(env)

@@ -1,6 +1,6 @@
 const USER_RE=/^[A-Za-z0-9_]{5,32}$/;
 const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const PLATFORMS=["facebook","whatsapp","x","telegram","instagram","link"];
+const PLATFORMS=["facebook","whatsapp","x","telegram","instagram","link","copy_caption"];
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function trustedImage(value,size="w1280"){try{const u=new URL(String(value||""));if(u.protocol!=="https:"||u.hostname!=="image.tmdb.org")return null;const m=u.pathname.match(/^\/t\/p\/[^/]+\/(.+)$/);if(!m)return null;u.pathname="/t/p/"+size+"/"+m[1];return u.href;}catch{return null;}}
 export function getMovieShareBotUsername(bots){const master=Array.isArray(bots)?bots.find(b=>b?.slug==="findly"&&b?.is_active!==false):null;return master?.telegram_username||"";}

@@ -337,7 +337,7 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
 
 async function getMovieShare(env,userId,body,requestUrl){
  const titleId=String(body?.title_id||""),platform=String(body?.platform||"");
- if(!UUID_RE.test(titleId)||!["facebook","whatsapp","x","telegram","instagram","link"].includes(platform))return json({ok:false,error:"INVALID_SHARE_REQUEST"},400);
+ if(!UUID_RE.test(titleId)||!["facebook","whatsapp","x","telegram","instagram","link","copy_caption"].includes(platform))return json({ok:false,error:"INVALID_SHARE_REQUEST"},400);
  const db=getSupabase(env);
  const [titleR,botR,genreR,userR]=await Promise.all([
   db.from("movie_titles").select("id,status,title,overview,release_year,runtime_minutes,rating,poster_path,backdrop_path,media_type").eq("id",titleId).eq("status","active").maybeSingle(),
