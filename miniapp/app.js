@@ -1,4 +1,4 @@
-import { tmdbImageUrl } from "/tmdb-image-url.js";
+import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-1";
 (() => {
   const tg = window.Telegram?.WebApp;
   const app = document.getElementById("app");
