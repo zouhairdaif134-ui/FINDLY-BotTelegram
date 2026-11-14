@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
-import { validateTelegramInitData } from "./miniapp.js";
+import { validateTelegramInitData, parseCatalogPagination, truncateOverview } from "./miniapp.js";
 
 async function signedInitData(token, user, authDate) {
   const params = new URLSearchParams({
@@ -36,4 +36,18 @@ test("rejects tampered, expired and bot-user initData", async () => {
   assert.equal(await validateTelegramInitData(expired, token, now, webcrypto), null);
   const bot = await signedInitData(token, { id: 987654321, is_bot: true }, Math.floor(now / 1000));
   assert.equal(await validateTelegramInitData(bot, token, now, webcrypto), null);
+});
+
+
+test("catalog pagination clamps page size and rejects negative offsets", () => {
+  assert.deepEqual(parseCatalogPagination({ limit: 500, offset: -20 }), { limit: 50, offset: 0 });
+  assert.deepEqual(parseCatalogPagination({ limit: 20, offset: 80 }), { limit: 20, offset: 80 });
+  assert.deepEqual(parseCatalogPagination({}), { limit: 40, offset: 0 });
+});
+
+test("catalog overview is shortened without changing short text", () => {
+  assert.equal(truncateOverview("A short synopsis"), "A short synopsis");
+  const result = truncateOverview("word ".repeat(60), 160);
+  assert.equal(result.length <= 160, true);
+  assert.equal(result.endsWith("…"), true);
 });
