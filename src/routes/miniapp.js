@@ -255,10 +255,13 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
   if (!UUID_RE.test(titleId || "")) return json({ ok: false, error: "INVALID_TITLE_ID" }, 400);
   const supabase = getSupabase(env);
   const now = Date.now();
+  const favoritePromise = supabase.from("movie_telegram_favorites")
+    .select("title_id").eq("telegram_user_id", userId).eq("title_id", titleId).maybeSingle();
+  let favoriteResult;
   let cached = detailsCache.get(titleId);
 
   if (!cached || cached.expiresAt <= now) {
-    const [titleResult, genreResult, rightsResult, mediaResult, providerResult, seasonResult] = await Promise.all([
+    const [titleResult, genreResult, rightsResult, mediaResult, providerResult, seasonResult, userFavoriteResult] = await Promise.all([
       supabase.from("movie_titles")
         .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,full_plot_summary,poster_path,backdrop_path")
         .eq("id", titleId).eq("status", "active").maybeSingle(),
@@ -267,9 +270,11 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
       supabase.from("movie_media_assets").select("id,file_id,media_type").eq("title_id", titleId).eq("status", "active").limit(10),
       supabase.from("movie_provider_availability").select("provider,region_code,availability_type,provider_url").eq("title_id", titleId).eq("is_active", true),
       supabase.from("movie_seasons").select("id,season_number,name,overview,air_date,episode_count,poster_path")
-        .eq("title_id", titleId).eq("status", "active").order("season_number", { ascending: true })
+        .eq("title_id", titleId).eq("status", "active").order("season_number", { ascending: true }),
+      favoritePromise
     ]);
-    for (const result of [titleResult, genreResult, rightsResult, mediaResult, providerResult, seasonResult]) if (result.error) throw result.error;
+    for (const result of [titleResult, genreResult, rightsResult, mediaResult, providerResult, seasonResult, userFavoriteResult]) if (result.error) throw result.error;
+    favoriteResult = userFavoriteResult;
     const title = titleResult.data;
     if (!title) return json({ ok: false, error: "TITLE_NOT_FOUND" }, 404);
 
@@ -314,15 +319,14 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
     }
   }
 
-  const { data: favorite, error: favoriteError } = await supabase.from("movie_telegram_favorites")
-    .select("title_id").eq("telegram_user_id", userId).eq("title_id", titleId).maybeSingle();
-  if (favoriteError) throw favoriteError;
+  if (!favoriteResult) favoriteResult = await favoritePromise;
+  if (favoriteResult.error) throw favoriteResult.error;
 
   return json({
     ok: true,
     title: {
       ...cached.title,
-      is_favorite: Boolean(favorite),
+      is_favorite: Boolean(favoriteResult.data),
       ...(includeFullPlot ? { full_plot_summary: cached.fullPlotSummary } : {})
     },
     seasons: cached.seasons
