@@ -3,6 +3,31 @@ import { getTelegramToken } from "../lib/telegram.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_INIT_DATA_AGE_SECONDS = 24 * 60 * 60;
+const AUTH_CACHE_TTL_MS = 5 * 60 * 1000;
+const CATALOG_CACHE_TTL_MS = 60 * 1000;
+const DETAILS_CACHE_TTL_MS = 60 * 1000;
+const BOT_CACHE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_CATALOG_LIMIT = 40;
+const MAX_CATALOG_LIMIT = 50;
+const authCache = new Map();
+const catalogCache = new Map();
+const detailsCache = new Map();
+let watchBotCache = { value: "", expiresAt: 0 };
+
+export function parseCatalogPagination(body = {}) {
+  const requestedLimit = Number.parseInt(body.limit, 10);
+  const requestedOffset = Number.parseInt(body.offset, 10);
+  return {
+    limit: Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), MAX_CATALOG_LIMIT) : DEFAULT_CATALOG_LIMIT,
+    offset: Number.isFinite(requestedOffset) ? Math.min(Math.max(requestedOffset, 0), 1000000) : 0
+  };
+}
+
+export function truncateOverview(value, maxLength = 160) {
+  const text = String(value || "").replace(/\\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return text.slice(0, Math.max(1, maxLength - 1)).trimEnd() + "…";
+}
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -70,18 +95,31 @@ async function authenticate(env, body) {
   if (!verified) return { error: "INVALID_TELEGRAM_SESSION", status: 401 };
 
   const user = verified.user;
+  const userId = String(user.id);
+  const now = Date.now();
+  const cached = authCache.get(userId);
+  if (cached && now - cached.checkedAt < AUTH_CACHE_TTL_MS) {
+    if (cached.isActive === false) return { error: "USER_ACCESS_DISABLED", status: 403 };
+    return { userId };
+  }
+
   const { data: savedUser, error } = await getSupabase(env).from("telegram_users").upsert({
-    telegram_user_id: String(user.id),
+    telegram_user_id: userId,
     username: user.username || null,
     first_name: user.first_name || null,
     last_name: user.last_name || null,
     language_code: user.language_code || null,
     is_bot: false,
-    last_seen_at: new Date().toISOString()
+    last_seen_at: new Date(now).toISOString()
   }, { onConflict: "telegram_user_id" }).select("is_active").single();
   if (error) throw error;
-  if (savedUser?.is_active === false) return { error: "USER_ACCESS_DISABLED", status: 403 };
-  return { userId: String(user.id) };
+  const isActive = savedUser?.is_active !== false;
+  authCache.set(userId, { isActive, checkedAt: now });
+  if (authCache.size > 5000) {
+    for (const [key, value] of authCache) if (now - value.checkedAt >= AUTH_CACHE_TTL_MS) authCache.delete(key);
+  }
+  if (!isActive) return { error: "USER_ACCESS_DISABLED", status: 403 };
+  return { userId };
 }
 
 function safeProviderUrl(value) {
@@ -91,18 +129,29 @@ function safeProviderUrl(value) {
   } catch { return null; }
 }
 
-async function decorateTitles(supabase, titles, telegramUserId) {
-  const ids = (titles || []).map((title) => title.id);
-  if (!ids.length) return { titles: [], favoriteIds: [] };
+async function getWatchBotUsername(supabase) {
+  const now = Date.now();
+  if (watchBotCache.expiresAt > now) return watchBotCache.value;
+  const { data, error } = await supabase.from("bots")
+    .select("telegram_username").eq("slug", "movies").eq("is_active", true).maybeSingle();
+  if (error) throw error;
+  watchBotCache = {
+    value: String(data?.telegram_username || "").replace(/^@/, ""),
+    expiresAt: now + BOT_CACHE_TTL_MS
+  };
+  return watchBotCache.value;
+}
 
-  const [genreResult, rightsResult, mediaResult, favoritesResult, watchBotResult] = await Promise.all([
+async function decorateTitles(supabase, titles) {
+  const ids = (titles || []).map((title) => title.id);
+  if (!ids.length) return [];
+
+  const [genreResult, rightsResult, mediaResult] = await Promise.all([
     supabase.from("movie_title_genres").select("title_id,movie_genres(name,slug)").in("title_id", ids),
     supabase.from("movie_distribution_rights").select("title_id,status").in("title_id", ids).eq("status", "authorized"),
-    supabase.from("movie_media_assets").select("title_id,id,file_id,media_type").in("title_id", ids).eq("status", "active"),
-    supabase.from("movie_telegram_favorites").select("title_id").eq("telegram_user_id", telegramUserId),
-    supabase.from("bots").select("telegram_username").eq("slug", "movies").eq("is_active", true).maybeSingle()
+    supabase.from("movie_media_assets").select("title_id,id,file_id,media_type").in("title_id", ids).eq("status", "active")
   ]);
-  for (const result of [genreResult, rightsResult, mediaResult, favoritesResult, watchBotResult]) if (result.error) throw result.error;
+  for (const result of [genreResult, rightsResult, mediaResult]) if (result.error) throw result.error;
 
   const genresByTitle = new Map();
   for (const row of genreResult.data || []) {
@@ -111,93 +160,115 @@ async function decorateTitles(supabase, titles, telegramUserId) {
   }
   const authorized = new Set((rightsResult.data || []).map((row) => row.title_id));
   const hasActiveMedia = new Set((mediaResult.data || []).filter((row) => row.file_id && ["video", "document"].includes(row.media_type)).map((row) => row.title_id));
-  const favoriteIds = (favoritesResult.data || []).map((row) => row.title_id);
-  const watchUsername = String(watchBotResult.data?.telegram_username || "").replace(/^@/, "");
+  const needsWatchBot = (titles || []).some((title) => authorized.has(title.id) && hasActiveMedia.has(title.id));
+  const watchUsername = needsWatchBot ? await getWatchBotUsername(supabase) : "";
   const validWatchUsername = /^[a-zA-Z0-9_]{5,32}$/.test(watchUsername);
 
-  return {
-    titles: (titles || []).map((title) => {
-      const watchAvailable = authorized.has(title.id) && hasActiveMedia.has(title.id);
-      return {
-        ...title,
-        genres: genresByTitle.get(title.id) || [],
-        is_favorite: favoriteIds.includes(title.id),
-        watch_available: watchAvailable && validWatchUsername,
-        watch_url: watchAvailable && validWatchUsername ? "https://t.me/" + watchUsername + "?start=movie_" + title.id + "_watch" : null
-      };
-    }),
-    favoriteIds
-  };
+  return (titles || []).map((title) => {
+    const watchAvailable = authorized.has(title.id) && hasActiveMedia.has(title.id) && validWatchUsername;
+    return {
+      ...title,
+      overview: truncateOverview(title.overview, 160),
+      genres: genresByTitle.get(title.id) || [],
+      watch_available: watchAvailable,
+      watch_url: watchAvailable ? "https://t.me/" + watchUsername + "?start=movie_" + title.id + "_watch" : null
+    };
+  });
 }
 
 async function getCatalog(env, userId, body) {
   const supabase = getSupabase(env);
-  let query = supabase.from("movie_titles")
-    .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,poster_path,backdrop_path,created_at")
-    .eq("status", "active")
-    .limit(200);
-
+  const { limit, offset } = parseCatalogPagination(body);
   const type = ["movie", "series"].includes(body.media_type) ? body.media_type : null;
-  if (type) query = query.eq("media_type", type);
-  const search = String(body.query || "").trim().replace(/[\u0000-\u001f%_*]/g, " ").slice(0, 80).trim();
-  if (search) query = query.ilike("normalized_title", "%" + search + "%");
+  const search = String(body.query || "").trim().replace(/[\\u0000-\\u001f%_*]/g, " ").slice(0, 80).trim();
   const genre = String(body.genre || "").trim().slice(0, 40);
-  if (genre) {
-    const { data: genreRow, error: genreError } = await supabase.from("movie_genres")
-      .select("id").eq("slug", genre).maybeSingle();
-    if (genreError) throw genreError;
-    if (!genreRow) return json({ ok: true, titles: [], favorite_ids: [], genres: [] });
-    const { data: links, error: linksError } = await supabase.from("movie_title_genres")
-      .select("title_id").eq("genre_id", genreRow.id).limit(1000);
-    if (linksError) throw linksError;
-    const titleIds = (links || []).map((row) => row.title_id);
-    if (!titleIds.length) return json({ ok: true, titles: [], favorite_ids: [], genres: [] });
-    query = query.in("id", titleIds);
+  const sort = body.sort === "top" ? "rating" : body.sort === "release" ? "release_date" : "created_at";
+  const cacheKey = JSON.stringify({ limit, offset, type, search, genre, sort });
+  const now = Date.now();
+  let cached = catalogCache.get(cacheKey);
+
+  if (!cached || cached.expiresAt <= now) {
+    let query = supabase.from("movie_titles")
+      .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,poster_path,backdrop_path,created_at", { count: "exact" })
+      .eq("status", "active");
+    if (genre) {
+      query = supabase.from("movie_titles")
+        .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,poster_path,backdrop_path,created_at,movie_title_genres!inner(movie_genres!inner(slug))", { count: "exact" })
+        .eq("status", "active")
+        .eq("movie_title_genres.movie_genres.slug", genre);
+    }
+    if (type) query = query.eq("media_type", type);
+    if (search) query = query.ilike("normalized_title", "%" + search + "%");
+
+    const [titleResult, genresResult] = await Promise.all([
+      query.order(sort, { ascending: false, nullsFirst: false }).range(offset, offset + limit - 1),
+      supabase.from("movie_genres").select("name,slug").order("name", { ascending: true }).limit(80)
+    ]);
+    if (titleResult.error) throw titleResult.error;
+    if (genresResult.error) throw genresResult.error;
+
+    const rows = (titleResult.data || []).map(({ movie_title_genres, ...title }) => title);
+    const decoratedTitles = await decorateTitles(supabase, rows);
+    cached = {
+      titles: decoratedTitles,
+      genres: genresResult.data || [],
+      total: titleResult.count ?? offset + rows.length,
+      expiresAt: now + CATALOG_CACHE_TTL_MS
+    };
+    catalogCache.set(cacheKey, cached);
+    if (catalogCache.size > 150) {
+      for (const [key, value] of catalogCache) if (value.expiresAt <= now) catalogCache.delete(key);
+      while (catalogCache.size > 150) catalogCache.delete(catalogCache.keys().next().value);
+    }
   }
 
-  const sort = body.sort === "top" ? "rating" : body.sort === "release" ? "release_date" : "created_at";
-  const { data, error } = await query.order(sort, { ascending: false, nullsFirst: false });
-  if (error) throw error;
-
-  const decorated = await decorateTitles(supabase, data || [], userId);
-  const { data: genres, error: genresError } = await supabase.from("movie_genres")
-    .select("name,slug").order("name", { ascending: true }).limit(80);
-  if (genresError) throw genresError;
+  const { data: favorites, error: favoritesError } = await supabase.from("movie_telegram_favorites")
+    .select("title_id").eq("telegram_user_id", userId);
+  if (favoritesError) throw favoritesError;
+  const favoriteIds = (favorites || []).map((row) => row.title_id);
+  const favoriteSet = new Set(favoriteIds);
+  const titles = cached.titles.map((title) => ({ ...title, is_favorite: favoriteSet.has(title.id) }));
+  const nextOffset = offset + titles.length;
 
   return json({
     ok: true,
-    titles: decorated.titles,
-    favorite_ids: decorated.favoriteIds,
-    genres: genres || []
+    titles,
+    favorite_ids: favoriteIds,
+    genres: cached.genres,
+    pagination: {
+      limit,
+      offset,
+      total: cached.total,
+      next_offset: nextOffset,
+      has_more: nextOffset < cached.total
+    }
   });
 }
 
 async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
   if (!UUID_RE.test(titleId || "")) return json({ ok: false, error: "INVALID_TITLE_ID" }, 400);
   const supabase = getSupabase(env);
-  const { data: title, error } = await supabase.from("movie_titles")
-    .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,full_plot_summary,poster_path,backdrop_path")
-    .eq("id", titleId).eq("status", "active").maybeSingle();
-  if (error) throw error;
-  if (!title) return json({ ok: false, error: "TITLE_NOT_FOUND" }, 404);
+  const now = Date.now();
+  let cached = detailsCache.get(titleId);
 
-  const [genreResult, rightsResult, mediaResult, providerResult, favoriteResult] = await Promise.all([
-    supabase.from("movie_title_genres").select("movie_genres(name,slug)").eq("title_id", titleId),
-    supabase.from("movie_distribution_rights").select("status").eq("title_id", titleId).maybeSingle(),
-    supabase.from("movie_media_assets").select("id,file_id,media_type").eq("title_id", titleId).eq("status", "active").limit(10),
-    supabase.from("movie_provider_availability").select("provider,region_code,availability_type,provider_url").eq("title_id", titleId).eq("is_active", true),
-    supabase.from("movie_telegram_favorites").select("title_id").eq("telegram_user_id", userId).eq("title_id", titleId).maybeSingle()
-  ]);
-  for (const result of [genreResult, rightsResult, mediaResult, providerResult, favoriteResult]) if (result.error) throw result.error;
+  if (!cached || cached.expiresAt <= now) {
+    const [titleResult, genreResult, rightsResult, mediaResult, providerResult, seasonResult] = await Promise.all([
+      supabase.from("movie_titles")
+        .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,full_plot_summary,poster_path,backdrop_path")
+        .eq("id", titleId).eq("status", "active").maybeSingle(),
+      supabase.from("movie_title_genres").select("movie_genres(name,slug)").eq("title_id", titleId),
+      supabase.from("movie_distribution_rights").select("status").eq("title_id", titleId).maybeSingle(),
+      supabase.from("movie_media_assets").select("id,file_id,media_type").eq("title_id", titleId).eq("status", "active").limit(10),
+      supabase.from("movie_provider_availability").select("provider,region_code,availability_type,provider_url").eq("title_id", titleId).eq("is_active", true),
+      supabase.from("movie_seasons").select("id,season_number,name,overview,air_date,episode_count,poster_path")
+        .eq("title_id", titleId).eq("status", "active").order("season_number", { ascending: true })
+    ]);
+    for (const result of [titleResult, genreResult, rightsResult, mediaResult, providerResult, seasonResult]) if (result.error) throw result.error;
+    const title = titleResult.data;
+    if (!title) return json({ ok: false, error: "TITLE_NOT_FOUND" }, 404);
 
-  let seasons = [];
-  if (title.media_type === "series") {
-    const { data, error: seasonError } = await supabase.from("movie_seasons")
-      .select("id,season_number,name,overview,air_date,episode_count,poster_path")
-      .eq("title_id", titleId).eq("status", "active").order("season_number", { ascending: true });
-    if (seasonError) throw seasonError;
-    seasons = data || [];
-    if (seasons.length) {
+    let seasons = seasonResult.data || [];
+    if (title.media_type === "series" && seasons.length) {
       const { data: episodes, error: episodeError } = await supabase.from("movie_episodes")
         .select("id,season_id,episode_number,name,overview,air_date,runtime_minutes,still_path")
         .in("season_id", seasons.map((season) => season.id)).eq("status", "active")
@@ -205,36 +276,50 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
       if (episodeError) throw episodeError;
       seasons = seasons.map((season) => ({ ...season, episodes: (episodes || []).filter((episode) => episode.season_id === season.id) }));
     }
+
+    const watchAvailable = rightsResult.data?.status === "authorized" && (mediaResult.data || []).some((asset) => asset.file_id && ["video", "document"].includes(asset.media_type));
+    const username = watchAvailable ? await getWatchBotUsername(supabase) : "";
+    const watchUrl = watchAvailable && /^[a-zA-Z0-9_]{5,32}$/.test(username)
+      ? "https://t.me/" + username + "?start=movie_" + titleId + "_watch"
+      : null;
+
+    cached = {
+      title: {
+        ...Object.fromEntries(Object.entries(title).filter(([key]) => key !== "full_plot_summary")),
+        has_full_plot_summary: Boolean(title.full_plot_summary),
+        genres: (genreResult.data || []).map((row) => row.movie_genres?.name).filter(Boolean),
+        watch_available: Boolean(watchUrl),
+        watch_url: watchUrl,
+        providers: (providerResult.data || []).map((row) => ({
+          provider: row.provider,
+          region_code: row.region_code,
+          availability_type: row.availability_type,
+          provider_url: safeProviderUrl(row.provider_url)
+        })).filter((row) => row.provider_url)
+      },
+      fullPlotSummary: title.full_plot_summary || null,
+      seasons,
+      expiresAt: now + DETAILS_CACHE_TTL_MS
+    };
+    detailsCache.set(titleId, cached);
+    if (detailsCache.size > 300) {
+      for (const [key, value] of detailsCache) if (value.expiresAt <= now) detailsCache.delete(key);
+      while (detailsCache.size > 300) detailsCache.delete(detailsCache.keys().next().value);
+    }
   }
 
-  const watchAvailable = rightsResult.data?.status === "authorized" && (mediaResult.data || []).some((asset) => asset.file_id && ["video", "document"].includes(asset.media_type));
-  const { data: watchBot, error: botError } = watchAvailable
-    ? await supabase.from("bots").select("telegram_username").eq("slug", "movies").eq("is_active", true).maybeSingle()
-    : { data: null, error: null };
-  if (botError) throw botError;
-  const username = String(watchBot?.telegram_username || "").replace(/^@/, "");
-  const watchUrl = watchAvailable && /^[a-zA-Z0-9_]{5,32}$/.test(username)
-    ? "https://t.me/" + username + "?start=movie_" + titleId + "_watch"
-    : null;
+  const { data: favorite, error: favoriteError } = await supabase.from("movie_telegram_favorites")
+    .select("title_id").eq("telegram_user_id", userId).eq("title_id", titleId).maybeSingle();
+  if (favoriteError) throw favoriteError;
 
   return json({
     ok: true,
     title: {
-      ...Object.fromEntries(Object.entries(title).filter(([key]) => key !== "full_plot_summary")),
-      ...(includeFullPlot ? { full_plot_summary: title.full_plot_summary || null } : {}),
-      has_full_plot_summary: Boolean(title.full_plot_summary),
-      genres: (genreResult.data || []).map((row) => row.movie_genres?.name).filter(Boolean),
-      is_favorite: Boolean(favoriteResult.data),
-      watch_available: Boolean(watchUrl),
-      watch_url: watchUrl,
-      providers: (providerResult.data || []).map((row) => ({
-        provider: row.provider,
-        region_code: row.region_code,
-        availability_type: row.availability_type,
-        provider_url: safeProviderUrl(row.provider_url)
-      })).filter((row) => row.provider_url)
+      ...cached.title,
+      is_favorite: Boolean(favorite),
+      ...(includeFullPlot ? { full_plot_summary: cached.fullPlotSummary } : {})
     },
-    seasons
+    seasons: cached.seasons
   });
 }
 
