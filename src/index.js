@@ -93,6 +93,7 @@ import { getSupabase } from "./lib/supabase.js";
 import { cleanupExpiredAISessionMessages } from "./lib/ai-memory.js";
 import { activateDueMonetizationCampaigns } from "./lib/monetization.js";
 import { renderMovieSharePage } from "./lib/movie-sharing.js";
+import { handleMiniAppRoute } from "./routes/miniapp.js";
 import {
   listMovieQueue,
   enqueueMovieQueue,
@@ -374,6 +375,9 @@ export default {
           )
         , request);
       }
+
+      const miniAppResponse = await handleMiniAppRoute(env, request, url);
+      if (miniAppResponse) return miniAppResponse;
 
       /*
        * PUBLIC MOVIE SHARE PAGES
