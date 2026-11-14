@@ -182,21 +182,22 @@ async function getCatalog(env, userId, body) {
   const type = ["movie", "series"].includes(body.media_type) ? body.media_type : null;
   const search = String(body.query || "").trim().replace(/[\\u0000-\\u001f%_*]/g, " ").slice(0, 80).trim();
   const genre = String(body.genre || "").trim().slice(0, 40);
+  const favoritesOnly = body.favorites_only === true;
   const sort = body.sort === "top" ? "rating" : body.sort === "release" ? "release_date" : "created_at";
-  const cacheKey = JSON.stringify({ limit, offset, type, search, genre, sort });
+  const cacheKey = JSON.stringify({ limit, offset, type, search, genre, favoritesOnly, userId: favoritesOnly ? userId : null, sort });
   const now = Date.now();
   let cached = catalogCache.get(cacheKey);
 
   if (!cached || cached.expiresAt <= now) {
+    const relations = [];
+    if (genre) relations.push("movie_title_genres!inner(movie_genres!inner(slug))");
+    if (favoritesOnly) relations.push("movie_telegram_favorites!inner(telegram_user_id)");
+    const selectFields = "id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,poster_path,backdrop_path,created_at" + (relations.length ? "," + relations.join(",") : "");
     let query = supabase.from("movie_titles")
-      .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,poster_path,backdrop_path,created_at", { count: "exact" })
+      .select(selectFields, { count: "exact" })
       .eq("status", "active");
-    if (genre) {
-      query = supabase.from("movie_titles")
-        .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,poster_path,backdrop_path,created_at,movie_title_genres!inner(movie_genres!inner(slug))", { count: "exact" })
-        .eq("status", "active")
-        .eq("movie_title_genres.movie_genres.slug", genre);
-    }
+    if (genre) query = query.eq("movie_title_genres.movie_genres.slug", genre);
+    if (favoritesOnly) query = query.eq("movie_telegram_favorites.telegram_user_id", userId);
     if (type) query = query.eq("media_type", type);
     if (search) query = query.ilike("normalized_title", "%" + search + "%");
 
@@ -207,7 +208,7 @@ async function getCatalog(env, userId, body) {
     if (titleResult.error) throw titleResult.error;
     if (genresResult.error) throw genresResult.error;
 
-    const rows = (titleResult.data || []).map(({ movie_title_genres, ...title }) => title);
+    const rows = (titleResult.data || []).map(({ movie_title_genres, movie_telegram_favorites, ...title }) => title);
     const decoratedTitles = await decorateTitles(supabase, rows);
     cached = {
       titles: decoratedTitles,
