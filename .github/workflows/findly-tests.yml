@@ -16,6 +16,7 @@ jobs:
           node-version: 22
       - run: npm install --no-package-lock
       - run: npm test
+      - run: node --check miniapp/app.js
       - run: npx --yes wrangler@4.156.1 deploy --dry-run
 
   monetization-migration:
