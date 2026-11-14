@@ -9,7 +9,6 @@
     tg.ready();
     tg.expand();
     try { tg.setHeaderColor("#090a0d"); tg.setBackgroundColor("#090a0d"); } catch {}
-    tg.enableClosingConfirmation?.();
   }
 
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[char]));
@@ -89,7 +88,7 @@
     else if (state.tab === "genre") renderGrid("حسب التصنيف", state.titles.filter(x => (x.genres || []).includes(state.genreName)));
   }
   async function openDetails(id) {
-    try { state.activeTitle = id; state.showFullPlot = false; render(); state.details = await api("details", { title_id: id }); render(); }
+    try { state.activeTitle = id; state.showFullPlot = false; tg?.BackButton?.show(); render(); state.details = await api("details", { title_id: id }); render(); }
     catch (error) { state.activeTitle = null; notify(error.message); render(); }
   }
   function renderDetails() {
@@ -110,14 +109,14 @@
     try { await api("favorite", { title_id: id, action: add ? "add" : "remove" }); if (add) state.favoriteIds.add(id); else state.favoriteIds.delete(id); if (state.details?.title?.id === id) state.details.title.is_favorite = add; notify(add ? "تزاد لمكتبك" : "تحيد من مكتبك"); render(); }
     catch (error) { notify(error.message); }
   }
-  function goTab(tab) { state.activeTitle = null; state.details = null; state.tab = tab; render(); }
+  function goTab(tab) { state.activeTitle = null; state.details = null; state.showFullPlot = false; tg?.BackButton?.hide(); state.tab = tab; render(); }
   app.addEventListener("click", async (event) => {
     const button = event.target.closest("button");
     if (!button) return;
     if (button.dataset.open) return openDetails(button.dataset.open);
     if (button.dataset.watch) { const title = state.details?.title; const url = title?.watch_url || state.titles.find(t => t.id === button.dataset.watch)?.watch_url; if (url) tg?.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank", "noopener"); else return openDetails(button.dataset.watch); return; }
     if (button.dataset.favorite) return toggleFavorite(button.dataset.favorite);
-    if (button.dataset.close !== undefined) { state.activeTitle = null; state.details = null; render(); return; }
+    if (button.dataset.close !== undefined) { state.activeTitle = null; state.details = null; state.showFullPlot = false; tg?.BackButton?.hide(); render(); return; }
     if (button.dataset.plot !== undefined) {
       if (!state.details?.title?.full_plot_summary) {
         try {
@@ -157,7 +156,7 @@
     }
   }
   if (tg?.BackButton) {
-    tg.BackButton.onClick(() => { if (state.activeTitle) { state.activeTitle = null; state.details = null; render(); tg.BackButton.hide(); } else { goTab("home"); } });
+    tg.BackButton.onClick(() => { if (state.activeTitle) { state.activeTitle = null; state.details = null; state.showFullPlot = false; render(); tg.BackButton.hide(); } else { goTab("home"); } });
   }
   start();
 })();
