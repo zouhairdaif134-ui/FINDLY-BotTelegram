@@ -9,6 +9,7 @@ on:
       - main
     paths:
       - "src/**"
+      - "miniapp/**"
       - "test/**"
       - "dashboard/**"
       - "package.json"

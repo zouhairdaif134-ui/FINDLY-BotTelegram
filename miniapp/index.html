@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090a0d">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="FINDLY Movies — اكتشف الأفلام والمسلسلات داخل Telegram">
+  <title>FINDLY Movies</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://telegram.org/js/telegram-web-app.js?65"></script>
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="FINDLY Movies">
+        <span class="brand-mark">F</span>
+        <span><b>FINDLY</b><small>MOVIES</small></span>
+      </a>
+      <button class="icon-button" id="search-open" aria-label="بحث">⌕</button>
+    </header>
+    <main id="app" aria-live="polite">
+      <section class="loading-state"><span class="loader"></span><p>كنوجدو ليك المكتبة...</p></section>
+    </main>
+    <nav class="bottom-nav" aria-label="التنقل الرئيسي">
+      <button data-tab="home" class="active"><span>⌂</span><small>الرئيسية</small></button>
+      <button data-tab="movie"><span>▣</span><small>الأفلام</small></button>
+      <button data-tab="series"><span>▤</span><small>المسلسلات</small></button>
+      <button data-tab="favorites"><span>♡</span><small>مكتبتي</small></button>
+    </nav>
+  </div>
+  <div id="toast" class="toast" role="status"></div>
+</body>
+</html>

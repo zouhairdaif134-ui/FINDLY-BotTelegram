@@ -7,7 +7,8 @@ import {
   isMoviesYearReply,
   MOVIE_PAGE_SIZE,
   buildMoviePosterAlbum,
-  buildMoviePosterKeyboard
+  buildMoviePosterKeyboard,
+  buildMoviesMiniAppButton
 } from "./movies-bot.js";
 import { getTelegramToken, getTelegramWebhookSecret } from "./telegram.js";
 
@@ -195,4 +196,15 @@ test("builds two-column detail buttons for every title in the poster album", () 
   assert.equal(keyboard[0].length, 2);
   assert.equal(keyboard[1].length, 2);
   assert.equal(keyboard[1][1].callback_data, "movies:title:550e8400-e29b-41d4-a716-446655440003");
+});
+
+
+test("builds a secure Telegram Mini App launch button for the Master Bot", () => {
+  assert.deepEqual(buildMoviesMiniAppButton("https://findly-v3-api.berrchidcity99.workers.dev/"), {
+    text: "🎬 افتح مكتبة FINDLY",
+    web_app: { url: "https://findly-v3-api.berrchidcity99.workers.dev/" }
+  });
+  assert.equal(buildMoviesMiniAppButton("http://example.com"), null);
+  assert.equal(buildMoviesMiniAppButton("javascript:alert(1)"), null);
+  assert.equal(buildMoviesMiniAppButton(""), null);
 });

@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "src/**"
+      - "miniapp/**"
       - "package.json"
       - "package-lock.json"
       - "wrangler.jsonc"
