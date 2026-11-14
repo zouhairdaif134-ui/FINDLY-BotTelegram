@@ -3,7 +3,9 @@ import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-2";
   const tg = window.Telegram?.WebApp, app = document.getElementById("app"), toast = document.getElementById("toast");
   const state = {titles:[],genres:[],favoriteIds:new Set(),tab:"home",query:"",searchType:"all",searchResults:[],searchHasMore:false,searchNextOffset:0,searchRequestId:0,searchLoading:false,genre:"",genreName:"",activeTitle:null,details:null,showFullPlot:false,loading:true,heroIndex:0,pagination:{nextOffset:0,hasMore:false,loading:false}};
   const initData = tg?.initData || "";
-  let savedScrollY=0, heroTimer=null, searchTimer=null, heroTouchStart=0;\n  const detailsCache=new Map(), detailsRequests=new Map();\n  let derivedSource=null, derivedData=null;
+  let savedScrollY=0, heroTimer=null, searchTimer=null, heroTouchStart=0;
+  const detailsCache=new Map(), detailsRequests=new Map();
+  let derivedSource=null, derivedData=null;
   if(tg){tg.ready();tg.expand();try{tg.setHeaderColor("#0B0B0F");tg.setBackgroundColor("#0B0B0F");}catch{}}
   const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const poster=t=>tmdbImageUrl(t.poster_path,"w342");
@@ -72,7 +74,9 @@ import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-2";
   }
   function goTab(tab){state.activeTitle=null;state.details=null;state.showFullPlot=false;if(tab!=="genre"){state.genre="";state.genreName="";}tg?.BackButton?.hide();state.tab=tab;render();loadCatalogPage(true).catch(error=>notify(error.message));}
   function shareTitle(id){const t=state.details?.title;if(!t||t.id!==id)return;const shareUrl="https://t.me/FindlySearch2026Bot",message="اكتشف "+t.title+(t.release_year?" ("+t.release_year+")":"")+" في مكتبة FINDLY Movies.",url="https://t.me/share/url?url="+encodeURIComponent(shareUrl)+"&text="+encodeURIComponent(message);if(tg?.openTelegramLink)tg.openTelegramLink(url);else window.open(url,"_blank","noopener");}
-  app.addEventListener("pointerover",event=>{const target=event.target.closest("[data-open]");if(target)prefetchDetails(target.dataset.open);});\n  app.addEventListener("touchstart",event=>{const target=event.target.closest("[data-open]");if(target)prefetchDetails(target.dataset.open);},{passive:true});\n  app.addEventListener("click",async event=>{
+  app.addEventListener("pointerover",event=>{const target=event.target.closest("[data-open]");if(target)prefetchDetails(target.dataset.open);});
+  app.addEventListener("touchstart",event=>{const target=event.target.closest("[data-open]");if(target)prefetchDetails(target.dataset.open);},{passive:true});
+  app.addEventListener("click",async event=>{
     const b=event.target.closest("button");if(!b)return;
     if(b.dataset.open)return openDetails(b.dataset.open);
     if(b.dataset.watch){const t=state.details?.title,url=t?.watch_url||state.titles.find(x=>x.id===b.dataset.watch)?.watch_url;if(url)tg?.openTelegramLink?tg.openTelegramLink(url):window.open(url,"_blank","noopener");else return openDetails(b.dataset.watch);return;}
