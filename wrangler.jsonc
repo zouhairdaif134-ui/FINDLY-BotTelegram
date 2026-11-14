@@ -7,7 +7,7 @@
     "directory": "./miniapp",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/telegram/*", "/share/*", "/health"]
+    "run_worker_first": ["/api/*", "/telegram/*", "/share/*", "/jobs/*", "/health"]
   },
   "vars": {
     "SUPABASE_URL": "https://rcebarvpmpxsosclexyg.supabase.co",
