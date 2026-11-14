@@ -1,154 +1,94 @@
 import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-2";
 (() => {
-  const tg = window.Telegram?.WebApp;
-  const app = document.getElementById("app");
-  const toast = document.getElementById("toast");
-  const state = { titles: [], genres: [], favoriteIds: new Set(), tab: "home", query: "", genre: "", activeTitle: null, details: null, showFullPlot: false, loading: true };
+  const tg = window.Telegram?.WebApp, app = document.getElementById("app"), toast = document.getElementById("toast");
+  const state = {titles:[],genres:[],favoriteIds:new Set(),tab:"home",query:"",searchType:"all",genre:"",genreName:"",activeTitle:null,details:null,showFullPlot:false,loading:true,heroIndex:0};
   const initData = tg?.initData || "";
-
-  if (tg) {
-    tg.ready();
-    tg.expand();
-    try { tg.setHeaderColor("#090a0d"); tg.setBackgroundColor("#090a0d"); } catch {}
+  let savedScrollY=0, heroTimer=null, searchTimer=null, heroTouchStart=0;
+  if(tg){tg.ready();tg.expand();try{tg.setHeaderColor("#090a0d");tg.setBackgroundColor("#090a0d");}catch{}}
+  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const poster=t=>tmdbImageUrl(t.poster_path,"w342");
+  const backdrop=t=>tmdbImageUrl(t.backdrop_path,"w1280")||tmdbImageUrl(t.poster_path,"w500");
+  const normalizeSearch=v=>String(v??"").toLocaleLowerCase("ar").normalize("NFD").replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g,"").replace(/[أإآٱ]/g,"ا").replace(/ى/g,"ي").replace(/ـ/g,"").trim();
+  const isNew=t=>{const d=Date.parse(t.created_at||"");return Number.isFinite(d)&&Date.now()-d>=0&&Date.now()-d<=604800000;};
+  const notify=m=>{toast.textContent=m;toast.classList.add("show");clearTimeout(notify.timer);notify.timer=setTimeout(()=>toast.classList.remove("show"),2200);};
+  async function api(endpoint,payload={}){const response=await fetch("/api/miniapp/"+endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,init_data:initData})});const data=await response.json().catch(()=>({}));if(!response.ok||!data.ok)throw new Error(data.error||"تعذر الاتصال بالخدمة");return data;}
+  const meta=t=>[t.release_year||"",t.media_type==="series"?"مسلسل":"فيلم",t.runtime_minutes?t.runtime_minutes+" دقيقة":""].filter(Boolean).join(" · ");
+  function card(t,rank=null){
+    const src=poster(t),rating=t.rating!=null?'<span class="poster-rating">★ '+Number(t.rating).toFixed(1)+'</span>':"",fresh=isNew(t)?'<span class="new-badge">جديد</span>':"",rankMarkup=rank?'<span class="rank-number" aria-hidden="true">'+rank+'</span>':"";
+    return '<button class="poster-card'+(rank?' ranked-card':'')+'" data-open="'+esc(t.id)+'">'+rankMarkup+'<div class="poster">'+(src?'<img class="poster-image" loading="lazy" src="'+esc(src)+'" alt="'+esc(t.title)+'">':'<span class="poster-fallback">'+esc(t.title)+'</span>')+rating+fresh+'</div><div class="poster-title">'+esc(t.title)+'</div><div class="poster-sub">'+esc(meta(t))+'</div></button>';
   }
-
-  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[char]));
-  const poster = (title) => tmdbImageUrl(title.poster_path, "w342");
-  const backdrop = (title) => tmdbImageUrl(title.backdrop_path, "w1280") || tmdbImageUrl(title.poster_path, "w500");
-  const notify = (message) => {
-    toast.textContent = message; toast.classList.add("show");
-    clearTimeout(notify.timer); notify.timer = setTimeout(() => toast.classList.remove("show"), 2200);
-  };
-  async function api(endpoint, payload = {}) {
-    const response = await fetch("/api/miniapp/" + endpoint, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, init_data: initData })
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.ok) throw new Error(data.error || "تعذر الاتصال بالخدمة");
-    return data;
+  function shelf(title,rows,key){if(!rows?.length)return "";return '<section class="shelf"><div class="shelf-head"><h2>'+title+'</h2><button data-view="'+key+'">عرض الكل <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button></div><div class="poster-row">'+rows.map(card).join("")+'</div></section>';}
+  function topShelf(rows){if(!rows.length)return "";return '<section class="shelf top-ten-shelf"><div class="shelf-head"><h2>أفضل 10</h2><button data-view="top">عرض الكل <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button></div><div class="poster-row">'+rows.slice(0,10).map((t,i)=>card(t,i+1)).join("")+'</div></section>';}
+  function hero(t,index,total){
+    if(!t)return '<section class="empty-state"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><strong>المكتبة قيد الإعداد</strong>لا توجد عناوين منشورة حالياً.</section>';
+    const dots=total>1?'<div class="hero-dots">'+Array.from({length:total},(_,i)=>'<button class="hero-dot'+(i===index?' active':'')+'" data-hero-index="'+i+'" aria-label="الشريحة '+(i+1)+'"></button>').join("")+'</div>':"";
+    return '<section class="hero" style="--hero-image:url(&quot;'+esc(backdrop(t))+'&quot;)"><div class="hero-content"><div class="eyebrow">اختيار FINDLY</div><h1>'+esc(t.title)+'</h1><div class="meta"><span>'+esc(t.release_year||"")+'</span><span>'+(t.media_type==="series"?"مسلسل":"فيلم")+'</span>'+(t.rating!=null?'<span class="rating">★ '+Number(t.rating).toFixed(1)+'</span>':"")+'</div><p>'+esc(t.overview||"اكتشف تفاصيل هذا العمل السينمائي.")+'</p><div class="actions">'+(t.watch_available?'<button class="primary-btn" data-watch="'+esc(t.id)+'"><svg viewBox="0 0 24 24"><path d="m8 5 12 7-12 7z" fill="currentColor" stroke="none"/></svg>مشاهدة</button>':"")+'<button class="secondary-btn" data-open="'+esc(t.id)+'"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>تفاصيل</button></div></div>'+dots+'</section>';
   }
-  const meta = (title) => [title.release_year || "", title.media_type === "series" ? "مسلسل" : "فيلم", title.runtime_minutes ? title.runtime_minutes + " دقيقة" : ""].filter(Boolean).join(" · ");
-  function card(title) {
-    const src = poster(title);
-    const rating = title.rating != null ? '<span class="poster-rating">★ ' + Number(title.rating).toFixed(1) + '</span>' : "";
-    return '<button class="poster-card" data-open="' + esc(title.id) + '">' +
-      '<div class="poster">' + (src ? '<img loading="lazy" src="' + esc(src) + '" alt="' + esc(title.title) + '">' : '<span class="poster-fallback">' + esc(title.title) + '</span>') + rating + '</div>' +
-      '<div class="poster-title">' + esc(title.title) + '</div><div class="poster-sub">' + esc(meta(title)) + '</div></button>';
+  function getSlides(){const latest=[...state.titles].sort((a,b)=>String(b.created_at||b.release_date||"").localeCompare(String(a.created_at||a.release_date||"")));const top=[...state.titles].filter(x=>x.rating!=null).sort((a,b)=>Number(b.rating)-Number(a.rating));return [...new Map([...top,...latest].map(x=>[x.id,x])).values()].slice(0,5);}
+  function startHeroTimer(total){clearInterval(heroTimer);if(total<2)return;heroTimer=setInterval(()=>{if(state.tab!=="home"||state.activeTitle)return;const slides=getSlides();state.heroIndex=(state.heroIndex+1)%slides.length;const old=app.querySelector(".hero");if(!old)return;const wrap=document.createElement("div");wrap.innerHTML=hero(slides[state.heroIndex],state.heroIndex,slides.length);old.replaceWith(wrap.firstElementChild);},6500);}
+  function renderHome(){
+    const latest=[...state.titles].sort((a,b)=>String(b.created_at||b.release_date||"").localeCompare(String(a.created_at||a.release_date||""))).slice(0,12);
+    const top=[...state.titles].filter(x=>x.rating!=null).sort((a,b)=>Number(b.rating)-Number(a.rating)).slice(0,10);
+    const movies=state.titles.filter(x=>x.media_type==="movie").slice(0,12),series=state.titles.filter(x=>x.media_type==="series").slice(0,12),slides=getSlides(),idx=slides.length?state.heroIndex%slides.length:0,favorites=state.titles.filter(x=>state.favoriteIds.has(x.id)).slice(0,12);
+    app.innerHTML=hero(slides[idx],idx,slides.length)+'<div class="category-strip"><button class="chip '+(!state.genre?"active":"")+'" data-genre="all">الكل</button>'+state.genres.slice(0,18).map(g=>'<button class="chip '+(state.genre===g.slug?"active":"")+'" data-genre="'+esc(g.slug)+'">'+esc(g.name)+'</button>').join("")+'</div>'+shelf("مكتبتي",favorites,"favorites")+topShelf(top)+shelf("أضيف حديثاً",latest,"latest")+shelf("الأفلام",movies,"movie")+shelf("المسلسلات",series,"series");
+    startHeroTimer(slides.length);
+    const node=app.querySelector(".hero");if(node){node.addEventListener("touchstart",e=>{heroTouchStart=e.changedTouches[0]?.clientX||0;},{passive:true});node.addEventListener("touchend",e=>{const end=e.changedTouches[0]?.clientX||0;if(Math.abs(end-heroTouchStart)<45||slides.length<2)return;state.heroIndex=(state.heroIndex+(end<heroTouchStart?1:slides.length-1))%slides.length;renderHome();},{passive:true});}
   }
-  function shelf(title, rows, key) {
-    if (!rows?.length) return "";
-    return '<section class="shelf"><div class="shelf-head"><h2>' + title + '</h2><button data-view="' + key + '">عرض الكل <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button></div><div class="poster-row">' + rows.map(card).join("") + '</div></section>';
+  function renderGrid(title,rows){app.innerHTML='<div class="page-heading"><h1>'+esc(title)+'</h1><p>'+rows.length+' عنوان في المكتبة</p></div>'+(rows.length?'<div class="catalog-grid">'+rows.map(card).join("")+'</div>':'<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>'+(title==="مكتبتي"?"قائمتك فارغة":"لا توجد نتائج")+'</strong>جرّب اختياراً آخر أو بحثاً مختلفاً.</div>');}
+  function getSearchRows(){const q=normalizeSearch(state.query);return state.titles.filter(t=>{const typeOk=state.searchType==="all"||t.media_type===state.searchType;const hay=normalizeSearch((t.title||"")+" "+(t.original_title||""));return typeOk&&(!q||hay.includes(q));});}
+  function updateSearchResults(){const target=document.getElementById("search-results");if(!target)return;const rows=getSearchRows();target.innerHTML=state.query?(rows.length?'<div class="catalog-grid">'+rows.map(card).join("")+'</div>':'<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>لا توجد نتائج</strong>جرّب عنواناً آخر.</div>'):'<div class="empty-state">ابدأ بكتابة اسم الفيلم أو المسلسل.</div>';}
+  function renderSearch(){app.innerHTML='<div class="page-heading"><h1>البحث في FINDLY</h1><p>ابحث عن فيلم أو مسلسل</p></div><div class="search-wrap"><input id="search-input" class="search-input" placeholder="ابحث عن فيلم أو مسلسل" value="'+esc(state.query)+'" autocomplete="off"><div class="search-filters"><button class="chip'+(state.searchType==="all"?" active":"")+'" data-search-type="all">الكل</button><button class="chip'+(state.searchType==="movie"?" active":"")+'" data-search-type="movie">أفلام</button><button class="chip'+(state.searchType==="series"?" active":"")+'" data-search-type="series">مسلسلات</button></div></div><div id="search-results"></div>';updateSearchResults();}
+  function render(){
+    document.querySelectorAll(".bottom-nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===state.tab));
+    if(state.tab!=="home")clearInterval(heroTimer);
+    if(state.loading){app.innerHTML='<section class="loading-state"><div class="skeleton skeleton-hero"></div><div class="skeleton-heading"></div><div class="skeleton-row"><i></i><i></i><i></i><i></i></div></section>';return;}
+    if(state.activeTitle){renderDetails();return;}
+    if(state.tab==="home")renderHome();else if(state.tab==="search")renderSearch();else if(state.tab==="movie")renderGrid("الأفلام",state.titles.filter(x=>x.media_type==="movie"));else if(state.tab==="series")renderGrid("المسلسلات",state.titles.filter(x=>x.media_type==="series"));else if(state.tab==="favorites")renderGrid("مكتبتي",state.titles.filter(x=>state.favoriteIds.has(x.id)));else if(state.tab==="latest")renderGrid("أضيف حديثاً",[...state.titles].sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))));else if(state.tab==="top")renderGrid("الأعلى تقييماً",[...state.titles].sort((a,b)=>Number(b.rating||0)-Number(a.rating||0)));else if(state.tab==="genre")renderGrid("حسب التصنيف",state.titles.filter(x=>(x.genres||[]).includes(state.genreName)));
   }
-  function hero(title) {
-    if (!title) return '<section class="empty-state"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><strong>المكتبة قيد الإعداد</strong>لا توجد عناوين منشورة حالياً.</section>';
-    const image = backdrop(title);
-    return '<section class="hero" style="--hero-image:url(&quot;' + esc(image) + '&quot;)"><div class="hero-content"><div class="eyebrow">اختيار FINDLY</div><h1>' + esc(title.title) + '</h1><div class="meta"><span>' + esc(title.release_year || "") + '</span><span>' + (title.media_type === "series" ? "مسلسل" : "فيلم") + '</span>' + (title.rating != null ? '<span class="rating">★ ' + Number(title.rating).toFixed(1) + '</span>' : "") + '</div><p>' + esc(title.overview || "اكتشف تفاصيل هذا العمل السينمائي.") + '</p><div class="actions">' + (title.watch_available ? '<button class="primary-btn" data-watch="' + esc(title.id) + '"><svg viewBox="0 0 24 24"><path d="m8 5 12 7-12 7z" fill="currentColor" stroke="none"/></svg>مشاهدة</button>' : "") + '<button class="secondary-btn" data-open="' + esc(title.id) + '"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>تفاصيل</button></div></div></section>';
+  async function openDetails(id){savedScrollY=window.scrollY||document.documentElement.scrollTop||0;try{state.activeTitle=id;state.showFullPlot=false;tg?.BackButton?.show();render();state.details=await api("details",{title_id:id});render();}catch(error){state.activeTitle=null;notify(error.message);render();window.scrollTo(0,savedScrollY);}}
+  function closeDetails(){state.activeTitle=null;state.details=null;state.showFullPlot=false;tg?.BackButton?.hide();render();requestAnimationFrame(()=>window.scrollTo(0,savedScrollY));}
+  function renderDetails(){
+    if(!state.details?.title){app.innerHTML='<section class="detail"><div class="loading-state"><div class="skeleton skeleton-hero"></div><div class="skeleton-heading"></div></div></section>';return;}
+    const t=state.details.title,image=backdrop(t),favorite=state.favoriteIds.has(t.id);
+    const providers=(t.providers||[]).map(p=>'<a class="provider" href="'+esc(p.provider_url)+'" target="_blank" rel="noopener noreferrer">'+esc(p.provider)+' · '+esc(p.availability_type)+' · '+esc(p.region_code)+'</a>').join("");
+    const seasons=(state.details.seasons||[]).map(s=>'<details class="season"><summary>'+esc(s.name||("الموسم "+s.season_number))+'</summary><div class="season-content">'+(s.episodes||[]).map(e=>'<div class="episode">'+esc("الحلقة "+e.episode_number+" — "+(e.name||"بدون عنوان"))+'</div>').join("")+'</div></details>').join("");
+    const similar=state.titles.filter(x=>x.id!==t.id&&(x.genres||[]).some(g=>(t.genres||[]).includes(g))).slice(0,10);
+    app.innerHTML='<section class="detail"><div class="detail-hero" style="background-image:url(&quot;'+esc(image)+'&quot;)"><button class="detail-close" data-close aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div class="detail-body">'+(poster(t)?'<img class="detail-poster poster-image" src="'+esc(poster(t))+'" alt="'+esc(t.title)+'">':'<span class="detail-poster-fallback">'+esc(t.title)+'</span>')+'<div class="eyebrow">'+(t.media_type==="series"?"FINDLY SERIES":"FINDLY MOVIE")+'</div><h1>'+esc(t.title)+'</h1><div class="meta"><span>'+esc(meta(t))+'</span>'+(t.rating!=null?'<span class="rating">★ '+Number(t.rating).toFixed(1)+'/10</span>':"")+'</div><p class="description">'+esc(t.overview||"لا يتوفر ملخص قصير لهذا العنوان حالياً.")+'</p><div class="detail-actions">'+(t.watch_url?'<button class="primary-btn" data-watch="'+esc(t.id)+'"><svg viewBox="0 0 24 24"><path d="m8 5 12 7-12 7z" fill="currentColor" stroke="none"/></svg>مشاهدة</button>':'<button class="secondary-btn" disabled>المشاهدة غير متاحة حالياً</button>')+'<button class="favorite-round" data-favorite="'+esc(t.id)+'" aria-label="'+(favorite?"إزالة من قائمتي":"إضافة إلى قائمتي")+'"><svg viewBox="0 0 24 24"><path d="M20.8 8.7c0 5.1-8.8 11-8.8 11s-8.8-5.9-8.8-11A4.7 4.7 0 0 1 12 6.1a4.7 4.7 0 0 1 8.8 2.6Z" '+(favorite?'fill="currentColor"':'')+'/></svg></button><button class="share-round" data-share="'+esc(t.id)+'" aria-label="مشاركة العنوان"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.4m-6.6 7 6.6 4.4"/></svg></button></div>'+
+      (t.has_full_plot_summary?'<section class="detail-section"><button class="plot-toggle" data-plot>'+(state.showFullPlot?"أقل":"المزيد")+(state.showFullPlot?" −":" +")+'</button>'+(t.full_plot_summary?'<p id="full-plot" class="description" '+(state.showFullPlot?'':'hidden')+'>'+esc(t.full_plot_summary)+'</p>':"")+'</section>':"")+
+      (t.genres?.length?'<section class="detail-section"><h3>التصنيفات</h3><div class="meta">'+t.genres.map(esc).join(" · ")+'</div></section>':"")+(seasons?'<section class="detail-section"><h3>المواسم والحلقات</h3>'+seasons+'</section>':"")+(providers?'<section class="detail-section"><h3>مصادر المشاهدة المتاحة</h3>'+providers+'</section>':"")+shelf("أفلام ومسلسلات مشابهة",similar,"similar")+'</div></section>';
   }
-  function renderHome() {
-    const latest = [...state.titles].sort((a,b) => String(b.release_date || b.created_at).localeCompare(String(a.release_date || a.created_at))).slice(0,12);
-    const top = [...state.titles].filter(x => x.rating != null).sort((a,b) => Number(b.rating)-Number(a.rating)).slice(0,12);
-    const movies = state.titles.filter(x => x.media_type === "movie").slice(0,12);
-    const series = state.titles.filter(x => x.media_type === "series").slice(0,12);
-    const feature = top[0] || latest[0];
-    app.innerHTML = hero(feature) +
-      '<div class="category-strip"><button class="chip ' + (!state.genre ? "active" : "") + '">الكل</button>' + state.genres.slice(0,18).map(g => '<button class="chip ' + (state.genre === g.slug ? "active" : "") + '" data-genre="' + esc(g.slug) + '">' + esc(g.name) + '</button>').join("") + '</div>' +
-      shelf("أضيف حديثاً", latest, "latest") + shelf("الأعلى تقييماً", top, "top") + shelf("الأفلام", movies, "movie") + shelf("المسلسلات", series, "series");
+  async function toggleFavorite(id){
+    const add=!state.favoriteIds.has(id);
+    try{await api("favorite",{title_id:id,action:add?"add":"remove"});if(add)state.favoriteIds.add(id);else state.favoriteIds.delete(id);if(state.details?.title?.id===id)state.details.title.is_favorite=add;
+      const button=app.querySelector('[data-favorite="'+CSS.escape(String(id))+'"]');if(button){button.setAttribute("aria-label",add?"إزالة من قائمتي":"إضافة إلى قائمتي");const path=button.querySelector("path");if(path)path.setAttribute("fill",add?"currentColor":"none");}
+      notify(add?"تمت الإضافة إلى مكتبتي":"تمت الإزالة من مكتبتي");
+    }catch(error){notify(error.message);}
   }
-  function renderGrid(title, rows) {
-    app.innerHTML = '<div class="page-heading"><h1>' + esc(title) + '</h1><p>' + rows.length + ' عنوان في المكتبة</p></div>' +
-      (rows.length ? '<div class="catalog-grid">' + rows.map(card).join("") + '</div>' : '<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>' + (title === "مكتبتي" ? "قائمتك فارغة" : "لا توجد نتائج") + '</strong>جرّب اختياراً آخر أو بحثاً مختلفاً.</div>');
-  }
-  function renderSearch() {
-    const rows = state.titles.filter(t => (t.title + " " + (t.original_title || "")).toLocaleLowerCase().includes(state.query.toLocaleLowerCase()));
-    app.innerHTML = '<div class="page-heading"><h1>البحث في FINDLY</h1><p>ابحث عن فيلم أو مسلسل</p></div><div class="search-wrap"><input id="search-input" class="search-input" placeholder="ابحث عن فيلم أو مسلسل" value="' + esc(state.query) + '" autocomplete="off"></div>' +
-      (state.query ? (rows.length ? '<div class="catalog-grid">' + rows.map(card).join("") + '</div>' : '<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>لا توجد نتائج</strong>جرّب عنواناً آخر.</div>') : '<div class="empty-state">ابدأ بكتابة اسم الفيلم أو المسلسل.</div>');
-    const input = document.getElementById("search-input");
-    input?.addEventListener("input", (event) => { state.query = event.target.value; const start = event.target.selectionStart; renderSearch(); const next = document.getElementById("search-input"); next?.focus(); next?.setSelectionRange(start,start); });
-  }
-  function render() {
-    document.querySelectorAll(".bottom-nav button").forEach(button => button.classList.toggle("active", button.dataset.tab === state.tab));
-    if (state.loading) { app.innerHTML = '<section class="loading-state"><div class="skeleton skeleton-hero"></div><div class="skeleton-heading"></div><div class="skeleton-row"><i></i><i></i><i></i><i></i></div></section>'; return; }
-    if (state.activeTitle) { renderDetails(); return; }
-    if (state.tab === "home") renderHome();
-    else if (state.tab === "search") renderSearch();
-    else if (state.tab === "movie") renderGrid("الأفلام", state.titles.filter(x => x.media_type === "movie"));
-    else if (state.tab === "series") renderGrid("المسلسلات", state.titles.filter(x => x.media_type === "series"));
-    else if (state.tab === "favorites") renderGrid("مكتبتي", state.titles.filter(x => state.favoriteIds.has(x.id)));
-    else if (state.tab === "latest") renderGrid("أضيف حديثاً", [...state.titles].sort((a,b) => String(b.created_at).localeCompare(String(a.created_at))));
-    else if (state.tab === "top") renderGrid("الأعلى تقييماً", [...state.titles].sort((a,b) => Number(b.rating || 0)-Number(a.rating || 0)));
-    else if (state.tab === "genre") renderGrid("حسب التصنيف", state.titles.filter(x => (x.genres || []).includes(state.genreName)));
-  }
-  async function openDetails(id) {
-    try { state.activeTitle = id; state.showFullPlot = false; tg?.BackButton?.show(); render(); state.details = await api("details", { title_id: id }); render(); }
-    catch (error) { state.activeTitle = null; notify(error.message); render(); }
-  }
-  function renderDetails() {
-    if (!state.details?.title) { app.innerHTML = '<section class="detail"><div class="loading-state"><div class="skeleton skeleton-hero"></div><div class="skeleton-heading"></div></div></section>'; return; }
-    const t = state.details.title;
-    const image = backdrop(t);
-    const favorite = state.favoriteIds.has(t.id);
-    const providers = (t.providers || []).map(p => '<a class="provider" href="' + esc(p.provider_url) + '" target="_blank" rel="noopener noreferrer">' + esc(p.provider) + ' · ' + esc(p.availability_type) + ' · ' + esc(p.region_code) + '</a>').join("");
-    const seasons = (state.details.seasons || []).map(s => '<details class="season"><summary>' + esc(s.name || ("الموسم " + s.season_number)) + '</summary><div class="season-content">' + (s.episodes || []).map(e => '<div class="episode">' + esc("الحلقة " + e.episode_number + " — " + (e.name || "بدون عنوان")) + '</div>').join("") + '</div></details>').join("");
-    app.innerHTML = '<section class="detail"><div class="detail-hero" style="background-image:url(&quot;' + esc(image) + '&quot;)"><button class="detail-close" data-close aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div class="detail-body">' + (poster(t) ? '<img class="detail-poster" src="' + esc(poster(t)) + '" alt="' + esc(t.title) + '">' : "") + '<div class="eyebrow">' + (t.media_type === "series" ? "FINDLY SERIES" : "FINDLY MOVIE") + '</div><h1>' + esc(t.title) + '</h1><div class="meta"><span>' + esc(meta(t)) + '</span>' + (t.rating != null ? '<span class="rating">★ ' + Number(t.rating).toFixed(1) + '/10</span>' : "") + '</div><p class="description">' + esc(t.overview || "لا يتوفر ملخص قصير لهذا العنوان حالياً.") + '</p><div class="detail-actions">' + (t.watch_url ? '<button class="primary-btn" data-watch="' + esc(t.id) + '"><svg viewBox="0 0 24 24"><path d="m8 5 12 7-12 7z" fill="currentColor" stroke="none"/></svg>مشاهدة</button>' : '<button class="secondary-btn" disabled>المشاهدة غير متاحة حالياً</button>') + '<button class="favorite-round" data-favorite="' + esc(t.id) + '" aria-label="' + (favorite ? "إزالة من قائمتي" : "إضافة إلى قائمتي") + '"><svg viewBox="0 0 24 24"><path d="M20.8 8.7c0 5.1-8.8 11-8.8 11s-8.8-5.9-8.8-11A4.7 4.7 0 0 1 12 6.1a4.7 4.7 0 0 1 8.8 2.6Z" ' + (favorite ? 'fill="currentColor"' : '') + '/></svg></button></div>' +
-      (t.has_full_plot_summary ? '<section class="detail-section"><button class="plot-toggle" data-plot>' + (state.showFullPlot ? "أقل" : "المزيد") + (state.showFullPlot ? " −" : " +") + '</button>' + (t.full_plot_summary ? '<p id="full-plot" class="description" ' + (state.showFullPlot ? '' : 'hidden') + '>' + esc(t.full_plot_summary) + '</p>' : '') + '</section>' : "") +
-      (t.genres?.length ? '<section class="detail-section"><h3>التصنيفات</h3><div class="meta">' + t.genres.map(esc).join(" · ") + '</div></section>' : "") +
-      (seasons ? '<section class="detail-section"><h3>المواسم والحلقات</h3>' + seasons + '</section>' : "") +
-      (providers ? '<section class="detail-section"><h3>مصادر المشاهدة المتاحة</h3>' + providers + '</section>' : "") + '</div></section>';
-  }
-  async function toggleFavorite(id) {
-    const add = !state.favoriteIds.has(id);
-    try { await api("favorite", { title_id: id, action: add ? "add" : "remove" }); if (add) state.favoriteIds.add(id); else state.favoriteIds.delete(id); if (state.details?.title?.id === id) state.details.title.is_favorite = add; notify(add ? "تمت الإضافة إلى مكتبتي" : "تمت الإزالة من مكتبتي"); render(); }
-    catch (error) { notify(error.message); }
-  }
-  function goTab(tab) { state.activeTitle = null; state.details = null; state.showFullPlot = false; tg?.BackButton?.hide(); state.tab = tab; render(); }
-  app.addEventListener("click", async (event) => {
-    const button = event.target.closest("button");
-    if (!button) return;
-    if (button.dataset.open) return openDetails(button.dataset.open);
-    if (button.dataset.watch) { const title = state.details?.title; const url = title?.watch_url || state.titles.find(t => t.id === button.dataset.watch)?.watch_url; if (url) tg?.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank", "noopener"); else return openDetails(button.dataset.watch); return; }
-    if (button.dataset.favorite) return toggleFavorite(button.dataset.favorite);
-    if (button.dataset.close !== undefined) { state.activeTitle = null; state.details = null; state.showFullPlot = false; tg?.BackButton?.hide(); render(); return; }
-    if (button.dataset.plot !== undefined) {
-      if (!state.details?.title?.full_plot_summary) {
-        try {
-          state.details = await api("details", { title_id: state.activeTitle, include_full_plot: true });
-          state.showFullPlot = true;
-          render();
-        } catch (error) { notify(error.message); }
-      } else {
-        state.showFullPlot = !state.showFullPlot;
-        render();
-      }
-      return;
-    }
-    if (button.dataset.view) return goTab(button.dataset.view);
-    if (button.dataset.genre) { state.genre = button.dataset.genre; state.genreName = state.genres.find(g => g.slug === state.genre)?.name || ""; state.tab = "genre"; render(); return; }
+  function goTab(tab){state.activeTitle=null;state.details=null;state.showFullPlot=false;state.genre="";state.genreName="";tg?.BackButton?.hide();state.tab=tab;render();}
+  function shareTitle(id){const t=state.details?.title;if(!t||t.id!==id)return;const shareUrl="https://t.me/FindlySearch2026Bot",message="شاهد تفاصيل "+t.title+(t.release_year?" ("+t.release_year+")":"")+" على FINDLY Movies",url="https://t.me/share/url?url="+encodeURIComponent(shareUrl)+"&text="+encodeURIComponent(message);if(tg?.openTelegramLink)tg.openTelegramLink(url);else window.open(url,"_blank","noopener");}
+  app.addEventListener("click",async event=>{
+    const b=event.target.closest("button");if(!b)return;
+    if(b.dataset.open)return openDetails(b.dataset.open);
+    if(b.dataset.watch){const t=state.details?.title,url=t?.watch_url||state.titles.find(x=>x.id===b.dataset.watch)?.watch_url;if(url)tg?.openTelegramLink?tg.openTelegramLink(url):window.open(url,"_blank","noopener");else return openDetails(b.dataset.watch);return;}
+    if(b.dataset.favorite)return toggleFavorite(b.dataset.favorite);
+    if(b.dataset.share)return shareTitle(b.dataset.share);
+    if(b.dataset.close!==undefined){closeDetails();return;}
+    if(b.dataset.plot!==undefined){if(!state.details?.title?.full_plot_summary){try{state.details=await api("details",{title_id:state.activeTitle,include_full_plot:true});state.showFullPlot=true;render();}catch(error){notify(error.message);}}else{state.showFullPlot=!state.showFullPlot;render();}return;}
+    if(b.dataset.view)return goTab(b.dataset.view);
+    if(b.dataset.genre!==undefined){if(b.dataset.genre==="all"){state.genre="";state.genreName="";state.tab="home";render();return;}state.genre=b.dataset.genre;state.genreName=state.genres.find(g=>g.slug===state.genre)?.name||"";state.tab="genre";render();return;}
+    if(b.dataset.heroIndex!==undefined){state.heroIndex=Number(b.dataset.heroIndex)||0;renderHome();return;}
+    if(b.dataset.searchType){state.searchType=b.dataset.searchType;app.querySelectorAll("[data-search-type]").forEach(x=>x.classList.toggle("active",x.dataset.searchType===state.searchType));updateSearchResults();return;}
   });
-  document.querySelector(".bottom-nav").addEventListener("click", event => { const button = event.target.closest("button[data-tab]"); if (button) goTab(button.dataset.tab); });
-  document.getElementById("search-open").addEventListener("click", () => { state.tab = "search"; render(); document.getElementById("search-input")?.focus(); });
-
-  async function start() {
-    if (!initData) {
-      state.loading = false;
-      app.innerHTML = '<section class="error-state"><strong>افتح مكتبة FINDLY من Telegram</strong>هاد الصفحة كتحتاج جلسة Telegram موثّقة. رجع لبوت FINDLY واضغط على زر فتح المكتبة.</section>';
-      document.querySelector(".bottom-nav").hidden = true;
-      return;
-    }
-    try {
-      const data = await api("catalog");
-      state.titles = data.titles || [];
-      state.genres = data.genres || [];
-      state.favoriteIds = new Set(data.favorite_ids || []);
-      state.loading = false;
-      render();
-    } catch (error) {
-      state.loading = false;
-      app.innerHTML = '<section class="error-state"><strong>تعذر فتح المكتبة</strong>' + esc(error.message) + '<p>سدّ النافذة وعاود فتح FINDLY من Telegram.</p></section>';
-    }
+  app.addEventListener("input",event=>{if(event.target.id!=="search-input")return;state.query=event.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(updateSearchResults,220);});
+  app.addEventListener("load",event=>{if(event.target instanceof HTMLImageElement)event.target.classList.add("loaded");},true);
+  app.addEventListener("error",event=>{const img=event.target;if(!(img instanceof HTMLImageElement)||img.dataset.fallbackApplied)return;img.dataset.fallbackApplied="true";const fallback=document.createElement("span");fallback.className=img.classList.contains("detail-poster")?"detail-poster-fallback":"poster-fallback";fallback.textContent=img.alt||"FINDLY";img.replaceWith(fallback);},true);
+  document.querySelector(".bottom-nav").addEventListener("click",event=>{const b=event.target.closest("button[data-tab]");if(b)goTab(b.dataset.tab);});
+  document.getElementById("search-open").addEventListener("click",()=>{state.tab="search";state.genre="";state.genreName="";render();document.getElementById("search-input")?.focus();});
+  async function start(){
+    if(!initData){state.loading=false;app.innerHTML='<section class="error-state"><strong>افتح مكتبة FINDLY من Telegram</strong>هاد الصفحة كتحتاج جلسة Telegram موثّقة. رجع لبوت FINDLY واضغط على زر فتح المكتبة.</section>';document.querySelector(".bottom-nav").hidden=true;return;}
+    try{const data=await api("catalog");state.titles=data.titles||[];state.genres=data.genres||[];state.favoriteIds=new Set(data.favorite_ids||[]);state.loading=false;render();}
+    catch(error){state.loading=false;app.innerHTML='<section class="error-state"><strong>تعذر فتح المكتبة</strong>'+esc(error.message)+'<p>سدّ النافذة وعاود فتح FINDLY من Telegram.</p></section>';}
   }
-  if (tg?.BackButton) {
-    tg.BackButton.onClick(() => { if (state.activeTitle) { state.activeTitle = null; state.details = null; state.showFullPlot = false; render(); tg.BackButton.hide(); } else { goTab("home"); } });
-  }
+  if(tg?.BackButton)tg.BackButton.onClick(()=>{if(state.activeTitle)closeDetails();else goTab("home");});
   start();
 })();
