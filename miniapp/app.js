@@ -73,7 +73,7 @@ import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-2";
     }catch(error){notify(error.message);}
   }
   function goTab(tab){state.activeTitle=null;state.details=null;state.showFullPlot=false;if(tab!=="genre"){state.genre="";state.genreName="";}tg?.BackButton?.hide();state.tab=tab;render();loadCatalogPage(true).catch(error=>notify(error.message));}
-  function shareTitle(id){const t=state.details?.title;if(!t||t.id!==id)return;const shareUrl="https://t.me/FindlySearch2026Bot",message="اكتشف "+t.title+(t.release_year?" ("+t.release_year+")":"")+" في مكتبة FINDLY Movies.",url="https://t.me/share/url?url="+encodeURIComponent(shareUrl)+"&text="+encodeURIComponent(message);if(tg?.openTelegramLink)tg.openTelegramLink(url);else window.open(url,"_blank","noopener");}
+  function shareTitle(id){const t=state.details?.title;if(!t||t.id!==id)return;const shareUrl="https://t.me/FindlySearch2026Bot?start=movie_"+encodeURIComponent(id),message="اكتشف "+t.title+(t.release_year?" ("+t.release_year+")":"")+" مباشرة في FINDLY Movies.",url="https://t.me/share/url?url="+encodeURIComponent(shareUrl)+"&text="+encodeURIComponent(message);if(tg?.openTelegramLink)tg.openTelegramLink(url);else window.open(url,"_blank","noopener");}
   app.addEventListener("pointerover",event=>{const target=event.target.closest("[data-open]");if(target)prefetchDetails(target.dataset.open);});
   app.addEventListener("touchstart",event=>{const target=event.target.closest("[data-open]");if(target)prefetchDetails(target.dataset.open);},{passive:true});
   app.addEventListener("click",async event=>{
