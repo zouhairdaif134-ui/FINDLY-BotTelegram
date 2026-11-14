@@ -1,4 +1,4 @@
-import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-1";
+import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-2";
 (() => {
   const tg = window.Telegram?.WebApp;
   const app = document.getElementById("app");
@@ -9,7 +9,7 @@ import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-1";
   if (tg) {
     tg.ready();
     tg.expand();
-    try { tg.setHeaderColor("#090a0d"); tg.setBackgroundColor("#090a0d"); } catch {}
+    try { tg.setHeaderColor("#0B0B0F"); tg.setBackgroundColor("#0B0B0F"); } catch {}
   }
 
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[char]));
@@ -38,12 +38,12 @@ import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-1";
   }
   function shelf(title, rows, key) {
     if (!rows?.length) return "";
-    return '<section class="shelf"><div class="shelf-head"><h2>' + title + '</h2><button data-view="' + key + '">عرض الكل ←</button></div><div class="poster-row">' + rows.map(card).join("") + '</div></section>';
+    return '<section class="shelf"><div class="shelf-head"><h2>' + title + '</h2><button data-view="' + key + '">عرض الكل <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button></div><div class="poster-row">' + rows.map(card).join("") + '</div></section>';
   }
   function hero(title) {
-    if (!title) return '<section class="empty-state"><strong>المكتبة كتوجد</strong>ما كايناش عناوين منشورة حالياً.</section>';
+    if (!title) return '<section class="empty-state"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><strong>المكتبة قيد الإعداد</strong>لا توجد عناوين منشورة حالياً.</section>';
     const image = backdrop(title);
-    return '<section class="hero" style="--hero-image:url(&quot;' + esc(image) + '&quot;)"><div class="hero-content"><div class="eyebrow">اختيار FINDLY</div><h1>' + esc(title.title) + '</h1><div class="meta"><span>' + esc(meta(title)) + '</span>' + (title.rating != null ? '<span class="rating">★ ' + Number(title.rating).toFixed(1) + '/10</span>' : "") + '</div><p>' + esc(title.overview || "اكتشف تفاصيل هذا العمل السينمائي.") + '</p><div class="actions"><button class="primary-btn" data-open="' + esc(title.id) + '">التفاصيل</button>' + (title.watch_available ? '<button class="secondary-btn" data-watch="' + esc(title.id) + '">▶ المشاهدة</button>' : "") + '</div></div></section>';
+    return '<section class="hero" style="--hero-image:url(&quot;' + esc(image) + '&quot;)"><div class="hero-content"><div class="eyebrow">اختيار FINDLY</div><h1>' + esc(title.title) + '</h1><div class="meta"><span>' + esc(title.release_year || "") + '</span><span>' + (title.media_type === "series" ? "مسلسل" : "فيلم") + '</span>' + (title.rating != null ? '<span class="rating">★ ' + Number(title.rating).toFixed(1) + '</span>' : "") + '</div><p>' + esc(title.overview || "اكتشف تفاصيل هذا العمل السينمائي.") + '</p><div class="actions">' + (title.watch_available ? '<button class="primary-btn" data-watch="' + esc(title.id) + '"><svg viewBox="0 0 24 24"><path d="m8 5 12 7-12 7z" fill="currentColor" stroke="none"/></svg>مشاهدة</button>' : "") + '<button class="secondary-btn" data-open="' + esc(title.id) + '"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>تفاصيل</button></div></div></section>';
   }
   function renderHome() {
     const latest = [...state.titles].sort((a,b) => String(b.release_date || b.created_at).localeCompare(String(a.release_date || a.created_at))).slice(0,12);
@@ -52,23 +52,23 @@ import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-1";
     const series = state.titles.filter(x => x.media_type === "series").slice(0,12);
     const feature = top[0] || latest[0];
     app.innerHTML = hero(feature) +
-      '<div class="category-strip">' + state.genres.slice(0,18).map(g => '<button class="chip" data-genre="' + esc(g.slug) + '">' + esc(g.name) + '</button>').join("") + '</div>' +
+      '<div class="category-strip"><button class="chip ' + (!state.genre ? "active" : "") + '">الكل</button>' + state.genres.slice(0,18).map(g => '<button class="chip ' + (state.genre === g.slug ? "active" : "") + '" data-genre="' + esc(g.slug) + '">' + esc(g.name) + '</button>').join("") + '</div>' +
       shelf("أضيف حديثاً", latest, "latest") + shelf("الأعلى تقييماً", top, "top") + shelf("الأفلام", movies, "movie") + shelf("المسلسلات", series, "series");
   }
   function renderGrid(title, rows) {
     app.innerHTML = '<div class="page-heading"><h1>' + esc(title) + '</h1><p>' + rows.length + ' عنوان في المكتبة</p></div>' +
-      (rows.length ? '<div class="catalog-grid">' + rows.map(card).join("") + '</div>' : '<div class="empty-state"><strong>ما لقيناش عناوين</strong>جرّب اختياراً آخر أو بحثاً مختلفاً.</div>');
+      (rows.length ? '<div class="catalog-grid">' + rows.map(card).join("") + '</div>' : '<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>' + (title === "مكتبتي" ? "قائمتك فارغة" : "لا توجد نتائج") + '</strong>جرّب اختياراً آخر أو بحثاً مختلفاً.</div>');
   }
   function renderSearch() {
     const rows = state.titles.filter(t => (t.title + " " + (t.original_title || "")).toLocaleLowerCase().includes(state.query.toLocaleLowerCase()));
-    app.innerHTML = '<div class="page-heading"><h1>البحث في FINDLY</h1><p>قلب على فيلم أو مسلسل بالعنوان</p></div><div class="search-wrap"><input id="search-input" class="search-input" placeholder="كتب اسم الفيلم..." value="' + esc(state.query) + '" autocomplete="off"></div>' +
-      (state.query ? (rows.length ? '<div class="catalog-grid">' + rows.map(card).join("") + '</div>' : '<div class="empty-state">ما لقينا حتى نتيجة مطابقة.</div>') : '<div class="empty-state">بدا بكتابة اسم الفيلم أو المسلسل.</div>');
+    app.innerHTML = '<div class="page-heading"><h1>البحث في FINDLY</h1><p>ابحث عن فيلم أو مسلسل</p></div><div class="search-wrap"><input id="search-input" class="search-input" placeholder="ابحث عن فيلم أو مسلسل" value="' + esc(state.query) + '" autocomplete="off"></div>' +
+      (state.query ? (rows.length ? '<div class="catalog-grid">' + rows.map(card).join("") + '</div>' : '<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>لا توجد نتائج</strong>جرّب عنواناً آخر.</div>') : '<div class="empty-state">ابدأ بكتابة اسم الفيلم أو المسلسل.</div>');
     const input = document.getElementById("search-input");
     input?.addEventListener("input", (event) => { state.query = event.target.value; const start = event.target.selectionStart; renderSearch(); const next = document.getElementById("search-input"); next?.focus(); next?.setSelectionRange(start,start); });
   }
   function render() {
     document.querySelectorAll(".bottom-nav button").forEach(button => button.classList.toggle("active", button.dataset.tab === state.tab));
-    if (state.loading) { app.innerHTML = '<section class="loading-state"><span class="loader"></span><p>كنوجدو ليك المكتبة...</p></section>'; return; }
+    if (state.loading) { app.innerHTML = '<section class="loading-state"><div class="skeleton skeleton-hero"></div><div class="skeleton-heading"></div><div class="skeleton-row"><i></i><i></i><i></i><i></i></div></section>'; return; }
     if (state.activeTitle) { renderDetails(); return; }
     if (state.tab === "home") renderHome();
     else if (state.tab === "search") renderSearch();
@@ -84,21 +84,21 @@ import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-1";
     catch (error) { state.activeTitle = null; notify(error.message); render(); }
   }
   function renderDetails() {
-    if (!state.details?.title) { app.innerHTML = '<section class="detail"><div class="loading-state"><span class="loader"></span><p>كنجيبو التفاصيل...</p></div></section>'; return; }
+    if (!state.details?.title) { app.innerHTML = '<section class="detail"><div class="loading-state"><div class="skeleton skeleton-hero"></div><div class="skeleton-heading"></div></div></section>'; return; }
     const t = state.details.title;
     const image = backdrop(t);
     const favorite = state.favoriteIds.has(t.id);
-    const providers = (t.providers || []).map(p => '<a class="provider" href="' + esc(p.provider_url) + '" target="_blank" rel="noopener noreferrer">' + esc(p.provider) + ' · ' + esc(p.availability_type) + ' · ' + esc(p.region_code) + ' ↗</a>').join("");
-    const seasons = (state.details.seasons || []).map(s => '<div class="season"><b>' + esc(s.name || ("الموسم " + s.season_number)) + '</b><div class="episode">' + (s.episodes || []).map(e => esc("الحلقة " + e.episode_number + " — " + (e.name || "بدون عنوان"))).join("<br>") + '</div></div>').join("");
-    app.innerHTML = '<section class="detail"><div class="detail-hero" style="background-image:url(&quot;' + esc(image) + '&quot;)"><button class="detail-close" data-close>×</button></div><div class="detail-body"><div class="eyebrow">' + (t.media_type === "series" ? "FINDLY SERIES" : "FINDLY MOVIE") + '</div><h1>' + esc(t.title) + '</h1><div class="meta"><span>' + esc(meta(t)) + '</span>' + (t.rating != null ? '<span class="rating">★ ' + Number(t.rating).toFixed(1) + '/10</span>' : "") + '</div><p class="description">' + esc(t.overview || "لا يتوفر ملخص قصير لهذا العنوان حالياً.") + '</p><div class="actions">' + (t.watch_url ? '<button class="primary-btn" data-watch="' + esc(t.id) + '">▶ المشاهدة عبر FINDLY</button>' : '<button class="secondary-btn" disabled>المشاهدة غير متاحة حالياً</button>') + '<button class="secondary-btn" data-favorite="' + esc(t.id) + '">' + (favorite ? "♥ إزالة من مكتبتي" : "♡ أضف إلى مكتبتي") + '</button></div>' +
-      (t.has_full_plot_summary ? '<section class="detail-section"><button class="secondary-btn" data-plot>عرض الملخص الكامل (قد يتضمن حرقاً)</button>' + (t.full_plot_summary ? '<p id="full-plot" class="description" ' + (state.showFullPlot ? '' : 'hidden') + '>' + esc(t.full_plot_summary) + '</p>' : '') + '</section>' : "") +
+    const providers = (t.providers || []).map(p => '<a class="provider" href="' + esc(p.provider_url) + '" target="_blank" rel="noopener noreferrer">' + esc(p.provider) + ' · ' + esc(p.availability_type) + ' · ' + esc(p.region_code) + '</a>').join("");
+    const seasons = (state.details.seasons || []).map(s => '<details class="season"><summary>' + esc(s.name || ("الموسم " + s.season_number)) + '</summary><div class="season-content">' + (s.episodes || []).map(e => '<div class="episode">' + esc("الحلقة " + e.episode_number + " — " + (e.name || "بدون عنوان")) + '</div>').join("") + '</div></details>').join("");
+    app.innerHTML = '<section class="detail"><div class="detail-hero" style="background-image:url(&quot;' + esc(image) + '&quot;)"><button class="detail-close" data-close aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div class="detail-body">' + (poster(t) ? '<img class="detail-poster" src="' + esc(poster(t)) + '" alt="' + esc(t.title) + '">' : "") + '<div class="eyebrow">' + (t.media_type === "series" ? "FINDLY SERIES" : "FINDLY MOVIE") + '</div><h1>' + esc(t.title) + '</h1><div class="meta"><span>' + esc(meta(t)) + '</span>' + (t.rating != null ? '<span class="rating">★ ' + Number(t.rating).toFixed(1) + '/10</span>' : "") + '</div><p class="description">' + esc(t.overview || "لا يتوفر ملخص قصير لهذا العنوان حالياً.") + '</p><div class="detail-actions">' + (t.watch_url ? '<button class="primary-btn" data-watch="' + esc(t.id) + '"><svg viewBox="0 0 24 24"><path d="m8 5 12 7-12 7z" fill="currentColor" stroke="none"/></svg>مشاهدة</button>' : '<button class="secondary-btn" disabled>المشاهدة غير متاحة حالياً</button>') + '<button class="favorite-round" data-favorite="' + esc(t.id) + '" aria-label="' + (favorite ? "إزالة من قائمتي" : "إضافة إلى قائمتي") + '"><svg viewBox="0 0 24 24"><path d="M20.8 8.7c0 5.1-8.8 11-8.8 11s-8.8-5.9-8.8-11A4.7 4.7 0 0 1 12 6.1a4.7 4.7 0 0 1 8.8 2.6Z" ' + (favorite ? 'fill="currentColor"' : '') + '/></svg></button></div>' +
+      (t.has_full_plot_summary ? '<section class="detail-section"><button class="plot-toggle" data-plot>' + (state.showFullPlot ? "أقل" : "المزيد") + (state.showFullPlot ? " −" : " +") + '</button>' + (t.full_plot_summary ? '<p id="full-plot" class="description" ' + (state.showFullPlot ? '' : 'hidden') + '>' + esc(t.full_plot_summary) + '</p>' : '') + '</section>' : "") +
       (t.genres?.length ? '<section class="detail-section"><h3>التصنيفات</h3><div class="meta">' + t.genres.map(esc).join(" · ") + '</div></section>' : "") +
       (seasons ? '<section class="detail-section"><h3>المواسم والحلقات</h3>' + seasons + '</section>' : "") +
       (providers ? '<section class="detail-section"><h3>مصادر المشاهدة المتاحة</h3>' + providers + '</section>' : "") + '</div></section>';
   }
   async function toggleFavorite(id) {
     const add = !state.favoriteIds.has(id);
-    try { await api("favorite", { title_id: id, action: add ? "add" : "remove" }); if (add) state.favoriteIds.add(id); else state.favoriteIds.delete(id); if (state.details?.title?.id === id) state.details.title.is_favorite = add; notify(add ? "تزاد لمكتبك" : "تحيد من مكتبك"); render(); }
+    try { await api("favorite", { title_id: id, action: add ? "add" : "remove" }); if (add) state.favoriteIds.add(id); else state.favoriteIds.delete(id); if (state.details?.title?.id === id) state.details.title.is_favorite = add; notify(add ? "تمت الإضافة إلى مكتبتي" : "تمت الإزالة من مكتبتي"); render(); }
     catch (error) { notify(error.message); }
   }
   function goTab(tab) { state.activeTitle = null; state.details = null; state.showFullPlot = false; tg?.BackButton?.hide(); state.tab = tab; render(); }
