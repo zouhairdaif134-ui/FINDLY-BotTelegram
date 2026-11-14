@@ -186,6 +186,9 @@ async function getCatalog(env, userId, body) {
   const sort = body.sort === "top" ? "rating" : body.sort === "release" ? "release_date" : "created_at";
   const cacheKey = JSON.stringify({ limit, offset, type, search, genre, favoritesOnly, userId: favoritesOnly ? userId : null, sort });
   const now = Date.now();
+  const favoritesPromise = supabase.from("movie_telegram_favorites")
+    .select("title_id").eq("telegram_user_id", userId);
+  let favoritesResult;
   let cached = catalogCache.get(cacheKey);
 
   if (!cached || cached.expiresAt <= now) {
@@ -201,12 +204,15 @@ async function getCatalog(env, userId, body) {
     if (type) query = query.eq("media_type", type);
     if (search) query = query.ilike("normalized_title", "%" + search + "%");
 
-    const [titleResult, genresResult] = await Promise.all([
+    const [titleResult, genresResult, userFavoritesResult] = await Promise.all([
       query.order(sort, { ascending: false, nullsFirst: false }).range(offset, offset + limit - 1),
-      supabase.from("movie_genres").select("name,slug").order("name", { ascending: true }).limit(80)
+      supabase.from("movie_genres").select("name,slug").order("name", { ascending: true }).limit(80),
+      favoritesPromise
     ]);
     if (titleResult.error) throw titleResult.error;
     if (genresResult.error) throw genresResult.error;
+    if (userFavoritesResult.error) throw userFavoritesResult.error;
+    favoritesResult = userFavoritesResult;
 
     const rows = (titleResult.data || []).map(({ movie_title_genres, movie_telegram_favorites, ...title }) => title);
     const decoratedTitles = await decorateTitles(supabase, rows);
@@ -223,10 +229,9 @@ async function getCatalog(env, userId, body) {
     }
   }
 
-  const { data: favorites, error: favoritesError } = await supabase.from("movie_telegram_favorites")
-    .select("title_id").eq("telegram_user_id", userId);
-  if (favoritesError) throw favoritesError;
-  const favoriteIds = (favorites || []).map((row) => row.title_id);
+  if (!favoritesResult) favoritesResult = await favoritesPromise;
+  if (favoritesResult.error) throw favoritesResult.error;
+  const favoriteIds = (favoritesResult.data || []).map((row) => row.title_id);
   const favoriteSet = new Set(favoriteIds);
   const titles = cached.titles.map((title) => ({ ...title, is_favorite: favoriteSet.has(title.id) }));
   const nextOffset = offset + titles.length;
