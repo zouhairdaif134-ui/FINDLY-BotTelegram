@@ -92,7 +92,7 @@ import { authorizeRequest } from "./lib/auth.js";
 import { getSupabase } from "./lib/supabase.js";
 import { cleanupExpiredAISessionMessages } from "./lib/ai-memory.js";
 import { activateDueMonetizationCampaigns } from "./lib/monetization.js";
-import { renderMovieSharePage } from "./lib/movie-sharing.js";
+import { renderMovieSharePage, getMovieShareImageUrl } from "./lib/movie-sharing.js";
 import { handleMiniAppRoute } from "./routes/miniapp.js";
 import {
   listMovieQueue,
@@ -390,7 +390,7 @@ export default {
         const isPoster = movieShareMatch[2] === "poster";
         const { data: movie, error: movieError } = await getSupabase(env)
           .from("movie_titles")
-          .select("id,media_type,title,overview,release_year,runtime_minutes,rating,poster_path,status")
+          .select("id,media_type,title,overview,release_year,runtime_minutes,rating,poster_path,backdrop_path,status")
           .eq("id", movieId)
           .eq("status", "active")
           .maybeSingle();
@@ -404,20 +404,9 @@ export default {
         }
 
         if (isPoster) {
-          let posterUrl;
-          try {
-            posterUrl = new URL(String(movie.poster_path || ""));
-          } catch {
-            return new Response("Poster not found", { status: 404 });
-          }
-          if (
-            posterUrl.protocol !== "https:" ||
-            posterUrl.hostname !== "image.tmdb.org" ||
-            !posterUrl.pathname.startsWith("/t/p/")
-          ) {
-            return new Response("Poster not found", { status: 404 });
-          }
-          const posterResponse = await fetch(posterUrl.toString(), {
+          const imageUrl = getMovieShareImageUrl(movie);
+          if (!imageUrl) return new Response("Image not found", { status: 404 });
+          const posterResponse = await fetch(imageUrl, {
             headers: { Accept: "image/jpeg,image/png,image/webp" }
           });
           const contentType = posterResponse.headers.get("content-type") || "";
@@ -435,18 +424,18 @@ export default {
         }
 
         const requestedSource = url.searchParams.get("source");
-        const source = ["facebook", "instagram"].includes(requestedSource)
+        const source = ["facebook", "whatsapp", "x", "telegram", "instagram", "link"].includes(requestedSource)
           ? requestedSource
           : "facebook";
         const { data: bot, error: botError } = await getSupabase(env)
           .from("bots")
           .select("telegram_username")
-          .eq("slug", "movies")
+          .eq("slug", "findly")
           .eq("is_active", true)
           .maybeSingle();
         if (botError) throw botError;
         if (!bot?.telegram_username) {
-          return new Response("FINDLY Movies bot is unavailable", { status: 503 });
+          return new Response("FINDLY Master bot is unavailable", { status: 503 });
         }
         const { data: genreLinks, error: genreError } = await getSupabase(env)
           .from("movie_title_genres")

@@ -1,5 +1,6 @@
 import { getSupabase } from "../lib/supabase.js";
 import { getTelegramToken } from "../lib/telegram.js";
+import { buildMovieShareContent } from "../lib/movie-sharing.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_INIT_DATA_AGE_SECONDS = 24 * 60 * 60;
@@ -333,8 +334,29 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
   });
 }
 
+
+async function getMovieShare(env,userId,body,requestUrl){
+ const titleId=String(body?.title_id||""),platform=String(body?.platform||"");
+ if(!UUID_RE.test(titleId)||!["facebook","whatsapp","x","telegram","instagram","link"].includes(platform))return json({ok:false,error:"INVALID_SHARE_REQUEST"},400);
+ const db=getSupabase(env);
+ const [titleR,botR,genreR,userR]=await Promise.all([
+  db.from("movie_titles").select("id,status,title,overview,release_year,runtime_minutes,rating,poster_path,backdrop_path,media_type").eq("id",titleId).eq("status","active").maybeSingle(),
+  db.from("bots").select("id,telegram_username").eq("slug","findly").eq("is_active",true).maybeSingle(),
+  db.from("movie_title_genres").select("movie_genres(name)").eq("title_id",titleId),
+  db.from("telegram_users").select("id").eq("telegram_user_id",userId).maybeSingle()
+ ]);
+ for(const r of [titleR,botR,genreR,userR])if(r.error)throw r.error;
+ if(!titleR.data)return json({ok:false,error:"TITLE_NOT_FOUND"},404);
+ if(!botR.data?.telegram_username)return json({ok:false,error:"MASTER_BOT_UNAVAILABLE"},503);
+ const movie={...titleR.data,genres:(genreR.data||[]).map(x=>x.movie_genres?.name).filter(Boolean)};
+ const share=buildMovieShareContent(movie,botR.data.telegram_username,platform,new URL(requestUrl).origin);
+ const {error}=await db.from("analytics_events").insert({user_id:userR.data?.id||null,bot_id:botR.data.id,event_type:"movie_share",event_data:{title_id:titleId,title:movie.title,platform,source:"miniapp"}});
+ if(error)console.error("FINDLY movie share analytics failed:",error.code||error.message);
+ return json({ok:true,...share});
+}
+
 export async function handleMiniAppRoute(env, request, url) {
-  const match = url.pathname.match(/^\/api\/miniapp\/(catalog|details|favorite)$/);
+  const match = url.pathname.match(/^\/api\/miniapp\/(catalog|details|favorite|share)$/);
   if (!match) return null;
   if (request.method !== "POST") return json({ ok: false, error: "METHOD_NOT_ALLOWED" }, 405);
 
@@ -352,6 +374,7 @@ export async function handleMiniAppRoute(env, request, url) {
     if (auth.error) return json({ ok: false, error: auth.error }, auth.status);
     if (match[1] === "catalog") return await getCatalog(env, auth.userId, body);
     if (match[1] === "details") return await getTitleDetails(env, auth.userId, body.title_id, body.include_full_plot === true);
+    if (match[1] === "share") return await getMovieShare(env, auth.userId, body, request.url);
     if (match[1] === "favorite") {
       if (!UUID_RE.test(body.title_id || "") || !["add", "remove"].includes(body.action)) {
         return json({ ok: false, error: "INVALID_FAVORITE_REQUEST" }, 400);
