@@ -1,5 +1,5 @@
 import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-2";
-import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequencyState, writeAdFrequencyState } from "/ad-slot.js?v=20261115-ads3";
+import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequencyState, writeAdFrequencyState, recordDetailClick, shouldTriggerInterstitial } from "/ad-slot.js?v=20261115-clickads1";
 (() => {
   const tg = window.Telegram?.WebApp, app = document.getElementById("app"), toast = document.getElementById("toast");
   let adsConfig = DEFAULT_AD_CONFIG;
@@ -18,20 +18,24 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   const notify=m=>{toast.textContent=m;toast.classList.add("show");clearTimeout(notify.timer);notify.timer=setTimeout(()=>toast.classList.remove("show"),2200);};
   async function api(endpoint,payload={}){const response=await fetch("/api/miniapp/"+endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,init_data:initData})});const data=await response.json().catch(()=>({}));if(!response.ok||!data.ok)throw new Error(data.error||"تعذر الاتصال بالخدمة");return data;}
   function renderAdSlot(slotKey){return canDisplayAd(adFrequencyState,adsConfig.frequency)?adSlot(adsConfig,slotKey):"";}
-  function recordDetailView(){adFrequencyState=writeAdFrequencyState({...adFrequencyState,detail_views:adFrequencyState.detail_views+1});}
+  function recordDetailView(titleId){adFrequencyState=recordDetailClick(adFrequencyState,titleId);}
   async function loadAdConfig(){try{const result=await api("ads/config");adsConfig=normalizeAdConfig(result.config);if(adsConfig.ads_enabled&&adsConfig.sdk_enabled)render();}catch{adsConfig=DEFAULT_AD_CONFIG;}}
-  let monetagAdAttempted=false;
+  let monetagAdPending=false;
   function maybeShowMonetagInterstitial(){
     const threshold=adsConfig.frequency.detail_views_before_interstitial;
-    if(!adsConfig.ads_enabled||!adsConfig.sdk_enabled||monetagAdAttempted||adFrequencyState.detail_views<threshold||!canDisplayAd(adFrequencyState,adsConfig.frequency))return;
+    if(!adsConfig.ads_enabled||!adsConfig.sdk_enabled||monetagAdPending||!shouldTriggerInterstitial(adFrequencyState,threshold)||!canDisplayAd(adFrequencyState,adsConfig.frequency))return;
     const showAd=window.show_12270189;
     if(typeof showAd!=="function")return;
-    monetagAdAttempted=true;
+    monetagAdPending=true;
+    const triggerAt=adFrequencyState.detail_views;
     try{
-      showAd({type:"inApp",inAppSettings:{frequency:1,capping:0.1667,interval:600,timeout:0,everyPage:false}});
-      adFrequencyState=writeAdFrequencyState({...adFrequencyState,session_count:adFrequencyState.session_count+1,last_shown_at:Date.now()});
+      Promise.resolve(showAd()).then(()=>{
+        adFrequencyState=writeAdFrequencyState({...adFrequencyState,session_count:adFrequencyState.session_count+1,last_shown_at:Date.now(),last_ad_detail_views:triggerAt});
+      }).catch(error=>{
+        console.warn("FINDLY Monetag interstitial failed",error);
+      }).finally(()=>{monetagAdPending=false;});
     }catch(error){
-      monetagAdAttempted=false;
+      monetagAdPending=false;
       console.warn("FINDLY Monetag interstitial failed",error);
     }
   }
@@ -74,7 +78,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   }
   async function fetchDetails(id,includeFullPlot=false){const cached=detailsCache.get(id);if(cached&&cached.expiresAt>Date.now()&&(!includeFullPlot||cached.data.title?.full_plot_summary))return cached.data;const key=id+(includeFullPlot?":plot":"");if(detailsRequests.has(key))return detailsRequests.get(key);const request=api("details",{title_id:id,include_full_plot:includeFullPlot}).then(data=>{const previous=detailsCache.get(id)?.data;const merged=previous&&includeFullPlot?{...data,title:{...data.title,full_plot_summary:data.title.full_plot_summary||previous.title?.full_plot_summary}}:data;detailsCache.set(id,{data:merged,expiresAt:Date.now()+60000});return merged;}).finally(()=>detailsRequests.delete(key));detailsRequests.set(key,request);return request;}
   function prefetchDetails(id){if(!id||detailsCache.get(id)?.expiresAt>Date.now()||detailsRequests.has(id))return;fetchDetails(id).catch(()=>{});}
-  async function openDetails(id){recordDetailView();savedScrollY=window.scrollY||document.documentElement.scrollTop||0;state.activeTitle=id;state.showFullPlot=false;tg?.BackButton?.show();const cached=detailsCache.get(id);state.details=cached&&cached.expiresAt>Date.now()?cached.data:null;render();try{state.details=await fetchDetails(id);if(state.activeTitle===id)render();}catch(error){if(state.activeTitle===id){state.activeTitle=null;notify(error.message);render();window.scrollTo(0,savedScrollY);}}}
+  async function openDetails(id){recordDetailView(id);savedScrollY=window.scrollY||document.documentElement.scrollTop||0;state.activeTitle=id;state.showFullPlot=false;tg?.BackButton?.show();const cached=detailsCache.get(id);state.details=cached&&cached.expiresAt>Date.now()?cached.data:null;render();try{state.details=await fetchDetails(id);if(state.activeTitle===id)render();}catch(error){if(state.activeTitle===id){state.activeTitle=null;notify(error.message);render();window.scrollTo(0,savedScrollY);}}}
   function closeDetails(){state.activeTitle=null;state.details=null;state.showFullPlot=false;state.shareOpen=false;tg?.BackButton?.hide();render();requestAnimationFrame(()=>window.scrollTo(0,savedScrollY));maybeShowMonetagInterstitial();}
 
   function shareSheet(){if(!state.shareOpen||!state.details?.title)return "";const t=state.details.title;return '<div class="share-overlay" data-share-close><section class="share-sheet" role="dialog" aria-modal="true" aria-label="مشاركة العنوان"><div class="share-sheet-handle"></div><div class="share-sheet-head"><div><strong>مشاركة العنوان</strong><small>'+esc(t.title)+'</small></div><button class="share-close" data-share-close aria-label="إغلاق">×</button></div><div class="share-grid"><button data-share-platform="facebook"><span class="share-brand facebook">f</span><small>Facebook</small></button><button data-share-platform="whatsapp"><span class="share-brand whatsapp">◉</span><small>WhatsApp</small></button><button data-share-platform="x"><span class="share-brand x-brand">𝕏</span><small>X</small></button><button data-share-platform="telegram"><span class="share-brand telegram">➤</span><small>Telegram</small></button><button data-share-platform="instagram"><span class="share-brand instagram">◎</span><small>Instagram</small></button></div><p class="share-hint">Facebook ما كيعمرش نص المنشور تلقائياً. نسخ الكابشن من هنا ولصقو يدوياً.</p><div class="share-tools"><button data-share-action="copy-link">نسخ رابط المشاركة</button><button data-share-action="copy-caption">نسخ الكابشن</button><button data-share-action="download-image">فتح صورة المشاركة</button><button data-share-action="copy-film-link">نسخ رابط الفيلم</button><button data-share-action="copy-bot-link">نسخ رابط بوت FINDLY</button></div></section></div>';}
