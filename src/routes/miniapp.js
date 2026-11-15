@@ -427,7 +427,7 @@ async function trackMiniAppAdEvent(env, userId, body) {
 }
 
 export async function handleMiniAppRoute(env, request, url) {
-  const match = url.pathname.match(/^\/api\/miniapp\/(catalog|details|favorite|share)$/);
+  const match = url.pathname.match(/^\/api\/miniapp\/(catalog|details|favorite|share|ads\/config|ads\/track)$/);
   if (!match) return null;
   if (request.method !== "POST") return json({ ok: false, error: "METHOD_NOT_ALLOWED" }, 405);
 
