@@ -96,6 +96,7 @@ export default function AnalyticsSection({ fetchApi }) {
   const miniapp = overview?.miniapp || {};
   const activity = overview?.activity || {};
   const providers = Object.fromEntries((overview?.ad_providers || []).map((item) => [item.provider, item]));
+  const botMetrics = Object.fromEntries((overview?.bots || []).map((item) => [item.slug, item]));
   const selectedPeriod = periodOptions.find((item) => item.value === period)?.label || periodOptions[1].label;
 
   return (
@@ -137,10 +138,10 @@ export default function AnalyticsSection({ fetchApi }) {
         </div>
         <div className="analytics-bot-grid">
           <article className="analytics-bot-card">
-            <span>Master Bot</span><strong>{number(users.master)}</strong><small>مستخدمو البوت الرئيسي</small>
+            <span>Master Bot</span><strong>{number(users.master)}</strong><small>{number(botMetrics.findly?.active_users)} نشط · {number(botMetrics.findly?.events)} حدث خلال الفترة</small>
           </article>
           <article className="analytics-bot-card">
-            <span>Watch Bot</span><strong>{number(users.watch)}</strong><small>مستخدمو بوت المشاهدة</small>
+            <span>Watch Bot</span><strong>{number(users.watch)}</strong><small>{number(botMetrics.movies?.active_users)} نشط · {number(botMetrics.movies?.events)} حدث خلال الفترة</small>
           </article>
           <article className="analytics-bot-card">
             <span>المشتركون بين البوتين</span><strong>{number(users.shared)}</strong><small>نفس المستخدم استعمل البوتين</small>
