@@ -454,8 +454,8 @@ export function buildTmdbSearchResultsPayload(searchTerm, results) {
     const tmdbId = String(item.tmdb_id);
     const kind = item.media_type === "series" ? "tv" : "movie";
     return [
-      { text: "📩 طلب الإضافة · " + String(item.title).slice(0, 28), callback_data: "movies:tmdbrequest:" + item.media_type + ":" + tmdbId },
-      { text: "TMDB ↗", url: "https://www.themoviedb.org/" + kind + "/" + tmdbId }
+      { text: String(item.title).slice(0, 64), callback_data: "movies:tmdbrequest:" + item.media_type + ":" + tmdbId },
+      { text: "↗", url: "https://www.themoviedb.org/" + kind + "/" + tmdbId }
     ];
   });
   keyboard.push([{ text: "📚 مكتبة FINDLY", callback_data: "movies:library:0" }, { text: "🔎 بحث جديد", callback_data: "movies:search" }]);
