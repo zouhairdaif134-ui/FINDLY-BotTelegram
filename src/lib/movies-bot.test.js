@@ -9,7 +9,8 @@ import {
   buildMoviePosterAlbum,
   buildMoviePosterKeyboard,
   buildMoviesMiniAppButton,
-  buildMoviesSearchPromptOptions
+  buildMoviesSearchPromptOptions,
+  buildTmdbSearchResultsPayload
 } from "./movies-bot.js";
 import { getTelegramToken, getTelegramWebhookSecret } from "./telegram.js";
 
@@ -219,4 +220,39 @@ test("builds Telegram Force Reply markup with the required top-level shape", () 
       input_field_placeholder: "اسم الفيلم أو المسلسل"
     }
   });
+});
+
+
+test("parses safe TMDB request callbacks for movies and series", () => {
+  assert.deepEqual(parseMoviesCallback("movies:tmdbrequest:movie:603"), {
+    action: "tmdbrequest", mediaType: "movie", tmdbId: "603"
+  });
+  assert.deepEqual(parseMoviesCallback("movies:tmdbrequest:series:1399"), {
+    action: "tmdbrequest", mediaType: "series", tmdbId: "1399"
+  });
+  assert.equal(parseMoviesCallback("movies:tmdbrequest:other:603"), null);
+  assert.equal(parseMoviesCallback("movies:tmdbrequest:movie:../../"), null);
+});
+
+test("builds TMDB fallback results with safe request callbacks and official links", () => {
+  const payload = buildTmdbSearchResultsPayload("Tony", [
+    {
+      tmdb_id: 603, media_type: "movie", title: "Tony & Friends", release_year: 2025,
+      rating: 7.2, overview: "<script>bad</script>", popularity: 20
+    },
+    { tmdb_id: 1399, media_type: "series", title: "Tony Show", release_year: 2024, rating: 8.1 }
+  ]);
+  assert.match(payload.text, /نتائج TMDB عن: Tony/);
+  assert.doesNotMatch(payload.text, /<script>/);
+  assert.deepEqual(payload.reply_markup.inline_keyboard[0], [
+    { text: "📩 طلب الإضافة · Tony & Friends", callback_data: "movies:tmdbrequest:movie:603" },
+    { text: "TMDB ↗", url: "https://www.themoviedb.org/movie/603" }
+  ]);
+  assert.equal(payload.reply_markup.inline_keyboard[1][0].callback_data, "movies:tmdbrequest:series:1399");
+});
+
+test("returns a clear empty TMDB result state without request buttons", () => {
+  const payload = buildTmdbSearchResultsPayload("Unknown", []);
+  assert.match(payload.text, /لا فمكتبة FINDLY ولا فنتائج TMDB/);
+  assert.equal(payload.reply_markup.inline_keyboard.length, 1);
 });
