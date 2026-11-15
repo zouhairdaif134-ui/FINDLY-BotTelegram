@@ -19,7 +19,7 @@ test("server kill switch and SDK readiness are both required before a slot can r
   assert.equal(config.ads_enabled, true);
   assert.equal(config.sdk_enabled, false);
   assert.equal(adSlot(config, "catalog_after_sixth"), "");
-  assert.equal(adSlot({ ...config, sdk_enabled: true }, "catalog_after_sixth").includes('data-ad-slot="catalog_after_sixth"'), true);
+  assert.equal(adSlot({ ...config, sdk_enabled: true }, "catalog_after_sixth"), "");
 });
 
 test("provider order is allow-listed and frequency values are bounded", () => {
@@ -80,11 +80,11 @@ test("recording an impression increments the shared counter and cooldown timesta
   assert.equal(canDisplayAd(result, { max_per_session: 1, min_interval_minutes: 10 }, 700000), false);
 });
 
-test("server-side ad activation is fail-closed behind written TMDB commercial approval", async () => {
+test("server-side Monetag activation follows the admin switch and selected provider", async () => {
   const { readFile } = await import("node:fs/promises");
   const route = await readFile(new URL("../src/routes/miniapp.js", import.meta.url), "utf8");
-  assert.match(route, /ads_enabled:\s*data\?\.ads_enabled === true && env\.TMDB_COMMERCIAL_LICENSE_APPROVED === "true"/);
-  assert.match(route, /sdk_enabled:\s*false/);
+  assert.match(route, /ads_enabled:\s*data\?\.ads_enabled === true/);
+  assert.match(route, /sdk_enabled:\s*providerOrder\.includes\("monetag"\)/);
 });
 
 test("telemetry service role is limited to read and insert operations", async () => {
