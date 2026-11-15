@@ -1,0 +1,35 @@
+name: FINDLY Mini App ads safety checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "miniapp/**"
+      - "src/routes/miniapp.js"
+      - "test/miniapp-ads.test.js"
+      - "supabase/migrations/20261115000100_miniapp_ads_phase1.sql"
+      - ".github/workflows/miniapp-ads-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "miniapp/**"
+      - "src/routes/miniapp.js"
+      - "test/miniapp-ads.test.js"
+      - "supabase/migrations/20261115000100_miniapp_ads_phase1.sql"
+      - ".github/workflows/miniapp-ads-tests.yml"
+
+jobs:
+  miniapp-ads-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-package-lock
+      - run: node --test test/miniapp-ads.test.js
+      - run: npm test
+      - run: node --check miniapp/app.js
+      - run: node --check miniapp/ad-slot.js
+      - run: node --check src/routes/miniapp.js
+      - run: npx --yes wrangler@4.156.1 deploy --dry-run
