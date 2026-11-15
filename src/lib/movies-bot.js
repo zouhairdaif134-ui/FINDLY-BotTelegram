@@ -142,7 +142,7 @@ export function parseMoviesCallback(value) {
     const page = Number(parts[2] || 0);
     return { action, page: Number.isInteger(page) && page >= 0 ? page : 0 };
   }
-  if (action === "tmdbrequest" && ["movie", "series"].includes(parts[2]) && /^\\d{1,12}$/.test(parts[3] || "")) {
+  if (action === "tmdbrequest" && ["movie", "series"].includes(parts[2]) && /^\d{1,12}$/.test(parts[3] || "")) {
     return { action, mediaType: parts[2], tmdbId: parts[3] };
   }
   if (["title", "favorite", "seasons", "plot", "watch"].includes(action) && UUID_RE.test(parts[2] || "")) {
@@ -433,12 +433,12 @@ async function showMoviesYearPrompt(env, bot, chatId) {
 
 export function buildTmdbSearchResultsPayload(searchTerm, results) {
   const safeResults = (Array.isArray(results) ? results : [])
-    .filter((item) => /^\\d{1,12}$/.test(String(item?.tmdb_id || "")) &&
+    .filter((item) => /^\d{1,12}$/.test(String(item?.tmdb_id || "")) &&
       ["movie", "series"].includes(item?.media_type) && String(item?.title || "").trim())
     .slice(0, MOVIE_PAGE_SIZE);
   if (!safeResults.length) {
     return {
-      text: "<b>🔎 نتائج البحث عن: " + escapeHtml(searchTerm) + "</b>\\n\\nما لقيناش هاد العنوان لا فمكتبة FINDLY ولا فنتائج TMDB.",
+      text: "<b>🔎 نتائج البحث عن: " + escapeHtml(searchTerm) + "</b>\n\nما لقيناش هاد العنوان لا فمكتبة FINDLY ولا فنتائج TMDB.",
       reply_markup: { inline_keyboard: [[{ text: "📚 مكتبة FINDLY", callback_data: "movies:library:0" }, { text: "🔎 بحث جديد", callback_data: "movies:search" }]] }
     };
   }
@@ -446,9 +446,9 @@ export function buildTmdbSearchResultsPayload(searchTerm, results) {
     const year = item.release_year ? " · " + item.release_year : "";
     const kind = item.media_type === "series" ? "مسلسل" : "فيلم";
     const rating = item.rating != null ? "⭐ " + Number(item.rating).toFixed(1) + "/10" : "بدون تقييم";
-    const overview = String(item.overview || "لا يتوفر ملخص حالياً.").replace(/\\s+/g, " ").trim().slice(0, 190);
+    const overview = String(item.overview || "لا يتوفر ملخص حالياً.").replace(/\s+/g, " ").trim().slice(0, 190);
     return (index + 1) + ". <b>" + escapeHtml(item.title) + "</b>" + escapeHtml(year) +
-      "\\n" + escapeHtml(kind + " · " + rating) + "\\n" + escapeHtml(overview);
+      "\n" + escapeHtml(kind + " · " + rating) + "\n" + escapeHtml(overview);
   });
   const keyboard = safeResults.map((item) => {
     const tmdbId = String(item.tmdb_id);
@@ -460,7 +460,7 @@ export function buildTmdbSearchResultsPayload(searchTerm, results) {
   });
   keyboard.push([{ text: "📚 مكتبة FINDLY", callback_data: "movies:library:0" }, { text: "🔎 بحث جديد", callback_data: "movies:search" }]);
   return {
-    text: "<b>🔎 نتائج TMDB عن: " + escapeHtml(searchTerm) + "</b>\\n<i>هاد العناوين من TMDB ومازال ما تزادوش لمكتبة FINDLY.</i>\\n\\n" + sections.join("\\n\\n"),
+    text: "<b>🔎 نتائج TMDB عن: " + escapeHtml(searchTerm) + "</b>\n<i>هاد العناوين من TMDB ومازال ما تزادوش لمكتبة FINDLY.</i>\n\n" + sections.join("\n\n"),
     reply_markup: { inline_keyboard: keyboard }
   };
 }
@@ -477,7 +477,7 @@ async function sendTmdbSearchResults(env, bot, chatId, searchTerm) {
   } catch (error) {
     console.error("FINDLY Telegram TMDB search fallback failed:", { code: error?.code || null, status: error?.status || null });
     await sendMessage(env, bot.slug, chatId,
-      "<b>⚠️ البحث الخارجي غير متاح حالياً.</b>\\nما قدرناش نتاصلو بـ TMDB دابا. عاود المحاولة من بعد."
+      "<b>⚠️ البحث الخارجي غير متاح حالياً.</b>\nما قدرناش نتاصلو بـ TMDB دابا. عاود المحاولة من بعد."
     );
   }
 }
@@ -1130,7 +1130,7 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
       const message = request.is_new_requester
         ? "✅ تسجل طلبك بنجاح. عدد المستخدمين اللي طلبو هاد العنوان: " + request.request_count + "."
         : "ℹ️ سبق ليك طلبتي هاد العنوان. عدد المستخدمين اللي طلبوه: " + request.request_count + ".";
-      await sendMessage(env, bot.slug, chatId, message + "\\nما غاديش يتضاف للمكتبة حتى تراجع الإدارة الطلب.");
+      await sendMessage(env, bot.slug, chatId, message + "\nما غاديش يتضاف للمكتبة حتى تراجع الإدارة الطلب.");
     } catch (error) {
       console.error("FINDLY Telegram movie request failed:", { code: error?.code || null, status: error?.status || null });
       await sendMessage(env, bot.slug, chatId, "⚠️ ما قدرناش نسجلو الطلب دابا. عاود المحاولة من بعد.");
