@@ -35,9 +35,11 @@ const YEAR_PROMPT = "📅 سنة إصدار FINDLY";
 export function buildMoviesSearchPromptOptions() {
   return {
     reply_markup: {
-      force_reply: true,
-      selective: true,
-      input_field_placeholder: "اسم الفيلم أو المسلسل"
+      force_reply: {
+        force_reply: true,
+        selective: true,
+        input_field_placeholder: "اسم الفيلم أو المسلسل"
+      }
     }
   };
 }
