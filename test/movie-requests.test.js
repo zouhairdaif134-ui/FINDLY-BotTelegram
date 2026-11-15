@@ -52,7 +52,7 @@ test("movie request migration deduplicates titles and individual requesters tran
   const migration = await readFile(new URL("../supabase/migrations/20261115180000_movie_requests.sql", import.meta.url), "utf8");
   assert.match(migration, /unique \(tmdb_id, media_type\)/i);
   assert.match(migration, /primary key \(request_id, telegram_user_id\)/i);
-  assert.match(migration, /on conflict \(request_id, telegram_user_id\) do nothing/i);
+  assert.match(migration, /on conflict on constraint movie_request_users_pkey do nothing/i);
   assert.match(migration, /if v_inserted = 1 then[\s\S]*request_count = r\.request_count \+ 1/i);
   assert.match(migration, /security definer/i);
   assert.match(migration, /grant execute .* to service_role/i);
