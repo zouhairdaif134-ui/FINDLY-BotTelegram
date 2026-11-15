@@ -27,10 +27,12 @@ test("analytics overview API is protected by the existing analytics permission",
 test("Mini App records one authenticated open per session and ad-provider outcomes", async () => {
   const route = await read("../src/routes/miniapp.js");
   const app = await read("../miniapp/app.js");
+  const telegram = await read("../src/routes/telegram.js");
   assert.match(route, /analytics\/track/);
   assert.match(route, /miniapp_opened/);
   assert.match(route, /ad_provider_(request|resolved|failed)/);
   assert.match(route, /user_bots/);
+  assert.match(telegram, /movie_watch_started/);
   assert.match(app, /trackAnalyticsEvent\("miniapp_opened"/);
   assert.match(app, /trackProviderAdEvent\("monetag","request"/);
   assert.match(app, /trackProviderAdEvent\("adsgram","request"/);
