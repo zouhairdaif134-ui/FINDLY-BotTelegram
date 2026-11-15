@@ -1,5 +1,5 @@
 import { tmdbImageUrl } from "/tmdb-image-url.js?v=20261114-2";
-import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequencyState, writeAdFrequencyState, recordDetailClick, shouldTriggerInterstitial } from "/ad-slot.js?v=20261115-clickads1";
+import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequencyState, writeAdFrequencyState, recordDetailClick, shouldTriggerInterstitial } from "/ad-slot.js?v=20261115-clickads2";
 (() => {
   const tg = window.Telegram?.WebApp, app = document.getElementById("app"), toast = document.getElementById("toast");
   let adsConfig = DEFAULT_AD_CONFIG;
