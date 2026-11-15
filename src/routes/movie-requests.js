@@ -13,7 +13,7 @@ export function normalizeMovieRequestStatus(value) {
 export async function submitMovieRequest(env, telegramUserId, body = {}) {
   const tmdbId = String(body.tmdb_id || "");
   const mediaType = body.media_type === "series" ? "series" : body.media_type === "movie" ? "movie" : "";
-  if (!/^\\d{1,12}$/.test(tmdbId) || !mediaType) {
+  if (!/^\d{1,12}$/.test(tmdbId) || !mediaType) {
     const error = new Error("Invalid movie request");
     error.status = 400;
     error.code = "INVALID_MOVIE_REQUEST";
