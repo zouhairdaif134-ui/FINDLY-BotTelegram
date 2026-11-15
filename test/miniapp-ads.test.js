@@ -29,8 +29,8 @@ test("provider order is allow-listed and frequency values are bounded", () => {
     frequency: { max_per_session: 99, min_interval_minutes: 0 }
   });
   assert.deepEqual(config.provider_order, ["adsgram", "monetag"]);
-  assert.equal(config.frequency.max_per_session, 1);
-  assert.equal(config.frequency.min_interval_minutes, 10);
+  assert.equal(config.frequency.max_per_session, 0);
+  assert.equal(config.frequency.min_interval_minutes, 0);
 });
 
 test("shared frequency gate blocks a second slot in the same session and respects cooldown", () => {
@@ -141,4 +141,14 @@ test("click-based ad policy has no time cooldown or one-ad session cap", () => {
   assert.equal(config.frequency.max_per_session, 0);
   assert.equal(config.frequency.min_interval_minutes, 0);
   assert.equal(canDisplayAd({ session_count: 99, last_shown_at: 999999999 }, config.frequency, 1000000000), true);
+});
+
+
+test("app triggers a direct Monetag rewarded interstitial from the click threshold without a time interval", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const app = await readFile(new URL("../miniapp/app.js", import.meta.url), "utf8");
+  assert.match(app, /recordDetailClick\(adFrequencyState,titleId\)/);
+  assert.match(app, /shouldTriggerInterstitial\(adFrequencyState,threshold\)/);
+  assert.match(app, /Promise\.resolve\(showAd\(\)\)/);
+  assert.doesNotMatch(app, /type:"inApp".*interval:600/);
 });
