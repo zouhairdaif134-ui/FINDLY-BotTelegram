@@ -1,6 +1,8 @@
 import { getSupabase } from "../lib/supabase.js";
 import { getTelegramToken } from "../lib/telegram.js";
 import { buildMovieShareContent } from "../lib/movie-sharing.js";
+import { searchTmdbCatalog } from "./content.js";
+import { submitMovieRequest } from "./movie-requests.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_INIT_DATA_AGE_SECONDS = 24 * 60 * 60;
@@ -236,10 +238,30 @@ async function getCatalog(env, userId, body) {
   const favoriteSet = new Set(favoriteIds);
   const titles = cached.titles.map((title) => ({ ...title, is_favorite: favoriteSet.has(title.id) }));
   const nextOffset = offset + titles.length;
+  let tmdbResults = [];
+
+  // External discovery is a fallback only: never mix TMDB results into the FINDLY library.
+  if (search && offset === 0 && cached.total === 0 && !genre && !favoritesOnly) {
+    try {
+      const mediaTypes = type ? [type] : ["movie", "series"];
+      const batches = await Promise.all(mediaTypes.map((mediaType) => searchTmdbCatalog(env, search, mediaType, 1)));
+      tmdbResults = batches.flat()
+        .sort((a, b) => Number(b.popularity || 0) - Number(a.popularity || 0))
+        .slice(0, 20)
+        .map((item) => ({
+          ...item,
+          tmdb_url: "https://www.themoviedb.org/" + (item.media_type === "series" ? "tv/" : "movie/") + item.tmdb_id,
+          source: "tmdb"
+        }));
+    } catch (error) {
+      console.warn("FINDLY TMDB search fallback unavailable:", { code: error?.code || null });
+    }
+  }
 
   return json({
     ok: true,
     titles,
+    tmdb_results: tmdbResults,
     favorite_ids: favoriteIds,
     genres: cached.genres,
     pagination: {
@@ -530,6 +552,7 @@ export async function handleMiniAppRoute(env, request, url) {
     if (match[1] === "ads/track") return await trackMiniAppAdEvent(env, auth.userId, body);
     if (match[1] === "analytics/track") return await trackMiniAppAnalyticsEvent(env, auth.userId, body);
     if (match[1] === "catalog") return await getCatalog(env, auth.userId, body);
+    if (match[1] === "request") return json({ ok: true, request: await submitMovieRequest(env, auth.userId, body) });
     if (match[1] === "details") return await getTitleDetails(env, auth.userId, body.title_id, body.include_full_plot === true);
     if (match[1] === "share") return await getMovieShare(env, auth.userId, body, request.url);
     if (match[1] === "favorite") {
