@@ -407,7 +407,7 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
 }
 export async function getTmdbRequestDetails(env, tmdbId, mediaType = "movie") {
   const id = String(tmdbId || "");
-  if (!/^\\d+$/.test(id) || !["movie", "series"].includes(mediaType)) {
+  if (!/^\d+$/.test(id) || !["movie", "series"].includes(mediaType)) {
     throw new Error("Invalid TMDB request identifier");
   }
   const isSeries = mediaType === "series";
