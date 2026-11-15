@@ -20,6 +20,21 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   function renderAdSlot(slotKey){return canDisplayAd(adFrequencyState,adsConfig.frequency)?adSlot(adsConfig,slotKey):"";}
   function recordDetailView(){adFrequencyState=writeAdFrequencyState({...adFrequencyState,detail_views:adFrequencyState.detail_views+1});}
   async function loadAdConfig(){try{const result=await api("ads/config");adsConfig=normalizeAdConfig(result.config);if(adsConfig.ads_enabled&&adsConfig.sdk_enabled)render();}catch{adsConfig=DEFAULT_AD_CONFIG;}}
+  let monetagAdAttempted=false;
+  function maybeShowMonetagInterstitial(){
+    const threshold=adsConfig.frequency.detail_views_before_interstitial;
+    if(!adsConfig.ads_enabled||!adsConfig.sdk_enabled||monetagAdAttempted||adFrequencyState.detail_views<threshold||!canDisplayAd(adFrequencyState,adsConfig.frequency))return;
+    const showAd=window.show_12270189;
+    if(typeof showAd!=="function")return;
+    monetagAdAttempted=true;
+    try{
+      showAd({type:"inApp",inAppSettings:{frequency:1,capping:0.1667,interval:600,timeout:0,everyPage:false}});
+      adFrequencyState=writeAdFrequencyState({...adFrequencyState,session_count:adFrequencyState.session_count+1,last_shown_at:Date.now()});
+    }catch(error){
+      monetagAdAttempted=false;
+      console.warn("FINDLY Monetag interstitial failed",error);
+    }
+  }
   const meta=t=>[t.release_year||"",t.media_type==="series"?"مسلسل":"فيلم",t.runtime_minutes?t.runtime_minutes+" دقيقة":""].filter(Boolean).join(" · ");
   function card(t,rank=null){
     const src=poster(t),rating=t.rating!=null?'<span class="poster-rating">★ '+Number(t.rating).toFixed(1)+'</span>':"",fresh=isNew(t)?'<span class="new-badge">جديد</span>':"",rankMarkup=rank?'<span class="rank-number" aria-hidden="true">'+rank+'</span>':"";
@@ -60,7 +75,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   async function fetchDetails(id,includeFullPlot=false){const cached=detailsCache.get(id);if(cached&&cached.expiresAt>Date.now()&&(!includeFullPlot||cached.data.title?.full_plot_summary))return cached.data;const key=id+(includeFullPlot?":plot":"");if(detailsRequests.has(key))return detailsRequests.get(key);const request=api("details",{title_id:id,include_full_plot:includeFullPlot}).then(data=>{const previous=detailsCache.get(id)?.data;const merged=previous&&includeFullPlot?{...data,title:{...data.title,full_plot_summary:data.title.full_plot_summary||previous.title?.full_plot_summary}}:data;detailsCache.set(id,{data:merged,expiresAt:Date.now()+60000});return merged;}).finally(()=>detailsRequests.delete(key));detailsRequests.set(key,request);return request;}
   function prefetchDetails(id){if(!id||detailsCache.get(id)?.expiresAt>Date.now()||detailsRequests.has(id))return;fetchDetails(id).catch(()=>{});}
   async function openDetails(id){recordDetailView();savedScrollY=window.scrollY||document.documentElement.scrollTop||0;state.activeTitle=id;state.showFullPlot=false;tg?.BackButton?.show();const cached=detailsCache.get(id);state.details=cached&&cached.expiresAt>Date.now()?cached.data:null;render();try{state.details=await fetchDetails(id);if(state.activeTitle===id)render();}catch(error){if(state.activeTitle===id){state.activeTitle=null;notify(error.message);render();window.scrollTo(0,savedScrollY);}}}
-  function closeDetails(){state.activeTitle=null;state.details=null;state.showFullPlot=false;state.shareOpen=false;tg?.BackButton?.hide();render();requestAnimationFrame(()=>window.scrollTo(0,savedScrollY));}
+  function closeDetails(){state.activeTitle=null;state.details=null;state.showFullPlot=false;state.shareOpen=false;tg?.BackButton?.hide();render();requestAnimationFrame(()=>window.scrollTo(0,savedScrollY));maybeShowMonetagInterstitial();}
 
   function shareSheet(){if(!state.shareOpen||!state.details?.title)return "";const t=state.details.title;return '<div class="share-overlay" data-share-close><section class="share-sheet" role="dialog" aria-modal="true" aria-label="مشاركة العنوان"><div class="share-sheet-handle"></div><div class="share-sheet-head"><div><strong>مشاركة العنوان</strong><small>'+esc(t.title)+'</small></div><button class="share-close" data-share-close aria-label="إغلاق">×</button></div><div class="share-grid"><button data-share-platform="facebook"><span class="share-brand facebook">f</span><small>Facebook</small></button><button data-share-platform="whatsapp"><span class="share-brand whatsapp">◉</span><small>WhatsApp</small></button><button data-share-platform="x"><span class="share-brand x-brand">𝕏</span><small>X</small></button><button data-share-platform="telegram"><span class="share-brand telegram">➤</span><small>Telegram</small></button><button data-share-platform="instagram"><span class="share-brand instagram">◎</span><small>Instagram</small></button></div><p class="share-hint">Facebook ما كيعمرش نص المنشور تلقائياً. نسخ الكابشن من هنا ولصقو يدوياً.</p><div class="share-tools"><button data-share-action="copy-link">نسخ رابط المشاركة</button><button data-share-action="copy-caption">نسخ الكابشن</button><button data-share-action="download-image">فتح صورة المشاركة</button><button data-share-action="copy-film-link">نسخ رابط الفيلم</button><button data-share-action="copy-bot-link">نسخ رابط بوت FINDLY</button></div></section></div>';}
   async function copyShareText(value){try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(value);return true;}}catch{}try{const f=document.createElement("textarea");f.value=value;f.style.position="fixed";f.style.opacity="0";document.body.appendChild(f);f.select();const ok=document.execCommand("copy");f.remove();return ok;}catch{return false;}}
