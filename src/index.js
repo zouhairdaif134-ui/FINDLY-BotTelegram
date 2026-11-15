@@ -50,7 +50,7 @@ import {
   updateNotification,
   deleteNotification
 } from "./routes/notifications.js";
-import { getAnalytics, getMovieReferralAnalytics } from "./routes/analytics.js";
+import { getAnalytics, getMovieReferralAnalytics, getFindlyAnalyticsOverview } from "./routes/analytics.js";
 import { getActivity } from "./routes/activity.js";
 import { handleMonetizationRoute } from "./routes/monetization.js";
 import { handleMediaRoute } from "./routes/media.js";
@@ -1816,6 +1816,36 @@ export default {
             await deleteNotification(
               env,
               getId(url)
+            )
+          )
+        , request);
+      }
+
+      if (
+        url.pathname ===
+          "/api/analytics/overview" &&
+        request.method ===
+          "GET"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.analytics
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          , request);
+        }
+
+        return withCors(
+          success(
+            await getFindlyAnalyticsOverview(
+              env,
+              url.searchParams.get("from"),
+              url.searchParams.get("to")
             )
           )
         , request);

@@ -17,6 +17,9 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   const isNew=t=>{const d=Date.parse(t.created_at||"");return Number.isFinite(d)&&Date.now()-d>=0&&Date.now()-d<=604800000;};
   const notify=m=>{toast.textContent=m;toast.classList.add("show");clearTimeout(notify.timer);notify.timer=setTimeout(()=>toast.classList.remove("show"),2200);};
   async function api(endpoint,payload={}){const response=await fetch("/api/miniapp/"+endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,init_data:initData})});const data=await response.json().catch(()=>({}));if(!response.ok||!data.ok)throw new Error(data.error||"تعذر الاتصال بالخدمة");return data;}
+  const miniAppSessionId=crypto.randomUUID();
+  function trackAnalyticsEvent(eventType,details={}){const eventId=crypto.randomUUID();api("analytics/track",{event_type:eventType,event_id:eventId,session_id:miniAppSessionId,...details}).catch(()=>{});}
+  function trackProviderAdEvent(provider,outcome,attemptId,titleId=null){trackAnalyticsEvent("ad_provider_"+outcome,{provider,attempt_id:attemptId,title_id:titleId||undefined});}
   function renderAdSlot(slotKey){return canDisplayAd(adFrequencyState,adsConfig.frequency)?adSlot(adsConfig,slotKey):"";}
   function recordDetailView(titleId){adFrequencyState=recordDetailClick(adFrequencyState,titleId);}
   async function loadAdConfig(){try{const result=await api("ads/config");adsConfig=normalizeAdConfig(result.config);if(adsConfig.ads_enabled&&adsConfig.sdk_enabled)render();}catch{adsConfig=DEFAULT_AD_CONFIG;}}
@@ -26,16 +29,21 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
     const threshold=adsConfig.frequency.detail_views_before_interstitial;
     if(!adsConfig.ads_enabled||!adsConfig.sdk_enabled||monetagAdPending||!shouldTriggerInterstitial(adFrequencyState,threshold)||!canDisplayAd(adFrequencyState,adsConfig.frequency))return;
     const showAd=window.show_12270189;
-    if(typeof showAd!=="function")return;
+    if(typeof showAd!=="function"){const attemptId=crypto.randomUUID();trackProviderAdEvent("monetag","request",attemptId,state.activeTitle);trackProviderAdEvent("monetag","failed",attemptId,state.activeTitle);return;}
     monetagAdPending=true;
     const triggerAt=adFrequencyState.detail_views;
+    const attemptId=crypto.randomUUID();
+    trackProviderAdEvent("monetag","request",attemptId,state.activeTitle);
     try{
       Promise.resolve(showAd()).then(()=>{
+        trackProviderAdEvent("monetag","resolved",attemptId,state.activeTitle);
         adFrequencyState=writeAdFrequencyState({...adFrequencyState,session_count:adFrequencyState.session_count+1,last_shown_at:Date.now(),last_ad_detail_views:triggerAt});
       }).catch(error=>{
+        trackProviderAdEvent("monetag","failed",attemptId,state.activeTitle);
         console.warn("FINDLY Monetag interstitial failed",error);
       }).finally(()=>{monetagAdPending=false;});
     }catch(error){
+      trackProviderAdEvent("monetag","failed",attemptId,state.activeTitle);
       monetagAdPending=false;
       console.warn("FINDLY Monetag interstitial failed",error);
     }
@@ -68,7 +76,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   function renderGrid(title,rows){const categoryGenres=state.genres.filter(g=>state.titles.some(t=>(t.genres||[]).includes(g.name)));const categoryNav=state.tab==="genre"?'<div class="category-strip"><button class="chip" data-genre="all">كل التصنيفات</button>'+categoryGenres.map(g=>'<button class="chip '+(g.slug===state.genre?"active":"")+'" data-genre="'+esc(g.slug)+'">'+esc(g.name)+'</button>').join("")+'</div>':"";app.innerHTML='<div class="page-heading"><h1>'+esc(title)+'</h1><p>'+rows.length+' عنوان في المكتبة</p></div>'+categoryNav+(rows.length?'<div class="catalog-grid">'+rows.map((item,index)=>card(item)+(index===5?renderAdSlot("catalog_after_sixth"):"")).join("")+'</div>':'<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>'+(title==="مكتبتي"?"قائمتك فارغة":"لا توجد نتائج")+'</strong>جرّب اختياراً آخر أو بحثاً مختلفاً.</div>');}
   function getSearchRows(){const q=normalizeSearch(state.query);return state.titles.filter(t=>{const typeOk=state.searchType==="all"||t.media_type===state.searchType;const hay=normalizeSearch((t.title||"")+" "+(t.original_title||""));return typeOk&&(!q||hay.includes(q));});}
   function updateSearchResults(){const target=document.getElementById("search-results");if(!target)return;const rows=state.searchResults;target.innerHTML=state.query?(rows.length?'<div class="catalog-grid">'+rows.map((item,index)=>card(item)+(index===5?renderAdSlot("catalog_after_sixth"):"")).join("")+'</div>':'<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>لا توجد نتائج</strong>جرّب عنواناً آخر.</div>'):'<div class="empty-state">ابدأ بكتابة اسم الفيلم أو المسلسل.</div>';if(state.searchHasMore)target.insertAdjacentHTML("beforeend",'<div class="pagination-sentinel" data-search-more>مرّر لعرض المزيد</div>');}
-  async function searchCatalog(reset=true){if(state.searchLoading)return;const requestId=++state.searchRequestId,offset=reset?0:state.searchNextOffset;if(!reset&&!state.searchHasMore)return;state.searchLoading=true;try{const data=await api("catalog",{query:normalizeSearch(state.query),media_type:state.searchType==="all"?undefined:state.searchType,offset,limit:40});if(requestId!==state.searchRequestId)return;const incoming=data.titles||[];state.searchResults=reset?incoming:[...state.searchResults,...incoming.filter(x=>!state.searchResults.some(y=>y.id===x.id))];state.searchHasMore=Boolean(data.pagination?.has_more);state.searchNextOffset=data.pagination?.next_offset??offset+incoming.length;updateSearchResults();}catch(error){if(requestId===state.searchRequestId&&reset)notify(error.message);}finally{if(requestId===state.searchRequestId)state.searchLoading=false;}}
+  async function searchCatalog(reset=true){if(state.searchLoading)return;const requestId=++state.searchRequestId,offset=reset?0:state.searchNextOffset;if(!reset&&!state.searchHasMore)return;if(reset&&normalizeSearch(state.query))trackAnalyticsEvent("miniapp_search",{query_length:normalizeSearch(state.query).length,media_type:state.searchType});state.searchLoading=true;try{const data=await api("catalog",{query:normalizeSearch(state.query),media_type:state.searchType==="all"?undefined:state.searchType,offset,limit:40});if(requestId!==state.searchRequestId)return;const incoming=data.titles||[];state.searchResults=reset?incoming:[...state.searchResults,...incoming.filter(x=>!state.searchResults.some(y=>y.id===x.id))];state.searchHasMore=Boolean(data.pagination?.has_more);state.searchNextOffset=data.pagination?.next_offset??offset+incoming.length;updateSearchResults();}catch(error){if(requestId===state.searchRequestId&&reset)notify(error.message);}finally{if(requestId===state.searchRequestId)state.searchLoading=false;}}
   function renderSearch(){app.innerHTML='<div class="page-heading"><h1>البحث في FINDLY</h1><p>ابحث عن فيلم أو مسلسل</p></div><div class="search-wrap"><input id="search-input" class="search-input" placeholder="ابحث عن فيلم أو مسلسل" value="'+esc(state.query)+'" autocomplete="off"><div class="search-filters"><button class="chip'+(state.searchType==="all"?" active":"")+'" data-search-type="all">الكل</button><button class="chip'+(state.searchType==="movie"?" active":"")+'" data-search-type="movie">أفلام</button><button class="chip'+(state.searchType==="series"?" active":"")+'" data-search-type="series">مسلسلات</button></div></div><div id="search-results"></div>';updateSearchResults();}
   function render(){
     document.querySelectorAll(".bottom-nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===state.tab));
@@ -79,7 +87,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   }
   async function fetchDetails(id,includeFullPlot=false){const cached=detailsCache.get(id);if(cached&&cached.expiresAt>Date.now()&&(!includeFullPlot||cached.data.title?.full_plot_summary))return cached.data;const key=id+(includeFullPlot?":plot":"");if(detailsRequests.has(key))return detailsRequests.get(key);const request=api("details",{title_id:id,include_full_plot:includeFullPlot}).then(data=>{const previous=detailsCache.get(id)?.data;const merged=previous&&includeFullPlot?{...data,title:{...data.title,full_plot_summary:data.title.full_plot_summary||previous.title?.full_plot_summary}}:data;detailsCache.set(id,{data:merged,expiresAt:Date.now()+60000});return merged;}).finally(()=>detailsRequests.delete(key));detailsRequests.set(key,request);return request;}
   function prefetchDetails(id){if(!id||detailsCache.get(id)?.expiresAt>Date.now()||detailsRequests.has(id))return;fetchDetails(id).catch(()=>{});}
-  async function openDetails(id){recordDetailView(id);savedScrollY=window.scrollY||document.documentElement.scrollTop||0;state.activeTitle=id;state.showFullPlot=false;tg?.BackButton?.show();const cached=detailsCache.get(id);state.details=cached&&cached.expiresAt>Date.now()?cached.data:null;render();try{state.details=await fetchDetails(id);if(state.activeTitle===id)render();}catch(error){if(state.activeTitle===id){state.activeTitle=null;notify(error.message);render();window.scrollTo(0,savedScrollY);}}}
+  async function openDetails(id){recordDetailView(id);trackAnalyticsEvent("miniapp_title_viewed",{title_id:id});savedScrollY=window.scrollY||document.documentElement.scrollTop||0;state.activeTitle=id;state.showFullPlot=false;tg?.BackButton?.show();const cached=detailsCache.get(id);state.details=cached&&cached.expiresAt>Date.now()?cached.data:null;render();try{state.details=await fetchDetails(id);if(state.activeTitle===id)render();}catch(error){if(state.activeTitle===id){state.activeTitle=null;notify(error.message);render();window.scrollTo(0,savedScrollY);}}}
   function closeDetails(){state.activeTitle=null;state.details=null;state.showFullPlot=false;state.shareOpen=false;tg?.BackButton?.hide();render();requestAnimationFrame(()=>window.scrollTo(0,savedScrollY));maybeShowMonetagInterstitial();}
 
   function shareSheet(){if(!state.shareOpen||!state.details?.title)return "";const t=state.details.title;return '<div class="share-overlay" data-share-close><section class="share-sheet" role="dialog" aria-modal="true" aria-label="مشاركة العنوان"><div class="share-sheet-handle"></div><div class="share-sheet-head"><div><strong>مشاركة العنوان</strong><small>'+esc(t.title)+'</small></div><button class="share-close" data-share-close aria-label="إغلاق">×</button></div><div class="share-grid"><button data-share-platform="facebook"><span class="share-brand facebook">f</span><small>Facebook</small></button><button data-share-platform="whatsapp"><span class="share-brand whatsapp">◉</span><small>WhatsApp</small></button><button data-share-platform="x"><span class="share-brand x-brand">𝕏</span><small>X</small></button><button data-share-platform="telegram"><span class="share-brand telegram">➤</span><small>Telegram</small></button><button data-share-platform="instagram"><span class="share-brand instagram">◎</span><small>Instagram</small></button></div><p class="share-hint">Facebook ما كيعمرش نص المنشور تلقائياً. نسخ الكابشن من هنا ولصقو يدوياً.</p><div class="share-tools"><button data-share-action="copy-link">نسخ رابط المشاركة</button><button data-share-action="copy-caption">نسخ الكابشن</button><button data-share-action="download-image">فتح صورة المشاركة</button><button data-share-action="copy-film-link">نسخ رابط الفيلم</button><button data-share-action="copy-bot-link">نسخ رابط بوت FINDLY</button></div></section></div>';}
@@ -116,14 +124,25 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
       const t=state.details?.title,url=t?.watch_url||state.titles.find(x=>x.id===b.dataset.watch)?.watch_url;
       if(!url)return openDetails(b.dataset.watch);
       if(watchAdPending)return;
+      trackAnalyticsEvent("miniapp_watch_clicked",{title_id:b.dataset.watch});
       watchAdPending=true;b.disabled=true;
+      const attemptId=crypto.randomUUID();
+      trackProviderAdEvent("adsgram","request",attemptId,b.dataset.watch);
       try{
         const adsgram=window.Adsgram;
         if(typeof adsgram?.init==="function"){
           const controller=adsgram.init({blockId:"int-59879"});
-          if(typeof controller?.show==="function")await controller.show();
+          if(typeof controller?.show==="function"){
+            await controller.show();
+            trackProviderAdEvent("adsgram","resolved",attemptId,b.dataset.watch);
+          }else{
+            trackProviderAdEvent("adsgram","failed",attemptId,b.dataset.watch);
+          }
+        }else{
+          trackProviderAdEvent("adsgram","failed",attemptId,b.dataset.watch);
         }
       }catch(error){
+        trackProviderAdEvent("adsgram","failed",attemptId,b.dataset.watch);
         console.warn("FINDLY AdsGram interstitial unavailable; continuing to Watch Bot",error);
       }finally{
         watchAdPending=false;
@@ -156,6 +175,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   async function loadCatalogPage(reset=false){if(!reset&&(state.pagination.loading||!state.pagination.hasMore))return;if(reset){catalogRequestId++;state.pagination.loading=false;}const requestId=++catalogRequestId;state.pagination.loading=true;const offset=reset?0:state.pagination.nextOffset;const scroll=window.scrollY;try{const data=await api("catalog",catalogPayload(offset));if(requestId!==catalogRequestId)return;const incoming=data.titles||[];state.titles=reset?incoming:[...state.titles,...incoming.filter(x=>!state.titles.some(y=>y.id===x.id))];state.genres=data.genres||state.genres;state.favoriteIds=new Set(data.favorite_ids||[]);state.pagination={nextOffset:data.pagination?.next_offset??offset+incoming.length,hasMore:Boolean(data.pagination?.has_more),loading:false};derivedSource=null;state.loading=false;render();if(!reset)requestAnimationFrame(()=>window.scrollTo(0,scroll));saveCatalogCache();}catch(error){if(requestId===catalogRequestId){state.pagination.loading=false;if(!state.titles.length)throw error;}}finally{if(requestId===catalogRequestId)state.pagination.loading=false;}}
   async function start(){
     if(!initData){state.loading=false;app.innerHTML='<section class="error-state"><strong>افتح مكتبة FINDLY من Telegram</strong>هاد الصفحة كتحتاج جلسة Telegram موثّقة. رجع لبوت FINDLY واضغط على زر فتح المكتبة.</section>';document.querySelector(".bottom-nav").hidden=true;return;}
+    trackAnalyticsEvent("miniapp_opened",{});
     const cached=readCatalogCache();if(cached){state.titles=cached.titles;state.genres=cached.genres||[];state.favoriteIds=new Set(cached.favoriteIds||[]);state.pagination=cached.pagination||{nextOffset:state.titles.length,hasMore:true,loading:false};state.loading=false;render();}
     try{await loadCatalogPage(true);requestAnimationFrame(()=>loadAdConfig());const sp=tg?.initDataUnsafe?.start_param||new URLSearchParams(window.location.search).get("tgWebAppStartParam")||"";const dl=sp.match(/^movie_([0-9a-f-]{36})$/i);if(dl)await openDetails(dl[1]);}catch(error){state.loading=false;app.innerHTML='<section class="error-state"><strong>تعذر فتح المكتبة</strong>'+esc(error.message)+'<p>سدّ النافذة وعاود فتح FINDLY من Telegram.</p></section>';}
   }

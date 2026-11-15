@@ -1567,6 +1567,12 @@ async function processTelegramUpdate(
           start_payload: startPayload
         });
       }
+      if (bot.slug === "movies" && referral?.action === "watch") {
+        await recordAnalytics(env, bot, telegramUser, "movie_watch_started", {
+          title_id: referral.titleId,
+          source: "master_watch_link"
+        });
+      }
       await handleMoviesStart(env, bot, chatId, startPayload, telegramUser?.id);
       return { ok: true };
     }
