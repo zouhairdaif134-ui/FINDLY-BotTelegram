@@ -86,3 +86,10 @@ test("server-side ad activation is fail-closed behind written TMDB commercial ap
   assert.match(route, /ads_enabled:\s*data\?\.ads_enabled === true && env\.TMDB_COMMERCIAL_LICENSE_APPROVED === "true"/);
   assert.match(route, /sdk_enabled:\s*false/);
 });
+
+test("telemetry service role is limited to read and insert operations", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const migration = await readFile(new URL("../supabase/migrations/20261115000200_miniapp_ad_events_least_privilege.sql", import.meta.url), "utf8");
+  assert.match(migration, /revoke all on table public\.miniapp_ad_events from service_role/i);
+  assert.match(migration, /grant select, insert on table public\.miniapp_ad_events to service_role/i);
+});
