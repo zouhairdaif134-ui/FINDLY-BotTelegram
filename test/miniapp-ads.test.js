@@ -161,3 +161,14 @@ test("database migration permits click-only ad frequency with no timer or sessio
   assert.match(migration, /min_interval_minutes.*between 0 and 1440/is);
   assert.match(migration, /detail_views_before_interstitial.*between 3 and 20/is);
 });
+
+
+test("click policy starts with a clean counter when upgrading from the previous session schema", () => {
+  const oldValues = new Map([["findly:ads:session:v2", JSON.stringify({ session_count: 1, detail_views: 8 })]]);
+  const session = { getItem: (key) => oldValues.get(key) ?? null, setItem: (key, value) => oldValues.set(key, value) };
+  const persistent = { getItem: () => null, setItem: () => {} };
+  const state = readAdFrequencyState(session, persistent);
+  assert.equal(state.detail_views, 0);
+  assert.equal(state.session_count, 0);
+  assert.equal(shouldTriggerInterstitial(state, 3), false);
+});
