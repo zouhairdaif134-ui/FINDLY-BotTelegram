@@ -17,6 +17,24 @@ test("rejects malformed FINDLY storage captions", () => {
   });
 });
 
+test("parses a series storage caption using the series title, release year, episode, and quality", () => {
+  assert.deepEqual(
+    parseMovieStorageCaption("FINDLY:Reacher (2022)|S01E01|1080p"),
+    {
+      titleId: null, title: "Reacher", releaseYear: 2022, quality: "1080p",
+      seasonNumber: 1, episodeNumber: 1, mediaType: "series"
+    }
+  );
+});
+
+test("matches title-year captions only to the requested media type", () => {
+  const media = { title: "Reacher", releaseYear: 2022, mediaType: "series" };
+  const movie = { id: "11111111-1111-4111-8111-111111111111", title: "Reacher", release_year: 2022, media_type: "movie" };
+  const series = { id: "22222222-2222-4222-8222-222222222222", title: "Reacher", release_year: 2022, media_type: "series" };
+  assert.equal(findMovieMediaTitle([movie], media), null);
+  assert.equal(findMovieMediaTitle([movie, series], media), series);
+});
+
 test("extracts video metadata from a channel post without downloading the file", () => {
   assert.deepEqual(extractTelegramMedia({
     message_id: 321,
