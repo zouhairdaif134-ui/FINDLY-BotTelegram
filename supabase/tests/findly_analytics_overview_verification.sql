@@ -4,7 +4,7 @@ insert into public.bots (id, slug, name) values
 
 insert into public.telegram_users (id, first_seen_at) values
   ('20000000-0000-4000-8000-000000000001', '2026-11-10T10:00:00Z'),
-  ('20000000-0000-4000-8000-000000000002', '2026-11-20T10:00:00Z');
+  ('20000000-0000-4000-8000-000000000002', '2026-10-20T10:00:00Z');
 
 insert into public.user_bots (user_id, bot_id) values
   ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001'),
