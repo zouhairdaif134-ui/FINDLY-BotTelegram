@@ -586,13 +586,15 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
         categoriesData,
         usersData,
         contentData,
-        moviesData
+        moviesData,
+        movieRequestsData
       ] = await Promise.all([
         fetchApi("/api/bots"),
         fetchApi("/api/categories"),
         fetchApi("/api/users"),
         fetchApi("/api/content"),
-        fetchApi("/api/movies")
+        fetchApi("/api/movies"),
+        fetchApi("/api/movie-requests?status=pending")
       ]);
 
       setBots(botsData || []);
