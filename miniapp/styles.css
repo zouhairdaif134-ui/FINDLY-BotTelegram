@@ -27,3 +27,19 @@
 .catalog-grid .ad-slot{width:100%;max-width:none;min-width:0;min-height:240px;aspect-ratio:2/3}
 .ad-label{position:absolute;top:7px;right:7px;padding:3px 7px;border-radius:5px;background:#292933;color:#c8c8d2;font-size:10px;font-weight:700}
 .ad-slot-content{width:100%;height:100%}
+
+
+/* TMDB discovery results remain visually distinct from FINDLY's own catalog. */
+.tmdb-results { display: grid; gap: 12px; margin: 18px 0 28px; }
+.tmdb-results-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #f4f4f5; }
+.tmdb-results-heading span { color: #a1a1aa; font-size: 11px; }
+.tmdb-result { display: grid; grid-template-columns: 82px minmax(0,1fr); gap: 13px; padding: 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: #14141b; }
+.tmdb-result > img, .tmdb-poster-fallback { width: 82px; height: 122px; object-fit: cover; border-radius: 8px; background: #272733; }
+.tmdb-poster-fallback { display: grid; place-items: center; color: #aaa; font-weight: 800; font-size: 26px; }
+.tmdb-result-info { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.tmdb-result-info strong { color: #fff; font-size: 14px; }
+.tmdb-result-info small { color: #a1a1aa; font-size: 11px; }
+.tmdb-result-info p { margin: 0; color: #d4d4d8; font-size: 11px; line-height: 1.7; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.tmdb-result-info a { color: #9ca3ff; font-size: 11px; text-decoration: none; }
+.tmdb-request-button { min-height: 34px; padding: 7px 12px; font-size: 11px; margin-top: 3px; border: 0; border-radius: 8px; background: #7770e8; color: #fff; font-family: inherit; font-weight: 700; }
+.tmdb-request-button:disabled { opacity: .65; }

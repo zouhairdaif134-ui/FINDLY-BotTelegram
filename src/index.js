@@ -67,6 +67,7 @@ import { getIntegrationStatuses } from "./routes/integrations.js";
 import { getSecurityAlerts } from "./routes/security-alerts.js";
 import { recordWorkerError } from "./lib/worker-error-log.js";
 import { getAIAdminConfig, saveAIAdminConfig } from "./routes/ai.js";
+import { getMovieRequests, updateMovieRequestStatus } from "./routes/movie-requests.js";
 
 import {
   handleTelegramUpdate
@@ -1343,6 +1344,20 @@ export default {
         const body = await readJson(request);
         const result = await importTmdbCatalogItem(env, body.tmdb_id, body.media_type || "movie", auth);
         return withCors(success(result), request);
+      }
+
+      if (url.pathname === "/api/movie-requests" && request.method === "GET") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentView);
+        if (auth.response) return withCors(auth.response, request);
+        return withCors(success(await getMovieRequests(env, url.searchParams.get("status") || "all")), request);
+      }
+
+      const movieRequestMatch = url.pathname.match(/^\/api\/movie-requests\/([0-9a-f-]{36})$/i);
+      if (movieRequestMatch && request.method === "PATCH") {
+        const auth = await requirePermission(env, request, PERMISSIONS.contentUpdate);
+        if (auth.response) return withCors(auth.response, request);
+        const body = await readJson(request);
+        return withCors(success(await updateMovieRequestStatus(env, movieRequestMatch[1], body.status, auth)), request);
       }
 
       if (url.pathname === "/api/movies" && request.method === "GET") {

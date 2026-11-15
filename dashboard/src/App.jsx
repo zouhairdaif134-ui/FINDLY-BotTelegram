@@ -7,6 +7,7 @@ import ActivityLogSection from "./ActivityLogSection.jsx";
 import MonetizationSection from "./MonetizationSection.jsx";
 import AISection from "./AISection.jsx";
 import MovieQueueSection from "./MovieQueueSection.jsx";
+import MovieRequestsSection from "./MovieRequestsSection.jsx";
 import MediaReviewSection from "./MediaReviewSection.jsx";
 import SettingsSection from "./SettingsSection.jsx";
 import { buildMovieShareContent, getMovieShareBotUsername } from "../../src/lib/movie-sharing.js";
@@ -36,7 +37,7 @@ const menuGroups = [
   {
     icon: "🎬",
     label: "مكتبة المحتوى",
-    items: ["Movies", "Published", "Media Review", "Movie Queue", "Review", "Movie Categories", "Publishing & Sharing"]
+    items: ["Movies", "Movie Requests", "Published", "Media Review", "Movie Queue", "Review", "Movie Categories", "Publishing & Sharing"]
   },
   {
     icon: "🤖",
@@ -63,6 +64,7 @@ const menuGroups = [
 const sectionLabels = {
   Overview: "الرئيسية",
   Movies: "الأفلام والمسلسلات",
+  "Movie Requests": "طلبات المستخدمين",
   Published: "العناوين المنشورة",
   "Media Review": "الوسائط والتخزين",
   "Movie Queue": "طابور المعالجة",
@@ -167,6 +169,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
   const [users, setUsers] = useState([]);
   const [content, setContent] = useState([]);
   const [movies, setMovies] = useState([]);
+  const [movieRequestsPendingCount, setMovieRequestsPendingCount] = useState(0);
 
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
@@ -583,13 +586,15 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
         categoriesData,
         usersData,
         contentData,
-        moviesData
+        moviesData,
+        movieRequestsData
       ] = await Promise.all([
         fetchApi("/api/bots"),
         fetchApi("/api/categories"),
         fetchApi("/api/users"),
         fetchApi("/api/content"),
-        fetchApi("/api/movies")
+        fetchApi("/api/movies"),
+        fetchApi("/api/movie-requests?status=pending")
       ]);
 
       setBots(botsData || []);
@@ -599,6 +604,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       setUsers(usersData || []);
       setContent(contentData || []);
       setMovies(moviesData || []);
+      setMovieRequestsPendingCount(Number(movieRequestsData?.pending_count || 0));
 
       if (menuBotFilter) {
         const menusData =
@@ -1722,7 +1728,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
                           setMobileNavOpen(false);
                         }}
                       >
-                        {sectionLabels[item] || item}
+                        {sectionLabels[item] || item}{item === "Movie Requests" && movieRequestsPendingCount > 0 && <span className="nav-badge">{movieRequestsPendingCount > 99 ? "99+" : movieRequestsPendingCount}</span>}
                       </button>
                     ))}
                   </div>
@@ -1935,7 +1941,7 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
             }
           />
         )}
-        {activeSection === "Media Review" && <MediaReviewSection fetchApi={fetchApi} />}
+        {activeSection === "Movie Requests" && <MovieRequestsSection fetchApi={fetchApi} onPendingCountChange={setMovieRequestsPendingCount} />}\n        {activeSection === "Media Review" && <MediaReviewSection fetchApi={fetchApi} />}
         {activeSection === "Movie Queue" && <MovieQueueSection fetchApi={fetchApi} />}
         {activeSection === "Review" && <MovieQueueSection fetchApi={fetchApi} initialStatus="review" />}
         {(activeSection === "Movies" || activeSection === "Published" || activeSection === "Movie Categories" || activeSection === "Publishing & Sharing") && (
