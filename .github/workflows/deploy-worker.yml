@@ -11,6 +11,10 @@ on:
       - "wrangler.jsonc"
       - ".github/workflows/deploy-worker.yml"
 
+concurrency:
+  group: findly-worker-production
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
