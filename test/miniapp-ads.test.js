@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd } from "../miniapp/ad-slot.js";
+import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, recordAdImpression } from "../miniapp/ad-slot.js";
 
 test("ad runtime defaults closed and does not create visible slots", () => {
   const config = normalizeAdConfig(null);
@@ -66,4 +66,16 @@ test("production migration keeps ads disabled and stores provider-attributed eve
   assert.match(migration, /enable row level security/i);
   assert.match(migration, /revoke all on table public\.miniapp_ad_events from public, anon, authenticated/i);
   assert.match(migration, /grant select, insert on table public\.miniapp_ad_events to service_role/i);
+});
+
+test("recording an impression increments the shared counter and cooldown timestamp", () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value)
+  };
+  const result = recordAdImpression(storage, 9000);
+  assert.equal(result.session_count, 1);
+  assert.equal(result.last_shown_at, 9000);
+  assert.equal(canDisplayAd(result, { max_per_session: 1, min_interval_minutes: 10 }, 700000), false);
 });
