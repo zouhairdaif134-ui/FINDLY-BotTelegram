@@ -14,7 +14,7 @@ export const DEFAULT_AD_CONFIG = Object.freeze({
 });
 
 const PROVIDERS = new Set(["monetag", "adsgram"]);
-const SESSION_STORAGE_KEY = "findly:ads:session:v2";
+const SESSION_STORAGE_KEY = "findly:ads:session:v3";
 const LAST_SHOWN_STORAGE_KEY = "findly:ads:last-shown:v2";
 const LEGACY_STORAGE_KEY = "findly:ads:frequency:v1";
 
