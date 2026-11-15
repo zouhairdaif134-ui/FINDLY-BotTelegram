@@ -427,6 +427,88 @@ async function trackMiniAppAdEvent(env, userId, body) {
   return json({ ok: true, duplicate: error?.code === "23505" });
 }
 
+
+const MINIAPP_ANALYTICS_EVENTS = new Set([
+  "miniapp_opened",
+  "miniapp_search",
+  "miniapp_title_viewed",
+  "miniapp_watch_clicked",
+  "ad_provider_request",
+  "ad_provider_resolved",
+  "ad_provider_failed"
+]);
+
+async function trackMiniAppAnalyticsEvent(env, userId, body) {
+  const eventType = String(body?.event_type || "");
+  const eventId = String(body?.event_id || "");
+  const sessionId = String(body?.session_id || "");
+  const provider = String(body?.provider || "");
+  const attemptId = String(body?.attempt_id || "");
+  const titleId = UUID_RE.test(body?.title_id || "") ? body.title_id : null;
+
+  if (!MINIAPP_ANALYTICS_EVENTS.has(eventType)) {
+    return json({ ok: false, error: "INVALID_ANALYTICS_EVENT" }, 400);
+  }
+  if (eventType === "miniapp_opened" && !UUID_RE.test(sessionId)) {
+    return json({ ok: false, error: "INVALID_MINIAPP_SESSION" }, 400);
+  }
+  if (eventType !== "miniapp_opened" && !UUID_RE.test(eventId)) {
+    return json({ ok: false, error: "INVALID_ANALYTICS_EVENT_ID" }, 400);
+  }
+  if (eventType.startsWith("ad_provider_")
+    && (!["monetag", "adsgram"].includes(provider) || !UUID_RE.test(attemptId))) {
+    return json({ ok: false, error: "INVALID_AD_PROVIDER_EVENT" }, 400);
+  }
+
+  const db = getSupabase(env);
+  const [userResult, botResult] = await Promise.all([
+    db.from("telegram_users").select("id").eq("telegram_user_id", userId).maybeSingle(),
+    db.from("bots").select("id").eq("slug", "findly").eq("is_active", true).maybeSingle()
+  ]);
+  if (userResult.error) throw userResult.error;
+  if (botResult.error) throw botResult.error;
+  if (!userResult.data?.id || !botResult.data?.id) {
+    return json({ ok: false, error: "ANALYTICS_IDENTITY_UNAVAILABLE" }, 503);
+  }
+
+  const now = new Date().toISOString();
+  const { error: relationError } = await db.from("user_bots").upsert({
+    user_id: userResult.data.id,
+    bot_id: botResult.data.id,
+    first_seen_at: now,
+    last_seen_at: now
+  }, { onConflict: "user_id,bot_id", ignoreDuplicates: true });
+  if (relationError) throw relationError;
+
+  const eventData = { source: "miniapp" };
+  if (eventType === "miniapp_opened") {
+    eventData.session_id = sessionId;
+  } else {
+    eventData.event_id = eventId;
+  }
+  if (eventType === "miniapp_search") {
+    eventData.query_length = Number.isInteger(body.query_length) ? Math.max(0, Math.min(body.query_length, 80)) : 0;
+    eventData.media_type = ["all", "movie", "series"].includes(body.media_type) ? body.media_type : "all";
+  }
+  if (eventType === "miniapp_title_viewed" || eventType === "miniapp_watch_clicked") {
+    if (titleId) eventData.title_id = titleId;
+  }
+  if (eventType.startsWith("ad_provider_")) {
+    eventData.provider = provider;
+    eventData.attempt_id = attemptId;
+    if (titleId) eventData.title_id = titleId;
+  }
+
+  const { error } = await db.from("analytics_events").insert({
+    user_id: userResult.data.id,
+    bot_id: botResult.data.id,
+    event_type: eventType,
+    event_data: eventData
+  });
+  if (error && error.code !== "23505") throw error;
+  return json({ ok: true, duplicate: error?.code === "23505" });
+}
+
 export async function handleMiniAppRoute(env, request, url) {
   const match = url.pathname.match(/^\/api\/miniapp\/(catalog|details|favorite|share|ads\/config|ads\/track)$/);
   if (!match) return null;
@@ -446,6 +528,7 @@ export async function handleMiniAppRoute(env, request, url) {
     if (auth.error) return json({ ok: false, error: auth.error }, auth.status);
     if (match[1] === "ads/config") return await getMiniAppAdsConfig(env);
     if (match[1] === "ads/track") return await trackMiniAppAdEvent(env, auth.userId, body);
+    if (match[1] === "analytics/track") return await trackMiniAppAnalyticsEvent(env, auth.userId, body);
     if (match[1] === "catalog") return await getCatalog(env, auth.userId, body);
     if (match[1] === "details") return await getTitleDetails(env, auth.userId, body.title_id, body.include_full_plot === true);
     if (match[1] === "share") return await getMovieShare(env, auth.userId, body, request.url);
