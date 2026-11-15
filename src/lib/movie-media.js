@@ -18,6 +18,7 @@ export function findMovieMediaTitle(titles, media) {
   if (!target) return null;
   const matches = titles.filter((title) =>
     Number(title.release_year) === media.releaseYear &&
+    (!media.mediaType || title.media_type === media.mediaType) &&
     normalizeMovieTitle(title.title) === target
   );
   return matches.length === 1 ? matches[0] : null;
@@ -52,11 +53,28 @@ export function parseMovieStorageCaption(caption) {
   }
 
   const titleMatch = /^(.+?)\s*\((18\d{2}|19\d{2}|20\d{2}|21\d{2}|2200)\)$/.exec(reference);
-  if (!titleMatch || !titleMatch[1].trim() || parts.length > 2) return null;
+  if (!titleMatch || !titleMatch[1].trim()) return null;
+
+  // Title-based series episodes use: FINDLY:<SERIES TITLE> (<YEAR>)|S01E01|1080p
+  if (parts.length === 3) {
+    const episodeMatch = /^S(\d{2})E(\d{2,3})$/i.exec(parts[1] || "");
+    const seasonNumber = Number(episodeMatch?.[1]);
+    const episodeNumber = Number(episodeMatch?.[2]);
+    const quality = String(parts[2] || "").trim().slice(0, 24);
+    if (!episodeMatch || seasonNumber < 1 || episodeNumber < 1 || !quality) return null;
+    return {
+      titleId: null, title: titleMatch[1].trim(),
+      releaseYear: Number(titleMatch[2]), quality,
+      seasonNumber, episodeNumber, mediaType: "series"
+    };
+  }
+
+  if (parts.length > 2) return null;
   return {
     titleId: null, title: titleMatch[1].trim(),
     releaseYear: Number(titleMatch[2]),
-    quality: String(parts[1] || "Original").trim().slice(0, 24) || "Original"
+    quality: String(parts[1] || "Original").trim().slice(0, 24) || "Original",
+    mediaType: "movie"
   };
 }
 
