@@ -179,7 +179,7 @@ test("AdsGram is loaded separately and only gates the Watch Bot handoff", async 
   const app = await readFile(new URL("../miniapp/app.js", import.meta.url), "utf8");
   const html = await readFile(new URL("../miniapp/index.html", import.meta.url), "utf8");
   assert.match(html, /sad\.adsgram\.ai\/js\/sad\.min\.js/);
-  assert.match(app, /blockId:"int-59879"/);
+  assert.match(app, /blockId:"int-59888"/);
   assert.match(app, /await controller\.show\(\)/);
   assert.match(app, /FINDLY AdsGram interstitial unavailable; continuing to Watch Bot/);
   assert.match(app, /if\(tg\?\.openTelegramLink\)tg\.openTelegramLink\(url\)/);
