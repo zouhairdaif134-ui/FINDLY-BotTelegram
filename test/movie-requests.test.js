@@ -49,7 +49,7 @@ test("TMDB request metadata rejects invalid ids before making a network request"
 });
 
 test("movie request migration deduplicates titles and individual requesters transactionally", async () => {
-  const migration = await readFile(new URL("../supabase/migrations/20261115180000_movie_requests.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../supabase/migrations/20261115175559_movie_requests.sql", import.meta.url), "utf8");
   assert.match(migration, /unique \(tmdb_id, media_type\)/i);
   assert.match(migration, /primary key \(request_id, telegram_user_id\)/i);
   assert.match(migration, /on conflict on constraint movie_request_users_pkey do nothing/i);
