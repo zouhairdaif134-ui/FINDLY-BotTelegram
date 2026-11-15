@@ -88,7 +88,7 @@ begin
 
   insert into public.movie_request_users (request_id, telegram_user_id)
   values (v_request_id, p_telegram_user_id)
-  on conflict (request_id, telegram_user_id) do nothing;
+  on conflict on constraint movie_request_users_pkey do nothing;
 
   get diagnostics v_inserted = row_count;
 
