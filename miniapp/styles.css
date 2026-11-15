@@ -41,4 +41,4 @@
 .tmdb-result-info small { color: #a1a1aa; font-size: 11px; }
 .tmdb-result-info p { margin: 0; color: #d4d4d8; font-size: 11px; line-height: 1.7; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .tmdb-result-info a { color: #9ca3ff; font-size: 11px; text-decoration: none; }
-.tmdb-request-button { min-height: 34px; padding: 7px 12px; font-size: 11px; margin-top: 3px; }
+.tmdb-request-button { min-height: 34px; padding: 7px 12px; font-size: 11px; margin-top: 3px; border: 0; border-radius: 8px; background: #7770e8; color: #fff; font-family: inherit; font-weight: 700; }\n.tmdb-request-button:disabled { opacity: .65; }
