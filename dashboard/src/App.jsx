@@ -601,7 +601,8 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
       );
       setUsers(usersData || []);
       setContent(contentData || []);
-      setMovies(moviesData || []);\n      setMovieRequestsPendingCount(Number(movieRequestsData?.pending_count || 0));
+      setMovies(moviesData || []);
+      setMovieRequestsPendingCount(Number(movieRequestsData?.pending_count || 0));
 
       if (menuBotFilter) {
         const menusData =
