@@ -4,7 +4,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   const tg = window.Telegram?.WebApp, app = document.getElementById("app"), toast = document.getElementById("toast");
   let adsConfig = DEFAULT_AD_CONFIG;
   let adFrequencyState = readAdFrequencyState();
-  const state = {titles:[],genres:[],favoriteIds:new Set(),tab:"home",query:"",searchType:"all",searchResults:[],searchHasMore:false,searchNextOffset:0,searchRequestId:0,searchLoading:false,genre:"",genreName:"",activeTitle:null,details:null,showFullPlot:false,shareOpen:false,shareTitleId:null,loading:true,heroIndex:0,pagination:{nextOffset:0,hasMore:false,loading:false}};
+  const state = {titles:[],genres:[],favoriteIds:new Set(),tab:"home",query:"",searchType:"all",searchResults:[],tmdbResults:[],requestingTmdbId:null,searchHasMore:false,searchNextOffset:0,searchRequestId:0,searchLoading:false,genre:"",genreName:"",activeTitle:null,details:null,showFullPlot:false,shareOpen:false,shareTitleId:null,loading:true,heroIndex:0,pagination:{nextOffset:0,hasMore:false,loading:false}};
   const initData = tg?.initData || "";
   let savedScrollY=0, heroTimer=null, searchTimer=null, heroTouchStart=0;
   const detailsCache=new Map(), detailsRequests=new Map();
@@ -75,8 +75,36 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   }
   function renderGrid(title,rows){const categoryGenres=state.genres.filter(g=>state.titles.some(t=>(t.genres||[]).includes(g.name)));const categoryNav=state.tab==="genre"?'<div class="category-strip"><button class="chip" data-genre="all">كل التصنيفات</button>'+categoryGenres.map(g=>'<button class="chip '+(g.slug===state.genre?"active":"")+'" data-genre="'+esc(g.slug)+'">'+esc(g.name)+'</button>').join("")+'</div>':"";app.innerHTML='<div class="page-heading"><h1>'+esc(title)+'</h1><p>'+rows.length+' عنوان في المكتبة</p></div>'+categoryNav+(rows.length?'<div class="catalog-grid">'+rows.map((item,index)=>card(item)+(index===5?renderAdSlot("catalog_after_sixth"):"")).join("")+'</div>':'<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>'+(title==="مكتبتي"?"قائمتك فارغة":"لا توجد نتائج")+'</strong>جرّب اختياراً آخر أو بحثاً مختلفاً.</div>');}
   function getSearchRows(){const q=normalizeSearch(state.query);return state.titles.filter(t=>{const typeOk=state.searchType==="all"||t.media_type===state.searchType;const hay=normalizeSearch((t.title||"")+" "+(t.original_title||""));return typeOk&&(!q||hay.includes(q));});}
-  function updateSearchResults(){const target=document.getElementById("search-results");if(!target)return;const rows=state.searchResults;target.innerHTML=state.query?(rows.length?'<div class="catalog-grid">'+rows.map((item,index)=>card(item)+(index===5?renderAdSlot("catalog_after_sixth"):"")).join("")+'</div>':'<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>لا توجد نتائج</strong>جرّب عنواناً آخر.</div>'):'<div class="empty-state">ابدأ بكتابة اسم الفيلم أو المسلسل.</div>';if(state.searchHasMore)target.insertAdjacentHTML("beforeend",'<div class="pagination-sentinel" data-search-more>مرّر لعرض المزيد</div>');}
-  async function searchCatalog(reset=true){if(state.searchLoading)return;const requestId=++state.searchRequestId,offset=reset?0:state.searchNextOffset;if(!reset&&!state.searchHasMore)return;if(reset&&normalizeSearch(state.query))trackAnalyticsEvent("miniapp_search",{query_length:normalizeSearch(state.query).length,media_type:state.searchType});state.searchLoading=true;try{const data=await api("catalog",{query:normalizeSearch(state.query),media_type:state.searchType==="all"?undefined:state.searchType,offset,limit:40});if(requestId!==state.searchRequestId)return;const incoming=data.titles||[];state.searchResults=reset?incoming:[...state.searchResults,...incoming.filter(x=>!state.searchResults.some(y=>y.id===x.id))];state.searchHasMore=Boolean(data.pagination?.has_more);state.searchNextOffset=data.pagination?.next_offset??offset+incoming.length;updateSearchResults();}catch(error){if(requestId===state.searchRequestId&&reset)notify(error.message);}finally{if(requestId===state.searchRequestId)state.searchLoading=false;}}
+  function updateSearchResults(){
+    const target=document.getElementById("search-results");if(!target)return;
+    const rows=state.searchResults,external=state.tmdbResults||[];
+    const externalMarkup=external.length?'<section class="tmdb-results"><div class="tmdb-results-heading"><strong>نتائج من TMDB</strong><span>خارج مكتبة FINDLY</span></div>'+external.map(item=>{
+      const posterMarkup=item.poster_path?'<img src="'+esc(item.poster_path)+'" alt="'+esc(item.title)+'" loading="lazy">':'<div class="tmdb-poster-fallback">F</div>';
+      const requestLabel=state.requestingTmdbId===String(item.tmdb_id)?'جارٍ إرسال الطلب...':'طلب إضافة الفيلم';
+      return '<article class="tmdb-result">'+posterMarkup+'<div class="tmdb-result-info"><strong>'+esc(item.title)+'</strong><small>'+esc(item.release_year||'')+' · '+(item.media_type==='series'?'مسلسل':'فيلم')+(item.rating!=null?' · ★ '+Number(item.rating).toFixed(1):'')+'</small><p>'+esc(item.overview||'لا يتوفر ملخص حالياً.')+'</p><a href="'+esc(item.tmdb_url)+'" target="_blank" rel="noopener noreferrer">المصدر: TMDB</a><button class="primary-button tmdb-request-button" data-request-tmdb="'+esc(item.tmdb_id)+'" data-request-type="'+esc(item.media_type)+'" '+(state.requestingTmdbId===String(item.tmdb_id)?'disabled':'')+'>'+requestLabel+'</button></div></article>';
+    }).join('')+'</section>':'';
+    target.innerHTML=state.query?(rows.length?'<div class="catalog-grid">'+rows.map((item,index)=>card(item)+(index===5?renderAdSlot("catalog_after_sixth"):"")).join("")+'</div>':externalMarkup||'<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>لا توجد نتائج</strong>جرّب عنواناً آخر.</div>'):'<div class="empty-state">ابدأ بكتابة اسم الفيلم أو المسلسل.</div>';
+    if(rows.length&&externalMarkup)target.insertAdjacentHTML("beforeend",externalMarkup);
+    if(state.searchHasMore)target.insertAdjacentHTML("beforeend",'<div class="pagination-sentinel" data-search-more>مرّر لعرض المزيد</div>');
+  }
+  async function searchCatalog(reset=true){
+    if(state.searchLoading)return;
+    const requestId=++state.searchRequestId,offset=reset?0:state.searchNextOffset;
+    if(!reset&&!state.searchHasMore)return;
+    if(reset&&normalizeSearch(state.query))trackAnalyticsEvent("miniapp_search",{query_length:normalizeSearch(state.query).length,media_type:state.searchType});
+    state.searchLoading=true;
+    try{
+      const data=await api("catalog",{query:normalizeSearch(state.query),media_type:state.searchType==="all"?undefined:state.searchType,offset,limit:40});
+      if(requestId!==state.searchRequestId)return;
+      const incoming=data.titles||[];
+      state.searchResults=reset?incoming:[...state.searchResults,...incoming.filter(x=>!state.searchResults.some(y=>y.id===x.id))];
+      state.tmdbResults=reset?(data.tmdb_results||[]):[];
+      state.searchHasMore=Boolean(data.pagination?.has_more);
+      state.searchNextOffset=data.pagination?.next_offset??offset+incoming.length;
+      updateSearchResults();
+    }catch(error){if(requestId===state.searchRequestId&&reset)notify(error.message);}
+    finally{if(requestId===state.searchRequestId)state.searchLoading=false;}
+  }
   function renderSearch(){app.innerHTML='<div class="page-heading"><h1>البحث في FINDLY</h1><p>ابحث عن فيلم أو مسلسل</p></div><div class="search-wrap"><input id="search-input" class="search-input" placeholder="ابحث عن فيلم أو مسلسل" value="'+esc(state.query)+'" autocomplete="off"><div class="search-filters"><button class="chip'+(state.searchType==="all"?" active":"")+'" data-search-type="all">الكل</button><button class="chip'+(state.searchType==="movie"?" active":"")+'" data-search-type="movie">أفلام</button><button class="chip'+(state.searchType==="series"?" active":"")+'" data-search-type="series">مسلسلات</button></div></div><div id="search-results"></div>';updateSearchResults();}
   function render(){
     document.querySelectorAll(".bottom-nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===state.tab));
@@ -151,6 +179,18 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
       else window.location.assign(url);
       return;
     }
+    if(b.dataset.requestTmdb){
+      const tmdbId=String(b.dataset.requestTmdb),mediaType=b.dataset.requestType;
+      if(state.requestingTmdbId)return;
+      state.requestingTmdbId=tmdbId;b.disabled=true;b.textContent="جارٍ إرسال الطلب...";
+      try{
+        const result=await api("request",{tmdb_id:tmdbId,media_type:mediaType});
+        b.textContent=result.request?.is_new_requester?"تم إرسال طلبك":"سبق لك طلب هذا العنوان";
+        notify(result.request?.is_new_requester?"تسجل طلبك للإدارة":"هذا العنوان سبق طلبه من طرفك");
+      }catch(error){state.requestingTmdbId=null;b.disabled=false;b.textContent="طلب إضافة الفيلم";notify(error.message);}
+      finally{state.requestingTmdbId=null;}
+      return;
+    }
     if(b.dataset.favorite)return toggleFavorite(b.dataset.favorite);
     if(b.dataset.share)return shareTitle(b.dataset.share);
     if(b.dataset.sharePlatform)return shareWith(b.dataset.sharePlatform);
@@ -161,9 +201,9 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
     if(b.dataset.view)return goTab(b.dataset.view);
     if(b.dataset.genre!==undefined){if(b.dataset.genre==="all"){state.genre="";state.genreName="";state.tab="home";render();loadCatalogPage(true).catch(error=>notify(error.message));return;}state.genre=b.dataset.genre;state.genreName=state.genres.find(g=>g.slug===state.genre)?.name||"";state.tab="genre";render();loadCatalogPage(true).catch(error=>notify(error.message));return;}
     if(b.dataset.heroIndex!==undefined){state.heroIndex=Number(b.dataset.heroIndex)||0;updateHeroOnly();return;}
-    if(b.dataset.searchType){state.searchType=b.dataset.searchType;state.searchRequestId++;state.searchLoading=false;state.searchResults=[];app.querySelectorAll("[data-search-type]").forEach(x=>x.classList.toggle("active",x.dataset.searchType===state.searchType));updateSearchResults();searchCatalog(true);return;}
+    if(b.dataset.searchType){state.searchType=b.dataset.searchType;state.searchRequestId++;state.searchLoading=false;state.searchResults=[];state.tmdbResults=[];app.querySelectorAll("[data-search-type]").forEach(x=>x.classList.toggle("active",x.dataset.searchType===state.searchType));updateSearchResults();searchCatalog(true);return;}
   });
-  app.addEventListener("input",event=>{if(event.target.id!=="search-input")return;state.query=event.target.value;state.searchRequestId++;state.searchLoading=false;state.searchResults=getSearchRows();updateSearchResults();clearTimeout(searchTimer);searchTimer=setTimeout(()=>searchCatalog(true),260);});
+  app.addEventListener("input",event=>{if(event.target.id!=="search-input")return;state.query=event.target.value;state.searchRequestId++;state.searchLoading=false;state.searchResults=getSearchRows();state.tmdbResults=[];updateSearchResults();clearTimeout(searchTimer);searchTimer=setTimeout(()=>searchCatalog(true),260);});
   app.addEventListener("load",event=>{if(event.target instanceof HTMLImageElement)event.target.classList.add("loaded");},true);
   app.addEventListener("error",event=>{const img=event.target;if(!(img instanceof HTMLImageElement)||img.dataset.fallbackApplied)return;img.dataset.fallbackApplied="true";const fallback=document.createElement("span");fallback.className=img.classList.contains("detail-poster")?"detail-poster-fallback":"poster-fallback";fallback.textContent=img.alt||"FINDLY";img.replaceWith(fallback);},true);
   document.querySelector(".bottom-nav").addEventListener("click",event=>{const b=event.target.closest("button[data-tab]");if(b)goTab(b.dataset.tab);});
