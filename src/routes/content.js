@@ -405,6 +405,30 @@ export async function searchTmdbCatalog(env, term, mediaType = "movie", page = 1
     popularity: item.popularity || 0
   }));
 }
+export async function getTmdbRequestDetails(env, tmdbId, mediaType = "movie") {
+  const id = String(tmdbId || "");
+  if (!/^\\d+$/.test(id) || !["movie", "series"].includes(mediaType)) {
+    throw new Error("Invalid TMDB request identifier");
+  }
+  const isSeries = mediaType === "series";
+  const item = await tmdbRequest(env, (isSeries ? "/tv/" : "/movie/") + id, {
+    language: "en-US"
+  });
+  const releaseDate = isSeries ? item.first_air_date : item.release_date;
+  return {
+    tmdb_id: Number(item.id),
+    media_type: mediaType,
+    title: isSeries ? item.name : item.title,
+    original_title: isSeries ? item.original_name : item.original_title,
+    release_year: Number(String(releaseDate || "").slice(0, 4)) || null,
+    rating: Number.isFinite(Number(item.vote_average)) ? Math.round(Number(item.vote_average) * 10) / 10 : null,
+    overview: String(item.overview || "").slice(0, 5000),
+    poster_path: tmdbImage(item.poster_path),
+    backdrop_path: tmdbImage(item.backdrop_path, "w780"),
+    tmdb_url: "https://www.themoviedb.org/" + (isSeries ? "tv/" : "movie/") + id
+  };
+}
+
  
 
 export async function processMovieSynopsisBackfill(env, actor, requestedLimit = 3) {
