@@ -21,6 +21,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   function recordDetailView(titleId){adFrequencyState=recordDetailClick(adFrequencyState,titleId);}
   async function loadAdConfig(){try{const result=await api("ads/config");adsConfig=normalizeAdConfig(result.config);if(adsConfig.ads_enabled&&adsConfig.sdk_enabled)render();}catch{adsConfig=DEFAULT_AD_CONFIG;}}
   let monetagAdPending=false;
+  let watchAdPending=false;
   function maybeShowMonetagInterstitial(){
     const threshold=adsConfig.frequency.detail_views_before_interstitial;
     if(!adsConfig.ads_enabled||!adsConfig.sdk_enabled||monetagAdPending||!shouldTriggerInterstitial(adFrequencyState,threshold)||!canDisplayAd(adFrequencyState,adsConfig.frequency))return;
@@ -111,7 +112,26 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
     if(event.target.classList.contains("share-overlay")){state.shareOpen=false;render();return;}
     const b=event.target.closest("button");if(!b)return;
     if(b.dataset.open)return openDetails(b.dataset.open);
-    if(b.dataset.watch){const t=state.details?.title,url=t?.watch_url||state.titles.find(x=>x.id===b.dataset.watch)?.watch_url;if(url)tg?.openTelegramLink?tg.openTelegramLink(url):window.open(url,"_blank","noopener");else return openDetails(b.dataset.watch);return;}
+    if(b.dataset.watch){
+      const t=state.details?.title,url=t?.watch_url||state.titles.find(x=>x.id===b.dataset.watch)?.watch_url;
+      if(!url)return openDetails(b.dataset.watch);
+      if(watchAdPending)return;
+      watchAdPending=true;b.disabled=true;
+      try{
+        const adsgram=window.Adsgram;
+        if(typeof adsgram?.init==="function"){
+          const controller=adsgram.init({blockId:"int-59879"});
+          if(typeof controller?.show==="function")await controller.show();
+        }
+      }catch(error){
+        console.warn("FINDLY AdsGram interstitial unavailable; continuing to Watch Bot",error);
+      }finally{
+        watchAdPending=false;
+      }
+      if(tg?.openTelegramLink)tg.openTelegramLink(url);
+      else window.location.assign(url);
+      return;
+    }
     if(b.dataset.favorite)return toggleFavorite(b.dataset.favorite);
     if(b.dataset.share)return shareTitle(b.dataset.share);
     if(b.dataset.sharePlatform)return shareWith(b.dataset.sharePlatform);
