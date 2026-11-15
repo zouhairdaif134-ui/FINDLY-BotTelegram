@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, recordAdImpression, readAdFrequencyState, writeAdFrequencyState } from "../miniapp/ad-slot.js";
+import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, recordAdImpression, readAdFrequencyState, writeAdFrequencyState, recordDetailClick, shouldTriggerInterstitial } from "../miniapp/ad-slot.js";
 
 test("ad runtime defaults closed and does not create visible slots", () => {
   const config = normalizeAdConfig(null);
@@ -114,4 +114,31 @@ test("telemetry service role is limited to read and insert operations", async ()
   const migration = await readFile(new URL("../supabase/migrations/20261115000200_miniapp_ad_events_least_privilege.sql", import.meta.url), "utf8");
   assert.match(migration, /revoke all on table public\.miniapp_ad_events from service_role/i);
   assert.match(migration, /grant select, insert on table public\.miniapp_ad_events to service_role/i);
+});
+
+
+test("only distinct title-detail clicks count toward repeated ads", () => {
+  const sessionValues = new Map();
+  const session = { getItem: (key) => sessionValues.get(key) ?? null, setItem: (key, value) => sessionValues.set(key, value) };
+  let state = readAdFrequencyState(session, { getItem: () => null, setItem: () => {} });
+  state = recordDetailClick(state, "movie-a", session);
+  state = recordDetailClick(state, "movie-a", session);
+  state = recordDetailClick(state, "movie-b", session);
+  assert.equal(state.detail_views, 2);
+  state = recordDetailClick(state, "movie-c", session);
+  assert.equal(state.detail_views, 3);
+  assert.equal(shouldTriggerInterstitial(state, 3), true);
+  state = { ...state, last_ad_detail_views: 3 };
+  state = recordDetailClick(state, "movie-d", session);
+  state = recordDetailClick(state, "movie-e", session);
+  assert.equal(shouldTriggerInterstitial(state, 3), false);
+  state = recordDetailClick(state, "movie-f", session);
+  assert.equal(shouldTriggerInterstitial(state, 3), true);
+});
+
+test("click-based ad policy has no time cooldown or one-ad session cap", () => {
+  const config = normalizeAdConfig({ ads_enabled: true, sdk_enabled: true, provider_order: ["monetag"], frequency: { max_per_session: 0, min_interval_minutes: 0, detail_views_before_interstitial: 3 } });
+  assert.equal(config.frequency.max_per_session, 0);
+  assert.equal(config.frequency.min_interval_minutes, 0);
+  assert.equal(canDisplayAd({ session_count: 99, last_shown_at: 999999999 }, config.frequency, 1000000000), true);
 });
