@@ -40,3 +40,30 @@ test("shared frequency gate blocks a second slot in the same session and respect
   assert.equal(canDisplayAd({ session_count: 0, last_shown_at: 1000 }, limits, 2000), false);
   assert.equal(canDisplayAd({ session_count: 0, last_shown_at: 1000 }, limits, 601001), true);
 });
+
+test("shared frequency state persists one counter record through the supplied storage adapter", async () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value)
+  };
+  const { readAdFrequencyState, writeAdFrequencyState } = await import("../miniapp/ad-slot.js");
+  writeAdFrequencyState({ session_count: 1, last_shown_at: 5000, detail_views: 3 }, storage);
+  assert.deepEqual(readAdFrequencyState(storage), {
+    session_count: 1,
+    last_shown_at: 5000,
+    detail_views: 3
+  });
+});
+
+test("production migration keeps ads disabled and stores provider-attributed events privately", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const migration = await readFile(new URL("../supabase/migrations/20261115000100_miniapp_ads_phase1.sql", import.meta.url), "utf8");
+  assert.match(migration, /ads_enabled boolean not null default false/i);
+  assert.match(migration, /ads_provider_order text\[\].*monetag.*adsgram/is);
+  assert.match(migration, /create table if not exists public\.miniapp_ad_events/i);
+  assert.match(migration, /provider text not null check/i);
+  assert.match(migration, /enable row level security/i);
+  assert.match(migration, /revoke all on table public\.miniapp_ad_events from public, anon, authenticated/i);
+  assert.match(migration, /grant select, insert on table public\.miniapp_ad_events to service_role/i);
+});
