@@ -79,3 +79,10 @@ test("recording an impression increments the shared counter and cooldown timesta
   assert.equal(result.last_shown_at, 9000);
   assert.equal(canDisplayAd(result, { max_per_session: 1, min_interval_minutes: 10 }, 700000), false);
 });
+
+test("server-side ad activation is fail-closed behind written TMDB commercial approval", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const route = await readFile(new URL("../src/routes/miniapp.js", import.meta.url), "utf8");
+  assert.match(route, /ads_enabled:\s*data\?\.ads_enabled === true && env\.TMDB_COMMERCIAL_LICENSE_APPROVED === "true"/);
+  assert.match(route, /sdk_enabled:\s*false/);
+});
