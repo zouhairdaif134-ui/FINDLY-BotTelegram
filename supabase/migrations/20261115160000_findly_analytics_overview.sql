@@ -53,7 +53,7 @@ as $function$
   bot_activity as (
     select
       b.slug,
-      count(distinct ae.user_id) filter (where ae.user_id is not null)::bigint as active_users,
+      count(distinct ae.user_id) filter (where ae.user_id is not null) as active_users,
       count(ae.id)::bigint as events
     from public.bots b
     left join public.analytics_events ae
@@ -65,8 +65,8 @@ as $function$
   ),
   membership as (
     select
-      count(*) filter (where b.slug = 'findly')::bigint as master_users,
-      count(*) filter (where b.slug = 'movies')::bigint as watch_users
+      count(*) filter (where b.slug = 'findly') as master_users,
+      count(*) filter (where b.slug = 'movies') as watch_users
     from (
       select distinct ub.user_id, bot.slug
       from public.user_bots ub
@@ -97,9 +97,9 @@ as $function$
   provider_stats as (
     select
       provider.provider,
-      count(ae.id) filter (where ae.event_type = 'ad_provider_request')::bigint as requests,
-      count(ae.id) filter (where ae.event_type = 'ad_provider_resolved')::bigint as resolved,
-      count(ae.id) filter (where ae.event_type = 'ad_provider_failed')::bigint as failed
+      count(ae.id) filter (where ae.event_type = 'ad_provider_request') as requests,
+      count(ae.id) filter (where ae.event_type = 'ad_provider_resolved') as resolved,
+      count(ae.id) filter (where ae.event_type = 'ad_provider_failed') as failed
     from (values ('monetag'::text), ('adsgram'::text)) as provider(provider)
     left join public.analytics_events ae
       on ae.event_data ->> 'provider' = provider.provider
@@ -110,23 +110,23 @@ as $function$
   ),
   activity_stats as (
     select
-      count(*) filter (where ae.event_type = 'message')::bigint as telegram_messages,
-      count(*) filter (where ae.event_type = 'callback_query')::bigint as telegram_callbacks,
-      count(*) filter (where ae.event_type = 'master_menu_viewed')::bigint as master_menu_views,
-      count(*) filter (where ae.event_type = 'menu_item_clicked')::bigint as menu_item_clicks,
+      count(*) filter (where ae.event_type = 'message') as telegram_messages,
+      count(*) filter (where ae.event_type = 'callback_query') as telegram_callbacks,
+      count(*) filter (where ae.event_type = 'master_menu_viewed') as master_menu_views,
+      count(*) filter (where ae.event_type = 'menu_item_clicked') as menu_item_clicks,
       count(*) filter (
         where ae.event_type = 'miniapp_search'
           or (ae.event_type = 'callback_query' and coalesce(ae.event_data ->> 'action', '') like 'movies:search%')
-      )::bigint as movie_searches,
+      ) as movie_searches,
       count(*) filter (
         where ae.event_type = 'miniapp_title_viewed'
           or (ae.event_type = 'callback_query' and coalesce(ae.event_data ->> 'action', '') like 'movies:title:%')
-      )::bigint as movie_detail_views,
+      ) as movie_detail_views,
       count(*) filter (
         where ae.event_type = 'miniapp_watch_clicked'
           or (ae.event_type = 'callback_query' and coalesce(ae.event_data ->> 'action', '') like 'movies:watch:%')
-      )::bigint as movie_watch_clicks,
-      count(*) filter (where ae.event_type = 'movie_share')::bigint as movie_shares
+      ) as movie_watch_clicks,
+      count(*) filter (where ae.event_type = 'movie_share') as movie_shares
     from public.analytics_events ae, bounds b
     where ae.created_at >= b.from_at
       and ae.created_at < b.to_at
