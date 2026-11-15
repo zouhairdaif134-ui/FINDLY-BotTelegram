@@ -14,7 +14,9 @@ export const DEFAULT_AD_CONFIG = Object.freeze({
 });
 
 const PROVIDERS = new Set(["monetag", "adsgram"]);
-const STORAGE_KEY = "findly:ads:frequency:v1";
+const SESSION_STORAGE_KEY = "findly:ads:session:v2";
+const LAST_SHOWN_STORAGE_KEY = "findly:ads:last-shown:v2";
+const LEGACY_STORAGE_KEY = "findly:ads:frequency:v1";
 
 export function normalizeAdConfig(value) {
   const input = value && typeof value === "object" ? value : {};
@@ -47,29 +49,52 @@ export function canDisplayAd(state = {}, limits = DEFAULT_AD_CONFIG.frequency, n
   return !lastShownAt || now - lastShownAt >= cooldownMs;
 }
 
-export function readAdFrequencyState(storage) {
-  try {
-    const target = storage || globalThis.localStorage;
-    const value = JSON.parse(target?.getItem(STORAGE_KEY) || "{}");
-    return {
-      session_count: Number.isInteger(value.session_count) && value.session_count >= 0 ? value.session_count : 0,
-      last_shown_at: Number.isFinite(Number(value.last_shown_at)) ? Number(value.last_shown_at) : 0,
-      detail_views: Number.isInteger(value.detail_views) && value.detail_views >= 0 ? value.detail_views : 0
-    };
-  } catch {
-    return { session_count: 0, last_shown_at: 0, detail_views: 0 };
-  }
+function safeRead(storage, key) {
+  try { return storage?.getItem(key) ?? null; } catch { return null; }
 }
 
-export function writeAdFrequencyState(next, storage) {
+function safeWrite(storage, key, value) {
+  try { storage?.setItem(key, value); } catch {}
+}
+
+export function readAdFrequencyState(sessionStorage, persistentStorage) {
+  const session = sessionStorage || globalThis.sessionStorage;
+  const persistent = persistentStorage || globalThis.localStorage;
+  let sessionValue = {};
+  try { sessionValue = JSON.parse(safeRead(session, SESSION_STORAGE_KEY) || "{}"); } catch {}
+  let lastShownAt = 0;
+  try {
+    const current = safeRead(persistent, LAST_SHOWN_STORAGE_KEY);
+    if (current !== null) lastShownAt = Number(current) || 0;
+    else {
+      // Preserve an existing cooldown once when upgrading from the old combined record.
+      const legacy = JSON.parse(safeRead(persistent, LEGACY_STORAGE_KEY) || "{}");
+      lastShownAt = Number(legacy.last_shown_at) || 0;
+    }
+  } catch {}
+  return {
+    session_count: Number.isInteger(sessionValue.session_count) && sessionValue.session_count >= 0 ? sessionValue.session_count : 0,
+    detail_views: Number.isInteger(sessionValue.detail_views) && sessionValue.detail_views >= 0 ? sessionValue.detail_views : 0,
+    last_shown_at: Number.isFinite(lastShownAt) && lastShownAt > 0 ? lastShownAt : 0
+  };
+}
+
+export function writeAdFrequencyState(next, sessionStorage, persistentStorage) {
+  const session = sessionStorage || globalThis.sessionStorage;
+  const persistent = persistentStorage || globalThis.localStorage;
   const safe = {
     session_count: Math.max(0, Number(next?.session_count) || 0),
     last_shown_at: Math.max(0, Number(next?.last_shown_at) || 0),
     detail_views: Math.max(0, Number(next?.detail_views) || 0)
   };
-  try { (storage || globalThis.localStorage)?.setItem(STORAGE_KEY, JSON.stringify(safe)); } catch {}
+  safeWrite(session, SESSION_STORAGE_KEY, JSON.stringify({
+    session_count: safe.session_count,
+    detail_views: safe.detail_views
+  }));
+  safeWrite(persistent, LAST_SHOWN_STORAGE_KEY, String(safe.last_shown_at));
   return safe;
 }
+
 
 export function adSlot(config, slotKey) {
   if (!config?.ads_enabled || !config?.sdk_enabled || !config?.slots?.[slotKey]) return "";
