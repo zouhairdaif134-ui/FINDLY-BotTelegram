@@ -372,18 +372,19 @@ async function getMiniAppAdsConfig(env) {
   return json({
     ok: true,
     config: {
-      ads_enabled: data?.ads_enabled === true && env.TMDB_COMMERCIAL_LICENSE_APPROVED === "true",
-      // No provider SDK or rendering is shipped in Phase 1.
-      sdk_enabled: false,
+      ads_enabled: data?.ads_enabled === true,
+      // Monetag SDK is installed in the Mini App shell; AdsGram remains disabled until its SDK is integrated.
+      sdk_enabled: providerOrder.includes("monetag"),
       provider_order: providerOrder.length ? providerOrder : ["monetag", "adsgram"],
       frequency: {
         max_per_session: 1,
         min_interval_minutes: Number.isInteger(policy.min_interval_minutes) && policy.min_interval_minutes >= 10 && policy.min_interval_minutes <= 1440 ? policy.min_interval_minutes : 10,
         detail_views_before_interstitial: Number.isInteger(policy.detail_views_before_interstitial) && policy.detail_views_before_interstitial >= 3 && policy.detail_views_before_interstitial <= 20 ? policy.detail_views_before_interstitial : 3
       },
+      // Monetag currently supplies interstitial formats, not the inline banner/card slots.
       slots: {
-        catalog_after_sixth: true,
-        details_banner: true
+        catalog_after_sixth: false,
+        details_banner: false
       }
     }
   });
