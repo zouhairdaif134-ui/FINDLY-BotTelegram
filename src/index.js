@@ -444,7 +444,7 @@ export default {
         if (genreError) throw genreError;
         movie.genres = (genreLinks || []).map((link) => link.movie_genres?.name).filter(Boolean);
 
-        const html = renderMovieSharePage(movie, bot.telegram_username, source, url.origin);
+        const html = renderMovieSharePage(movie, bot.telegram_username, source, "https://findly-bottelegram.pages.dev");
         return new Response(html, {
           status: 200,
           headers: {
