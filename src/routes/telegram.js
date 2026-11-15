@@ -1379,14 +1379,15 @@ async function processTelegramUpdate(
     } else {
       const { data: candidates, error: titleError } = await supabase
         .from("movie_titles")
-        .select("id,title,release_year")
+        .select("id,title,release_year,media_type")
         .eq("release_year", media.releaseYear)
+        .eq("media_type", media.mediaType || "movie")
         .limit(100);
       if (titleError) throw titleError;
       title = findMovieMediaTitle(candidates || [], media);
     }
     if (!title) {
-      await sendMessage(env, bot.slug, media.chatId, "ما لقيتش هاد العنوان فمكتبة FINDLY. تأكد من UUID اللي كتبتي فالوصف.");
+      await sendMessage(env, bot.slug, media.chatId, "ما لقيتش هاد العنوان فمكتبة FINDLY. تأكد من الاسم والسنة ونوع المحتوى فالوصف.");
       return { ok: true, media_unlinked: true };
     }
 
