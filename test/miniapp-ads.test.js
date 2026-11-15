@@ -152,3 +152,12 @@ test("app triggers a direct Monetag rewarded interstitial from the click thresho
   assert.match(app, /Promise\.resolve\(showAd\(\)\)/);
   assert.doesNotMatch(app, /type:"inApp".*interval:600/);
 });
+
+
+test("database migration permits click-only ad frequency with no timer or session cap", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const migration = await readFile(new URL("../supabase/migrations/20261115142856_miniapp_click_based_ad_frequency.sql", import.meta.url), "utf8");
+  assert.match(migration, /max_per_session.*between 0 and 20/is);
+  assert.match(migration, /min_interval_minutes.*between 0 and 1440/is);
+  assert.match(migration, /detail_views_before_interstitial.*between 3 and 20/is);
+});
