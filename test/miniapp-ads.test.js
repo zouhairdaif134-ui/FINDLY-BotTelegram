@@ -54,12 +54,12 @@ test("session counters reset with a new session while the cooldown persists", ()
   const persistent = makeStorage();
   writeAdFrequencyState({ session_count: 1, last_shown_at: 5000, detail_views: 3 }, firstSession, persistent);
   assert.deepEqual(readAdFrequencyState(firstSession, persistent), {
-    session_count: 1, last_shown_at: 5000, detail_views: 3
+    session_count: 1, last_shown_at: 5000, detail_views: 3, viewed_title_ids: [], last_ad_detail_views: 0
   });
 
   const nextSession = makeStorage();
   assert.deepEqual(readAdFrequencyState(nextSession, persistent), {
-    session_count: 0, last_shown_at: 5000, detail_views: 0
+    session_count: 0, last_shown_at: 5000, detail_views: 0, viewed_title_ids: [], last_ad_detail_views: 0
   });
   assert.equal(canDisplayAd(readAdFrequencyState(nextSession, persistent), { max_per_session: 1, min_interval_minutes: 10 }, 600000), false);
   assert.equal(canDisplayAd(readAdFrequencyState(nextSession, persistent), { max_per_session: 1, min_interval_minutes: 10 }, 605000), true);
@@ -73,7 +73,7 @@ test("legacy combined storage preserves the last-shown cooldown but resets sessi
   };
   const session = { getItem: () => null, setItem: () => {} };
   assert.deepEqual(readAdFrequencyState(session, persistent), {
-    session_count: 0, detail_views: 0, last_shown_at: 7000
+    session_count: 0, detail_views: 0, viewed_title_ids: [], last_ad_detail_views: 0, last_shown_at: 7000
   });
 });
 
