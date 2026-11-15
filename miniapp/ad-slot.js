@@ -8,8 +8,8 @@ export const DEFAULT_AD_CONFIG = Object.freeze({
     detail_views_before_interstitial: 3
   }),
   slots: Object.freeze({
-    catalog_after_sixth: true,
-    details_banner: true
+    catalog_after_sixth: false,
+    details_banner: false
   })
 });
 
@@ -35,7 +35,7 @@ export function normalizeAdConfig(value) {
         ? frequency.detail_views_before_interstitial
         : DEFAULT_AD_CONFIG.frequency.detail_views_before_interstitial
     },
-    slots: { ...DEFAULT_AD_CONFIG.slots }
+    slots: { catalog_after_sixth: false, details_banner: false }
   };
 }
 
