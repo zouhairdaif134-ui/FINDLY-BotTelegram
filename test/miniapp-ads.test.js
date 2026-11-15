@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, recordAdImpression } from "../miniapp/ad-slot.js";
+import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, recordAdImpression, readAdFrequencyState, writeAdFrequencyState } from "../miniapp/ad-slot.js";
 
 test("ad runtime defaults closed and does not create visible slots", () => {
   const config = normalizeAdConfig(null);
@@ -41,18 +41,39 @@ test("shared frequency gate blocks a second slot in the same session and respect
   assert.equal(canDisplayAd({ session_count: 0, last_shown_at: 1000 }, limits, 601001), true);
 });
 
-test("shared frequency state persists one counter record through the supplied storage adapter", async () => {
-  const values = new Map();
-  const storage = {
-    getItem: (key) => values.get(key) || null,
-    setItem: (key, value) => values.set(key, value)
+test("session counters reset with a new session while the cooldown persists", () => {
+  const makeStorage = () => {
+    const values = new Map();
+    return {
+      values,
+      getItem: (key) => values.has(key) ? values.get(key) : null,
+      setItem: (key, value) => values.set(key, value)
+    };
   };
-  const { readAdFrequencyState, writeAdFrequencyState } = await import("../miniapp/ad-slot.js");
-  writeAdFrequencyState({ session_count: 1, last_shown_at: 5000, detail_views: 3 }, storage);
-  assert.deepEqual(readAdFrequencyState(storage), {
-    session_count: 1,
-    last_shown_at: 5000,
-    detail_views: 3
+  const firstSession = makeStorage();
+  const persistent = makeStorage();
+  writeAdFrequencyState({ session_count: 1, last_shown_at: 5000, detail_views: 3 }, firstSession, persistent);
+  assert.deepEqual(readAdFrequencyState(firstSession, persistent), {
+    session_count: 1, last_shown_at: 5000, detail_views: 3
+  });
+
+  const nextSession = makeStorage();
+  assert.deepEqual(readAdFrequencyState(nextSession, persistent), {
+    session_count: 0, last_shown_at: 5000, detail_views: 0
+  });
+  assert.equal(canDisplayAd(readAdFrequencyState(nextSession, persistent), { max_per_session: 1, min_interval_minutes: 10 }, 600000), false);
+  assert.equal(canDisplayAd(readAdFrequencyState(nextSession, persistent), { max_per_session: 1, min_interval_minutes: 10 }, 605000), true);
+});
+
+test("legacy combined storage preserves the last-shown cooldown but resets session counters", () => {
+  const legacy = new Map([["findly:ads:frequency:v1", JSON.stringify({ session_count: 1, detail_views: 5, last_shown_at: 7000 })]]);
+  const persistent = {
+    getItem: (key) => legacy.get(key) ?? null,
+    setItem: (key, value) => legacy.set(key, value)
+  };
+  const session = { getItem: () => null, setItem: () => {} };
+  assert.deepEqual(readAdFrequencyState(session, persistent), {
+    session_count: 0, detail_views: 0, last_shown_at: 7000
   });
 });
 
@@ -68,15 +89,16 @@ test("production migration keeps ads disabled and stores provider-attributed eve
   assert.match(migration, /grant select, insert on table public\.miniapp_ad_events to service_role/i);
 });
 
-test("recording an impression increments the shared counter and cooldown timestamp", () => {
-  const values = new Map();
-  const storage = {
-    getItem: (key) => values.get(key) || null,
-    setItem: (key, value) => values.set(key, value)
-  };
-  const result = recordAdImpression(storage, 9000);
+test("recording an impression increments the session counter and persists cooldown separately", () => {
+  const sessionValues = new Map();
+  const persistentValues = new Map();
+  const session = { getItem: (key) => sessionValues.get(key) ?? null, setItem: (key, value) => sessionValues.set(key, value) };
+  const persistent = { getItem: (key) => persistentValues.get(key) ?? null, setItem: (key, value) => persistentValues.set(key, value) };
+  const result = recordAdImpression(session, 9000, persistent);
   assert.equal(result.session_count, 1);
   assert.equal(result.last_shown_at, 9000);
+  assert.equal(sessionValues.has("findly:ads:last-shown:v2"), false);
+  assert.equal(persistentValues.get("findly:ads:last-shown:v2"), "9000");
   assert.equal(canDisplayAd(result, { max_per_session: 1, min_interval_minutes: 10 }, 700000), false);
 });
 
