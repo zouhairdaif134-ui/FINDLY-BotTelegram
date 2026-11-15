@@ -6,6 +6,7 @@ on:
     paths:
       - "miniapp/**"
       - "src/routes/miniapp.js"
+      - "src/lib/movie-sharing.test.js"
       - "test/miniapp-ads.test.js"
       - "supabase/migrations/20261115000100_miniapp_ads_phase1.sql"
       - ".github/workflows/miniapp-ads-tests.yml"
