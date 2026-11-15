@@ -108,6 +108,7 @@ export function extractTelegramMedia(channelPost) {
     titleId: link.titleId,
     title: link.title,
     releaseYear: link.releaseYear,
+    ...(link.mediaType ? { mediaType: link.mediaType } : {}),
     seasonNumber: link.seasonNumber ?? null,
     episodeNumber: link.episodeNumber ?? null,
     quality: link.quality
