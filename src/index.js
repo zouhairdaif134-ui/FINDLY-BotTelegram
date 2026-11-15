@@ -1352,7 +1352,7 @@ export default {
         return withCors(success(await getMovieRequests(env, url.searchParams.get("status") || "all")), request);
       }
 
-      const movieRequestMatch = url.pathname.match(/^\\/api\\/movie-requests\\/([0-9a-f-]{36})$/i);
+      const movieRequestMatch = url.pathname.match(/^\/api\/movie-requests\/([0-9a-f-]{36})$/i);
       if (movieRequestMatch && request.method === "PATCH") {
         const auth = await requirePermission(env, request, PERMISSIONS.contentUpdate);
         if (auth.response) return withCors(auth.response, request);
