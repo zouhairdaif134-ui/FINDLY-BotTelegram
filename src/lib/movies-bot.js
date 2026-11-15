@@ -2,6 +2,8 @@ import { getSupabase } from "./supabase.js";
 import { sendMessage, sendPhoto, sendMediaGroup, telegramRequest } from "./telegram.js";
 import { canDistributeMovieMedia } from "./movie-media.js";
 import { getMessageTemplate, getMessageButtons } from "../routes/message-templates.js";
+import { searchTmdbCatalog } from "../routes/content.js";
+import { submitMovieRequest } from "../routes/movie-requests.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -139,6 +141,9 @@ export function parseMoviesCallback(value) {
   if (["home", "library", "categories", "yearprompt", "added", "new", "old", "top", "az", "films", "series", "favorites", "search", "help"].includes(action)) {
     const page = Number(parts[2] || 0);
     return { action, page: Number.isInteger(page) && page >= 0 ? page : 0 };
+  }
+  if (action === "tmdbrequest" && ["movie", "series"].includes(parts[2]) && /^\\d{1,12}$/.test(parts[3] || "")) {
+    return { action, mediaType: parts[2], tmdbId: parts[3] };
   }
   if (["title", "favorite", "seasons", "plot", "watch"].includes(action) && UUID_RE.test(parts[2] || "")) {
     return { action, id: parts[2] };
@@ -426,6 +431,57 @@ async function showMoviesYearPrompt(env, bot, chatId) {
   );
 }
 
+export function buildTmdbSearchResultsPayload(searchTerm, results) {
+  const safeResults = (Array.isArray(results) ? results : [])
+    .filter((item) => /^\\d{1,12}$/.test(String(item?.tmdb_id || "")) &&
+      ["movie", "series"].includes(item?.media_type) && String(item?.title || "").trim())
+    .slice(0, MOVIE_PAGE_SIZE);
+  if (!safeResults.length) {
+    return {
+      text: "<b>🔎 نتائج البحث عن: " + escapeHtml(searchTerm) + "</b>\\n\\nما لقيناش هاد العنوان لا فمكتبة FINDLY ولا فنتائج TMDB.",
+      reply_markup: { inline_keyboard: [[{ text: "📚 مكتبة FINDLY", callback_data: "movies:library:0" }, { text: "🔎 بحث جديد", callback_data: "movies:search" }]] }
+    };
+  }
+  const sections = safeResults.map((item, index) => {
+    const year = item.release_year ? " · " + item.release_year : "";
+    const kind = item.media_type === "series" ? "مسلسل" : "فيلم";
+    const rating = item.rating != null ? "⭐ " + Number(item.rating).toFixed(1) + "/10" : "بدون تقييم";
+    const overview = String(item.overview || "لا يتوفر ملخص حالياً.").replace(/\\s+/g, " ").trim().slice(0, 190);
+    return (index + 1) + ". <b>" + escapeHtml(item.title) + "</b>" + escapeHtml(year) +
+      "\\n" + escapeHtml(kind + " · " + rating) + "\\n" + escapeHtml(overview);
+  });
+  const keyboard = safeResults.map((item) => {
+    const tmdbId = String(item.tmdb_id);
+    const kind = item.media_type === "series" ? "tv" : "movie";
+    return [
+      { text: "📩 طلب الإضافة · " + String(item.title).slice(0, 28), callback_data: "movies:tmdbrequest:" + item.media_type + ":" + tmdbId },
+      { text: "TMDB ↗", url: "https://www.themoviedb.org/" + kind + "/" + tmdbId }
+    ];
+  });
+  keyboard.push([{ text: "📚 مكتبة FINDLY", callback_data: "movies:library:0" }, { text: "🔎 بحث جديد", callback_data: "movies:search" }]);
+  return {
+    text: "<b>🔎 نتائج TMDB عن: " + escapeHtml(searchTerm) + "</b>\\n<i>هاد العناوين من TMDB ومازال ما تزادوش لمكتبة FINDLY.</i>\\n\\n" + sections.join("\\n\\n"),
+    reply_markup: { inline_keyboard: keyboard }
+  };
+}
+
+async function sendTmdbSearchResults(env, bot, chatId, searchTerm) {
+  try {
+    const batches = await Promise.all([
+      searchTmdbCatalog(env, searchTerm, "movie", 1),
+      searchTmdbCatalog(env, searchTerm, "series", 1)
+    ]);
+    const results = batches.flat().sort((a, b) => Number(b.popularity || 0) - Number(a.popularity || 0));
+    const payload = buildTmdbSearchResultsPayload(searchTerm, results);
+    await sendMessage(env, bot.slug, chatId, payload.text, { reply_markup: payload.reply_markup });
+  } catch (error) {
+    console.error("FINDLY Telegram TMDB search fallback failed:", { code: error?.code || null, status: error?.status || null });
+    await sendMessage(env, bot.slug, chatId,
+      "<b>⚠️ البحث الخارجي غير متاح حالياً.</b>\\nما قدرناش نتاصلو بـ TMDB دابا. عاود المحاولة من بعد."
+    );
+  }
+}
+
 async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", genreSlug = "", filters = {}) {
   const supabase = getSupabase(env);
   let query = supabase
@@ -479,6 +535,10 @@ async function sendList(env, bot, chatId, action, page = 0, searchTerm = "", gen
   const { data, error, count } = await query.range(from, from + MOVIE_PAGE_SIZE - 1);
   if (error) throw error;
   const total = count || 0;
+  if (action === "search" && page === 0 && total === 0) {
+    await sendTmdbSearchResults(env, bot, chatId, searchTerm);
+    return;
+  }
   const pageCount = Math.max(1, Math.ceil(total / MOVIE_PAGE_SIZE));
 
   const heading = action === "search"
@@ -1061,6 +1121,22 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   else if (parsed.action === "filteryearprompt") await showMoviesFilterYearPrompt(env, bot, chatId, parsed);
   else if (parsed.action === "filter") await sendList(env, bot, chatId, "filter", parsed.page, "", "", parsed);
   else if (parsed.action === "search") await showMoviesSearchPrompt(env, bot, chatId);
+  else if (parsed.action === "tmdbrequest") {
+    try {
+      const request = await submitMovieRequest(env, telegramUserId, {
+        tmdb_id: parsed.tmdbId,
+        media_type: parsed.mediaType
+      });
+      const message = request.is_new_requester
+        ? "✅ تسجل طلبك بنجاح. عدد المستخدمين اللي طلبو هاد العنوان: " + request.request_count + "."
+        : "ℹ️ سبق ليك طلبتي هاد العنوان. عدد المستخدمين اللي طلبوه: " + request.request_count + ".";
+      await sendMessage(env, bot.slug, chatId, message + "\\nما غاديش يتضاف للمكتبة حتى تراجع الإدارة الطلب.");
+    } catch (error) {
+      console.error("FINDLY Telegram movie request failed:", { code: error?.code || null, status: error?.status || null });
+      await sendMessage(env, bot.slug, chatId, "⚠️ ما قدرناش نسجلو الطلب دابا. عاود المحاولة من بعد.");
+    }
+  }
+
   else if (parsed.action === "favorites") await sendFavorites(env, bot, chatId, telegramUserId);
   else if (parsed.action === "title") await sendTitle(env, bot, chatId, parsed.id, telegramUserId);
   else if (parsed.action === "watch") await sendMovieMedia(env, bot, chatId, parsed.id);
