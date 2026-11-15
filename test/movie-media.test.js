@@ -44,6 +44,8 @@ test("extracts video metadata from a channel post without downloading the file",
     titleId: "550e8400-e29b-41d4-a716-446655440000",
     title: null,
     releaseYear: null,
+    seasonNumber: null,
+    episodeNumber: null,
     quality: "720p"
   });
 });
