@@ -349,7 +349,7 @@ async function getMovieShare(env,userId,body,requestUrl){
  if(!titleR.data)return json({ok:false,error:"TITLE_NOT_FOUND"},404);
  if(!botR.data?.telegram_username)return json({ok:false,error:"MASTER_BOT_UNAVAILABLE"},503);
  const movie={...titleR.data,genres:(genreR.data||[]).map(x=>x.movie_genres?.name).filter(Boolean)};
- const share=buildMovieShareContent(movie,botR.data.telegram_username,platform,new URL(requestUrl).origin);
+ const share=buildMovieShareContent(movie,botR.data.telegram_username,platform,"https://findly-bottelegram.pages.dev");
  const {error}=await db.from("analytics_events").insert({user_id:userR.data?.id||null,bot_id:botR.data.id,event_type:"movie_share",event_data:{title_id:titleId,title:movie.title,platform,source:"miniapp"}});
  if(error)console.error("FINDLY movie share analytics failed:",error.code||error.message);
  return json({ok:true,...share});
