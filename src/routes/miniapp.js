@@ -443,7 +443,9 @@ export async function handleMiniAppRoute(env, request, url) {
   try {
     const auth = await authenticate(env, body);
     if (auth.error) return json({ ok: false, error: auth.error }, auth.status);
-    if (match[1] === "ads/config") return await getMiniAppAdsConfig(env);\n    if (match[1] === "ads/track") return await trackMiniAppAdEvent(env, auth.userId, body);\n    if (match[1] === "catalog") return await getCatalog(env, auth.userId, body);
+    if (match[1] === "ads/config") return await getMiniAppAdsConfig(env);
+    if (match[1] === "ads/track") return await trackMiniAppAdEvent(env, auth.userId, body);
+    if (match[1] === "catalog") return await getCatalog(env, auth.userId, body);
     if (match[1] === "details") return await getTitleDetails(env, auth.userId, body.title_id, body.include_full_plot === true);
     if (match[1] === "share") return await getMovieShare(env, auth.userId, body, request.url);
     if (match[1] === "favorite") {
