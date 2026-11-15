@@ -78,7 +78,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   function updateSearchResults(){
     const target=document.getElementById("search-results");if(!target)return;
     const rows=state.searchResults,external=state.tmdbResults||[];
-    const externalMarkup=external.length?'<section class="tmdb-results"><div class="tmdb-results-heading"><strong>نتائج من TMDB</strong><span>خارج مكتبة FINDLY</span></div>'+external.map(item=>{
+    const externalMarkup=external.length?'<section class="tmdb-results"><div class="tmdb-results-heading"><strong>نتائج من TMDB</strong><span>FINDLY غير تابع أو معتمد من TMDB</span></div>'+external.map(item=>{
       const posterMarkup=item.poster_path?'<img src="'+esc(item.poster_path)+'" alt="'+esc(item.title)+'" loading="lazy">':'<div class="tmdb-poster-fallback">F</div>';
       const requestLabel=state.requestingTmdbId===String(item.tmdb_id)?'جارٍ إرسال الطلب...':'طلب إضافة الفيلم';
       return '<article class="tmdb-result">'+posterMarkup+'<div class="tmdb-result-info"><strong>'+esc(item.title)+'</strong><small>'+esc(item.release_year||'')+' · '+(item.media_type==='series'?'مسلسل':'فيلم')+(item.rating!=null?' · ★ '+Number(item.rating).toFixed(1):'')+'</small><p>'+esc(item.overview||'لا يتوفر ملخص حالياً.')+'</p><a href="'+esc(item.tmdb_url)+'" target="_blank" rel="noopener noreferrer">المصدر: TMDB</a><button class="primary-button tmdb-request-button" data-request-tmdb="'+esc(item.tmdb_id)+'" data-request-type="'+esc(item.media_type)+'" '+(state.requestingTmdbId===String(item.tmdb_id)?'disabled':'')+'>'+requestLabel+'</button></div></article>';
