@@ -26,19 +26,37 @@ export function findMovieMediaTitle(titles, media) {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function parseMovieStorageCaption(caption) {
-  const match = /^\s*FINDLY:([^|]{1,180}?)(?:\s*\|\s*(.{1,24}))?\s*$/i.exec(String(caption || ""));
-  if (!match) return null;
-  const reference = match[1].trim();
-  const quality = String(match[2] || "Original").trim().slice(0, 24) || "Original";
-  if (UUID_RE.test(reference)) return { titleId: reference, title: null, releaseYear: null, quality };
+  const raw = String(caption || "").trim();
+  const parts = raw.split("|").map((part) => part.trim());
+  const reference = parts[0]?.replace(/^FINDLY:/i, "").trim();
+  if (!reference || !/^FINDLY:/i.test(parts[0])) return null;
+
+  // Series episodes use: FINDLY:<SERIES_UUID>|S01E01|1080p
+  if (UUID_RE.test(reference) && parts.length === 3) {
+    const episodeMatch = /^S(\d{2})E(\d{2,3})$/i.exec(parts[1] || "");
+    const quality = String(parts[2] || "").trim().slice(0, 24);
+    if (!episodeMatch || !quality) return null;
+    const seasonNumber = Number(episodeMatch[1]);
+    const episodeNumber = Number(episodeMatch[2]);
+    if (episodeNumber < 1) return null;
+    return {
+      titleId: reference, title: null, releaseYear: null, quality,
+      seasonNumber, episodeNumber
+    };
+  }
+
+  // Existing movie format remains unchanged: FINDLY:<UUID>|1080p
+  if (UUID_RE.test(reference) && parts.length <= 2) {
+    const quality = String(parts[1] || "Original").trim().slice(0, 24) || "Original";
+    return { titleId: reference, title: null, releaseYear: null, quality };
+  }
 
   const titleMatch = /^(.+?)\s*\((18\d{2}|19\d{2}|20\d{2}|21\d{2}|2200)\)$/.exec(reference);
-  if (!titleMatch || !titleMatch[1].trim()) return null;
+  if (!titleMatch || !titleMatch[1].trim() || parts.length > 2) return null;
   return {
-    titleId: null,
-    title: titleMatch[1].trim(),
+    titleId: null, title: titleMatch[1].trim(),
     releaseYear: Number(titleMatch[2]),
-    quality
+    quality: String(parts[1] || "Original").trim().slice(0, 24) || "Original"
   };
 }
 
@@ -72,6 +90,8 @@ export function extractTelegramMedia(channelPost) {
     titleId: link.titleId,
     title: link.title,
     releaseYear: link.releaseYear,
+    seasonNumber: link.seasonNumber ?? null,
+    episodeNumber: link.episodeNumber ?? null,
     quality: link.quality
   };
 }

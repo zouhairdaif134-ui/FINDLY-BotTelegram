@@ -1371,7 +1371,7 @@ async function processTelegramUpdate(
     if (media.titleId) {
       const { data, error: titleError } = await supabase
         .from("movie_titles")
-        .select("id,title,release_year")
+        .select("id,title,release_year,media_type")
         .eq("id", media.titleId)
         .maybeSingle();
       if (titleError) throw titleError;
@@ -1393,10 +1393,43 @@ async function processTelegramUpdate(
     const linkedTitleId = resolveMovieMediaTitleId(media, title);
     if (!linkedTitleId) throw new Error("Resolved movie title ID is missing");
 
+    let linkedEpisodeId = null;
+    if (media.episodeNumber != null || media.seasonNumber != null) {
+      if (title.media_type !== "series" || !Number.isInteger(media.seasonNumber) ||
+          !Number.isInteger(media.episodeNumber) || media.episodeNumber < 1) {
+        await sendMessage(env, bot.slug, media.chatId, "صيغة الحلقة غير صالحة أو أن العنوان ليس مسلسلاً.");
+        return { ok: true, media_ignored: true, reason: "invalid_episode_reference" };
+      }
+      const { data: season, error: seasonError } = await supabase
+        .from("movie_seasons")
+        .select("id")
+        .eq("title_id", linkedTitleId)
+        .eq("season_number", media.seasonNumber)
+        .maybeSingle();
+      if (seasonError) throw seasonError;
+      if (!season) {
+        await sendMessage(env, bot.slug, media.chatId, "ما لقيتش الموسم S" + String(media.seasonNumber).padStart(2, "0") + " فمكتبة FINDLY.");
+        return { ok: true, media_unlinked: true, reason: "season_not_found" };
+      }
+      const { data: episode, error: episodeError } = await supabase
+        .from("movie_episodes")
+        .select("id")
+        .eq("season_id", season.id)
+        .eq("episode_number", media.episodeNumber)
+        .maybeSingle();
+      if (episodeError) throw episodeError;
+      if (!episode) {
+        await sendMessage(env, bot.slug, media.chatId, "ما لقيتش الحلقة E" + String(media.episodeNumber).padStart(2, "0") + " فهاد الموسم.");
+        return { ok: true, media_unlinked: true, reason: "episode_not_found" };
+      }
+      linkedEpisodeId = episode.id;
+    }
+
     const { data: registeredAsset, error: mediaError } = await supabase
       .from("movie_media_assets")
       .upsert({
         title_id: linkedTitleId,
+        episode_id: linkedEpisodeId,
         storage_chat_id: media.chatId,
         storage_message_id: media.messageId,
         media_type: media.mediaType,
@@ -1435,7 +1468,8 @@ async function processTelegramUpdate(
       env,
       bot.slug,
       media.chatId,
-      statusMessage + "\nالعنوان المرتبط: <b>" + escapeHtml(title.title) + "</b>.",
+      statusMessage + "\nالعنوان المرتبط: <b>" + escapeHtml(title.title) + "</b>." +
+        (linkedEpisodeId ? "\nالحلقة: S" + String(media.seasonNumber).padStart(2, "0") + "E" + String(media.episodeNumber).padStart(2, "0") : ""),
       { reply_to_message_id: media.messageId }
     );
     return { ok: true, media_registered: true, media_status: registeredAsset.status };

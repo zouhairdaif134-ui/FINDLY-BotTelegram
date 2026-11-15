@@ -677,6 +677,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     .from("movie_media_assets")
     .select("id,quality_label,storage_chat_id,storage_message_id,media_type,file_id")
     .eq("title_id", title.id)
+    .is("episode_id", null)
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(10);
@@ -699,7 +700,9 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
       .eq("is_active", true)
       .maybeSingle();
     if (moviesBotError) throw moviesBotError;
-    const watchButton = buildMasterWatchButton(moviesBot?.telegram_username, title.id);
+    const watchButton = title.media_type === "movie"
+      ? buildMasterWatchButton(moviesBot?.telegram_username, title.id)
+      : null;
     if (watchButton) keyboard.push([watchButton]);
   } else if (title.media_available && bot.slug === "movies") {
     for (const asset of availableMediaAssets) {
@@ -822,6 +825,79 @@ async function hasStartedMasterBot(env, telegramUserId) {
   return Boolean(relation);
 }
 
+async function sendWatchEpisode(env, bot, chatId, episodeId) {
+  if (bot.slug !== "movies" || !UUID_RE.test(episodeId || "")) {
+    await sendMessage(env, bot.slug, chatId, "رابط الحلقة غير صالح.");
+    return;
+  }
+  const supabase = getSupabase(env);
+  const { data: episode, error: episodeError } = await supabase
+    .from("movie_episodes")
+    .select("id,season_id,episode_number,name,runtime_minutes")
+    .eq("id", episodeId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (episodeError) throw episodeError;
+  if (!episode) {
+    await sendMessage(env, bot.slug, chatId, "هاد الحلقة ما بقاتش متاحة.");
+    return;
+  }
+  const { data: season, error: seasonError } = await supabase
+    .from("movie_seasons")
+    .select("id,title_id,season_number")
+    .eq("id", episode.season_id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (seasonError) throw seasonError;
+  if (!season) {
+    await sendMessage(env, bot.slug, chatId, "الموسم ديال هاد الحلقة ما بقاش متاح.");
+    return;
+  }
+  const { data: title, error: titleError } = await supabase
+    .from("movie_titles")
+    .select("id,title,release_year")
+    .eq("id", season.title_id)
+    .eq("media_type", "series")
+    .eq("status", "active")
+    .maybeSingle();
+  if (titleError) throw titleError;
+  if (!title) {
+    await sendMessage(env, bot.slug, chatId, "هاد المسلسل ما بقاش متاح للمشاهدة.");
+    return;
+  }
+  const { data: rights, error: rightsError } = await supabase
+    .from("movie_distribution_rights")
+    .select("status")
+    .eq("title_id", title.id)
+    .maybeSingle();
+  if (rightsError) throw rightsError;
+  const { data: assets, error: assetsError } = await supabase
+    .from("movie_media_assets")
+    .select("id,quality_label,media_type,file_id")
+    .eq("title_id", title.id)
+    .eq("episode_id", episode.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (assetsError) throw assetsError;
+  const playable = canDistributeMovieMedia(rights?.status)
+    ? (assets || []).filter((asset) => buildMovieMediaDeliveryRequest(asset, chatId))
+    : [];
+  const keyboard = playable.map((asset) => [{
+    text: "▶️ " + String(asset.quality_label || "Original").slice(0, 24),
+    callback_data: "movies:watch:" + asset.id
+  }]);
+  const heading = "<b>📺 " + escapeHtml(title.title) + " · S" +
+    String(season.season_number).padStart(2, "0") + "E" +
+    String(episode.episode_number).padStart(2, "0") + "</b>";
+  await sendMessage(env, bot.slug, chatId,
+    heading + "\n" + escapeHtml(episode.name || ("الحلقة " + episode.episode_number)) +
+    (episode.runtime_minutes ? " · " + episode.runtime_minutes + " دقيقة" : "") +
+    (playable.length ? "\n\nاختار الجودة باش نرسلو ليك الحلقة." : "\n\nهاد الحلقة مازال ما تزادش ليها فيديو متاح."),
+    { parse_mode: "HTML", ...(keyboard.length ? { reply_markup: { inline_keyboard: keyboard } } : {}) }
+  );
+}
+
 async function sendWatchTitle(env, bot, chatId, titleId) {
   if (!UUID_RE.test(titleId || "")) {
     await sendMessage(env, bot.slug, chatId, "رابط المشاهدة غير صالح.");
@@ -851,6 +927,7 @@ async function sendWatchTitle(env, bot, chatId, titleId) {
     .from("movie_media_assets")
     .select("id,quality_label,media_type,file_id")
     .eq("title_id", title.id)
+    .is("episode_id", null)
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(10);
@@ -909,6 +986,7 @@ async function sendMovieTitleMedia(env, bot, chatId, titleId) {
     .from("movie_media_assets")
     .select("id,storage_chat_id,storage_message_id,quality_label,media_type,file_id")
     .eq("title_id", title.id)
+    .is("episode_id", null)
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(10);
@@ -1036,22 +1114,49 @@ async function sendSeasons(env, bot, chatId, titleId) {
 
 async function sendEpisodes(env, bot, chatId, seasonId) {
   const supabase = getSupabase(env);
+  const { data: season, error: seasonError } = await supabase
+    .from("movie_seasons")
+    .select("id,title_id,season_number")
+    .eq("id", seasonId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (seasonError) throw seasonError;
+  if (!season) {
+    await sendMessage(env, bot.slug, chatId, "هاد الموسم ما بقاش متاح.");
+    return;
+  }
   const { data: episodes, error } = await supabase
     .from("movie_episodes")
-    .select("episode_number,name,overview,runtime_minutes,status")
+    .select("id,episode_number,name,overview,runtime_minutes,status")
     .eq("season_id", seasonId)
     .eq("status", "active")
     .order("episode_number", { ascending: true })
     .limit(50);
   if (error) throw error;
-  const lines = (episodes || []).map((episode) =>
-    "<b>" + episode.episode_number + ". " + escapeHtml(episode.name || ("الحلقة " + episode.episode_number)) + "</b>" +
-    (episode.runtime_minutes ? " · " + episode.runtime_minutes + " دقيقة" : "") +
-    (episode.overview ? "\n" + escapeHtml(episode.overview) : "")
-  );
+  let watchUsername = null;
+  if (bot.slug === "findly") {
+    const { data: watchBot, error: watchBotError } = await supabase
+      .from("bots").select("telegram_username").eq("slug", "movies").eq("is_active", true).maybeSingle();
+    if (watchBotError) throw watchBotError;
+    watchUsername = watchBot?.telegram_username?.replace(/^@/, "") || null;
+  }
+  const keyboard = [];
+  const lines = (episodes || []).map((episode) => {
+    if (watchUsername) {
+      keyboard.push([{
+        text: "▶️ الحلقة " + String(episode.episode_number).padStart(2, "0"),
+        url: "https://t.me/" + watchUsername + "?start=episode_" + episode.id
+      }]);
+    }
+    return "<b>" + episode.episode_number + ". " + escapeHtml(episode.name || ("الحلقة " + episode.episode_number)) + "</b>" +
+      (episode.runtime_minutes ? " · " + episode.runtime_minutes + " دقيقة" : "") +
+      (episode.overview ? "\n" + escapeHtml(episode.overview) : "");
+  });
+  keyboard.push([{ text: "⬅️ رجوع للمواسم", callback_data: "movies:seasons:" + season.title_id }]);
   await sendMessage(env, bot.slug, chatId,
-    "<b>🎞️ الحلقات</b>\n\n" + (lines.length ? lines.join("\n\n") : "مازال ما تسجلات حتى حلقة نشطة."),
-    { reply_markup: { inline_keyboard: [[{ text: "🏠 القائمة الرئيسية", callback_data: "movies:home" }]] } }
+    "<b>🎞️ الحلقات · الموسم " + season.season_number + "</b>\n\n" +
+    (lines.length ? lines.join("\n\n") : "مازال ما تسجلات حتى حلقة نشطة."),
+    { parse_mode: "HTML", reply_markup: { inline_keyboard: keyboard } }
   );
 }
 
@@ -1156,6 +1261,10 @@ export function isMovieDeepLinkBot(bot) {
 }
 
 export function parseMovieStartPayload(startPayload) {
+  const episodeMatch = /^episode_([0-9a-f-]{36})$/i.exec(startPayload || "");
+  if (episodeMatch && UUID_RE.test(episodeMatch[1])) {
+    return { episodeId: episodeMatch[1], action: "episode" };
+  }
   const match = /^movie_([0-9a-f-]{36})(?:_(facebook|instagram|watch))?$/i.exec(startPayload || "");
   if (!match || !UUID_RE.test(match[1])) return null;
   const suffix = match[2] ? match[2].toLowerCase() : null;
@@ -1214,6 +1323,10 @@ export async function handleMoviesStart(env, bot, chatId, startPayload, telegram
     }
     if (payload?.action === "watch") {
       await sendWatchTitle(env, bot, chatId, payload.titleId);
+      return;
+    }
+    if (payload?.action === "episode") {
+      await sendWatchEpisode(env, bot, chatId, payload.episodeId);
       return;
     }
     await sendMessage(env, bot.slug, chatId,

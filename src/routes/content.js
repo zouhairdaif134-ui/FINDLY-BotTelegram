@@ -591,6 +591,50 @@ export async function importTmdbCatalogItem(env, tmdbId, mediaType = "movie", ac
         .upsert(links, { onConflict: "title_id,genre_id" });
       if (linkError) throw linkError;
     }
+
+    if (isSeries) {
+      for (const seasonSummary of details.seasons || []) {
+        const seasonDetails = await tmdbRequest(
+          env,
+          "/tv/" + tmdbId + "/season/" + seasonSummary.season_number,
+          { language: "en-US" }
+        );
+        const { data: season, error: seasonError } = await supabase
+          .from("movie_seasons")
+          .upsert({
+            title_id: saved.id,
+            season_number: Number(seasonDetails.season_number),
+            name: seasonDetails.name || seasonSummary.name || null,
+            overview: seasonDetails.overview || null,
+            poster_path: tmdbImage(seasonDetails.poster_path),
+            air_date: seasonDetails.air_date || null,
+            episode_count: Number.isInteger(seasonDetails.episodes?.length)
+              ? seasonDetails.episodes.length
+              : Number(seasonSummary.episode_count) || 0,
+            status: "active"
+          }, { onConflict: "title_id,season_number" })
+          .select("id")
+          .single();
+        if (seasonError) throw seasonError;
+
+        const episodeRows = (seasonDetails.episodes || []).map((episode) => ({
+          season_id: season.id,
+          episode_number: Number(episode.episode_number),
+          name: episode.name || null,
+          overview: episode.overview || null,
+          air_date: episode.air_date || null,
+          runtime_minutes: Number.isInteger(episode.runtime) && episode.runtime > 0 ? episode.runtime : null,
+          still_path: tmdbImage(episode.still_path),
+          status: "active"
+        })).filter((episode) => Number.isInteger(episode.episode_number) && episode.episode_number >= 1);
+        if (episodeRows.length) {
+          const { error: episodesError } = await supabase
+            .from("movie_episodes")
+            .upsert(episodeRows, { onConflict: "season_id,episode_number" });
+          if (episodesError) throw episodesError;
+        }
+      }
+    }
   } catch (error) {
     await recordAdminFailure(env, actor, {
       action: "movie.import_relations",
