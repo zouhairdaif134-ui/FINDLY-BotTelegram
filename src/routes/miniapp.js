@@ -374,7 +374,7 @@ async function getMiniAppAdsConfig(env) {
     config: {
       ads_enabled: data?.ads_enabled === true,
       // No provider SDK or rendering is shipped in Phase 1.
-      sdk_enabled: env.MINIAPP_AD_SDK_ENABLED === "true",
+      sdk_enabled: false,
       provider_order: providerOrder.length ? providerOrder : ["monetag", "adsgram"],
       frequency: {
         max_per_session: 1,
