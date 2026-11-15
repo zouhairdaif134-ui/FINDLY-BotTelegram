@@ -123,7 +123,7 @@ as $function$
           or (ae.event_type = 'callback_query' and coalesce(ae.event_data ->> 'action', '') like 'movies:title:%')
       ) as movie_detail_views,
       count(*) filter (
-        where ae.event_type = 'miniapp_watch_clicked'
+        where ae.event_type in ('miniapp_watch_clicked', 'movie_watch_started')
           or (ae.event_type = 'callback_query' and coalesce(ae.event_data ->> 'action', '') like 'movies:watch:%')
       ) as movie_watch_clicks,
       count(*) filter (where ae.event_type = 'movie_share') as movie_shares
