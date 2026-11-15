@@ -6,6 +6,16 @@ FINDLY Movies is currently in a non-commercial development and testing phase, as
 
 Official source: https://developer.themoviedb.org/docs/faq
 
+## What counts as commercial use
+
+Treat every revenue-generating or paid-access feature as commercial use for this project, including third-party advertising, sponsored placements, affiliate revenue, paid subscriptions, and Telegram Stars Premium subscriptions. Using Telegram Stars rather than a card processor does not change the licensing gate.
+
+Until written TMDB approval covers the intended use:
+- Keep `system_settings.ads_enabled=false`.
+- Do not load Monetag, AdsGram, or any other advertising SDK in production.
+- Do not activate Premium/Stars payments or paid access.
+- Keep the Mini App ad SDK runtime disabled. The Worker also requires `TMDB_COMMERCIAL_LICENSE_APPROVED=true` before it will return an enabled ad configuration; this flag must only be set after written approval.
+
 ## Non-commercial development mode
 
 For a genuinely non-commercial development/test phase, the Worker may be configured with `TMDB_NONCOMMERCIAL_DEVELOPMENT=true`. This is a separate mode and does not represent or imply commercial approval. Use it only while the service is genuinely non-commercial, keep imported items as drafts, and do not monetize or publicly operate the service under this mode. Turn it off before any commercial launch. The existing `TMDB_COMMERCIAL_LICENSE_APPROVED=true` flag remains reserved for written commercial approval.
@@ -25,6 +35,10 @@ For a genuinely non-commercial development/test phase, the Worker may be configu
 All requests routed through the existing TMDB client fail closed by default. They are enabled only when either `TMDB_NONCOMMERCIAL_DEVELOPMENT=true` for genuinely non-commercial development/testing, or `TMDB_COMMERCIAL_LICENSE_APPROVED=true` after written commercial approval. The development flag is not a commercial license and must be disabled before monetization or commercial operation. This applies to manual TMDB search/import and the hourly queue.
 
 Do not set the approval flag merely because an API key exists or because the API endpoint responds. An API key is not proof of commercial permission.
+
+## Phase 1 implementation guard
+
+The Mini App ad control plane may be deployed for structural testing while remaining invisible to users. Its global database switch defaults to OFF, the provider SDK remains disabled, and the server-side configuration is fail-closed unless the written commercial-license approval flag is present. A failed or missing configuration request must produce no ad markup and no reserved blank space.
 
 ## Alternative source
 
