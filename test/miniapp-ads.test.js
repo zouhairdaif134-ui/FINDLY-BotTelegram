@@ -172,3 +172,18 @@ test("click policy starts with a clean counter when upgrading from the previous 
   assert.equal(state.session_count, 0);
   assert.equal(shouldTriggerInterstitial(state, 3), false);
 });
+
+
+test("AdsGram is loaded separately and only gates the Watch Bot handoff", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const app = await readFile(new URL("../miniapp/app.js", import.meta.url), "utf8");
+  const html = await readFile(new URL("../miniapp/index.html", import.meta.url), "utf8");
+  assert.match(html, /sad\.adsgram\.ai\/js\/sad\.min\.js/);
+  assert.match(app, /blockId:"int-59879"/);
+  assert.match(app, /await controller\.show\(\)/);
+  assert.match(app, /FINDLY AdsGram interstitial unavailable; continuing to Watch Bot/);
+  assert.match(app, /if\(tg\?\.openTelegramLink\)tg\.openTelegramLink\(url\)/);
+  assert.match(app, /window\.location\.assign\(url\)/);
+  const watchHandler = app.slice(app.indexOf('if(b.dataset.watch){'), app.indexOf('if(b.dataset.favorite)', app.indexOf('if(b.dataset.watch){')));
+  assert.doesNotMatch(watchHandler, /maybeShowMonetagInterstitial|show_12270189/);
+});
