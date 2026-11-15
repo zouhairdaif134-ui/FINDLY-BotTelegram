@@ -74,3 +74,12 @@ export function adSlot(config, slotKey) {
   if (!config?.ads_enabled || !config?.sdk_enabled || !config?.slots?.[slotKey]) return "";
   return '<aside class="ad-slot" data-ad-slot="' + slotKey + '" aria-label="إعلان"><span class="ad-label">إعلان</span><div class="ad-slot-content"></div></aside>';
 }
+
+export function recordAdImpression(storage, now = Date.now()) {
+  const current = readAdFrequencyState(storage);
+  return writeAdFrequencyState({
+    ...current,
+    session_count: current.session_count + 1,
+    last_shown_at: now
+  }, storage);
+}
