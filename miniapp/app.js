@@ -131,7 +131,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
       try{
         const adsgram=window.Adsgram;
         if(typeof adsgram?.init==="function"){
-          const controller=adsgram.init({blockId:"int-59888"});
+          const controller=adsgram.init({blockId:"int-59890"});
           if(typeof controller?.show==="function"){
             await controller.show();
             trackProviderAdEvent("adsgram","resolved",attemptId,b.dataset.watch);
