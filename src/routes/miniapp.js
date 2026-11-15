@@ -372,7 +372,7 @@ async function getMiniAppAdsConfig(env) {
   return json({
     ok: true,
     config: {
-      ads_enabled: data?.ads_enabled === true,
+      ads_enabled: data?.ads_enabled === true && env.TMDB_COMMERCIAL_LICENSE_APPROVED === "true",
       // No provider SDK or rendering is shipped in Phase 1.
       sdk_enabled: false,
       provider_order: providerOrder.length ? providerOrder : ["monetag", "adsgram"],
