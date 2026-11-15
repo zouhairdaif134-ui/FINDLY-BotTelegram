@@ -1941,7 +1941,8 @@ const [telegramWebhookChecking, setTelegramWebhookChecking] = useState(false);
             }
           />
         )}
-        {activeSection === "Movie Requests" && <MovieRequestsSection fetchApi={fetchApi} onPendingCountChange={setMovieRequestsPendingCount} />}\n        {activeSection === "Media Review" && <MediaReviewSection fetchApi={fetchApi} />}
+        {activeSection === "Movie Requests" && <MovieRequestsSection fetchApi={fetchApi} onPendingCountChange={setMovieRequestsPendingCount} />}
+        {activeSection === "Media Review" && <MediaReviewSection fetchApi={fetchApi} />}
         {activeSection === "Movie Queue" && <MovieQueueSection fetchApi={fetchApi} />}
         {activeSection === "Review" && <MovieQueueSection fetchApi={fetchApi} initialStatus="review" />}
         {(activeSection === "Movies" || activeSection === "Published" || activeSection === "Movie Categories" || activeSection === "Publishing & Sharing") && (
