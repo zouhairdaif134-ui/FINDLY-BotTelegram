@@ -3,8 +3,8 @@ export const DEFAULT_AD_CONFIG = Object.freeze({
   sdk_enabled: false,
   provider_order: Object.freeze(["monetag", "adsgram"]),
   frequency: Object.freeze({
-    max_per_session: 1,
-    min_interval_minutes: 10,
+    max_per_session: 0,
+    min_interval_minutes: 0,
     detail_views_before_interstitial: 3
   }),
   slots: Object.freeze({
@@ -29,8 +29,10 @@ export function normalizeAdConfig(value) {
     sdk_enabled: input.sdk_enabled === true,
     provider_order: providerOrder.length ? providerOrder : [...DEFAULT_AD_CONFIG.provider_order],
     frequency: {
-      max_per_session: frequency.max_per_session === 1 ? 1 : DEFAULT_AD_CONFIG.frequency.max_per_session,
-      min_interval_minutes: Number.isInteger(frequency.min_interval_minutes) && frequency.min_interval_minutes >= 10 && frequency.min_interval_minutes <= 1440
+      max_per_session: Number.isInteger(frequency.max_per_session) && frequency.max_per_session >= 0 && frequency.max_per_session <= 20
+        ? frequency.max_per_session
+        : DEFAULT_AD_CONFIG.frequency.max_per_session,
+      min_interval_minutes: Number.isInteger(frequency.min_interval_minutes) && frequency.min_interval_minutes >= 0 && frequency.min_interval_minutes <= 1440
         ? frequency.min_interval_minutes
         : DEFAULT_AD_CONFIG.frequency.min_interval_minutes,
       detail_views_before_interstitial: Number.isInteger(frequency.detail_views_before_interstitial) && frequency.detail_views_before_interstitial >= 3 && frequency.detail_views_before_interstitial <= 20
@@ -42,11 +44,12 @@ export function normalizeAdConfig(value) {
 }
 
 export function canDisplayAd(state = {}, limits = DEFAULT_AD_CONFIG.frequency, now = Date.now()) {
-  const maxPerSession = limits.max_per_session === 1 ? 1 : DEFAULT_AD_CONFIG.frequency.max_per_session;
-  const cooldownMs = Math.max(10, Number(limits.min_interval_minutes) || 10) * 60_000;
-  if (Number(state.session_count || 0) >= maxPerSession) return false;
+  const maxPerSession = Number.isInteger(limits.max_per_session) && limits.max_per_session >= 0 ? limits.max_per_session : DEFAULT_AD_CONFIG.frequency.max_per_session;
+  const cooldownMinutes = Number.isFinite(Number(limits.min_interval_minutes)) && Number(limits.min_interval_minutes) >= 0 ? Number(limits.min_interval_minutes) : DEFAULT_AD_CONFIG.frequency.min_interval_minutes;
+  if (maxPerSession > 0 && Number(state.session_count || 0) >= maxPerSession) return false;
+  if (cooldownMinutes === 0) return true;
   const lastShownAt = Number(state.last_shown_at || 0);
-  return !lastShownAt || now - lastShownAt >= cooldownMs;
+  return !lastShownAt || now - lastShownAt >= cooldownMinutes * 60_000;
 }
 
 function safeRead(storage, key) {
@@ -75,6 +78,8 @@ export function readAdFrequencyState(sessionStorage, persistentStorage) {
   return {
     session_count: Number.isInteger(sessionValue.session_count) && sessionValue.session_count >= 0 ? sessionValue.session_count : 0,
     detail_views: Number.isInteger(sessionValue.detail_views) && sessionValue.detail_views >= 0 ? sessionValue.detail_views : 0,
+    viewed_title_ids: Array.isArray(sessionValue.viewed_title_ids) ? sessionValue.viewed_title_ids.filter((id) => typeof id === "string").slice(-5000) : [],
+    last_ad_detail_views: Number.isInteger(sessionValue.last_ad_detail_views) && sessionValue.last_ad_detail_views >= 0 ? sessionValue.last_ad_detail_views : 0,
     last_shown_at: Number.isFinite(lastShownAt) && lastShownAt > 0 ? lastShownAt : 0
   };
 }
@@ -85,11 +90,15 @@ export function writeAdFrequencyState(next, sessionStorage, persistentStorage) {
   const safe = {
     session_count: Math.max(0, Number(next?.session_count) || 0),
     last_shown_at: Math.max(0, Number(next?.last_shown_at) || 0),
-    detail_views: Math.max(0, Number(next?.detail_views) || 0)
+    detail_views: Math.max(0, Number(next?.detail_views) || 0),
+    viewed_title_ids: Array.isArray(next?.viewed_title_ids) ? next.viewed_title_ids.filter((id) => typeof id === "string").slice(-5000) : [],
+    last_ad_detail_views: Math.max(0, Number(next?.last_ad_detail_views) || 0)
   };
   safeWrite(session, SESSION_STORAGE_KEY, JSON.stringify({
     session_count: safe.session_count,
-    detail_views: safe.detail_views
+    detail_views: safe.detail_views,
+    viewed_title_ids: safe.viewed_title_ids,
+    last_ad_detail_views: safe.last_ad_detail_views
   }));
   safeWrite(persistent, LAST_SHOWN_STORAGE_KEY, String(safe.last_shown_at));
   return safe;
@@ -108,4 +117,22 @@ export function recordAdImpression(sessionStorage, now = Date.now(), persistentS
     session_count: current.session_count + 1,
     last_shown_at: now
   }, sessionStorage, persistentStorage);
+}
+
+
+export function recordDetailClick(state, titleId, sessionStorage) {
+  const id = String(titleId || "").trim();
+  if (!id) return state;
+  const viewed = Array.isArray(state?.viewed_title_ids) ? state.viewed_title_ids : [];
+  if (viewed.includes(id)) return state;
+  return writeAdFrequencyState({
+    ...state,
+    detail_views: Number(state?.detail_views || 0) + 1,
+    viewed_title_ids: [...viewed, id]
+  }, sessionStorage);
+}
+
+export function shouldTriggerInterstitial(state, threshold = 3) {
+  const step = Number.isInteger(threshold) && threshold > 0 ? threshold : 3;
+  return Number(state?.detail_views || 0) - Number(state?.last_ad_detail_views || 0) >= step;
 }
