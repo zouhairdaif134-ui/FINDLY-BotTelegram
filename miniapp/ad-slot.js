@@ -47,9 +47,10 @@ export function canDisplayAd(state = {}, limits = DEFAULT_AD_CONFIG.frequency, n
   return !lastShownAt || now - lastShownAt >= cooldownMs;
 }
 
-export function readAdFrequencyState(storage = globalThis.localStorage) {
+export function readAdFrequencyState(storage) {
   try {
-    const value = JSON.parse(storage?.getItem(STORAGE_KEY) || "{}");
+    const target = storage || globalThis.localStorage;
+    const value = JSON.parse(target?.getItem(STORAGE_KEY) || "{}");
     return {
       session_count: Number.isInteger(value.session_count) && value.session_count >= 0 ? value.session_count : 0,
       last_shown_at: Number.isFinite(Number(value.last_shown_at)) ? Number(value.last_shown_at) : 0,
