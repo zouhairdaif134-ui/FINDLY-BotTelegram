@@ -60,13 +60,13 @@ export function readAdFrequencyState(storage = globalThis.localStorage) {
   }
 }
 
-export function writeAdFrequencyState(next, storage = globalThis.localStorage) {
+export function writeAdFrequencyState(next, storage) {
   const safe = {
     session_count: Math.max(0, Number(next?.session_count) || 0),
     last_shown_at: Math.max(0, Number(next?.last_shown_at) || 0),
     detail_views: Math.max(0, Number(next?.detail_views) || 0)
   };
-  try { storage?.setItem(STORAGE_KEY, JSON.stringify(safe)); } catch {}
+  try { (storage || globalThis.localStorage)?.setItem(STORAGE_KEY, JSON.stringify(safe)); } catch {}
   return safe;
 }
 
