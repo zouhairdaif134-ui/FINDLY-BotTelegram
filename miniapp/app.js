@@ -29,7 +29,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
     const threshold=adsConfig.frequency.detail_views_before_interstitial;
     if(!adsConfig.ads_enabled||!adsConfig.sdk_enabled||monetagAdPending||!shouldTriggerInterstitial(adFrequencyState,threshold)||!canDisplayAd(adFrequencyState,adsConfig.frequency))return;
     const showAd=window.show_12270189;
-    if(typeof showAd!=="function")return;
+    if(typeof showAd!=="function"){const attemptId=crypto.randomUUID();trackProviderAdEvent("monetag","request",attemptId,state.activeTitle);trackProviderAdEvent("monetag","failed",attemptId,state.activeTitle);return;}
     monetagAdPending=true;
     const triggerAt=adFrequencyState.detail_views;
     const attemptId=crypto.randomUUID();
