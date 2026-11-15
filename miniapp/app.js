@@ -80,7 +80,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
     const rows=state.searchResults,external=state.tmdbResults||[];
     const externalMarkup=external.length?'<section class="tmdb-results"><div class="tmdb-results-heading"><strong>نتائج من TMDB</strong><span>FINDLY غير تابع أو معتمد من TMDB</span></div>'+external.map(item=>{
       const posterMarkup=item.poster_path?'<img src="'+esc(item.poster_path)+'" alt="'+esc(item.title)+'" loading="lazy">':'<div class="tmdb-poster-fallback">F</div>';
-      const requestLabel=state.requestingTmdbId===String(item.tmdb_id)?'جارٍ إرسال الطلب...':'طلب إضافة الفيلم';
+      const requestLabel=state.requestingTmdbId===String(item.tmdb_id)?'جارٍ إرسال الطلب...':'طلب إضافة العنوان';
       return '<article class="tmdb-result">'+posterMarkup+'<div class="tmdb-result-info"><strong>'+esc(item.title)+'</strong><small>'+esc(item.release_year||'')+' · '+(item.media_type==='series'?'مسلسل':'فيلم')+(item.rating!=null?' · ★ '+Number(item.rating).toFixed(1):'')+'</small><p>'+esc(item.overview||'لا يتوفر ملخص حالياً.')+'</p><a href="'+esc(item.tmdb_url)+'" target="_blank" rel="noopener noreferrer">المصدر: TMDB</a><button class="primary-button tmdb-request-button" data-request-tmdb="'+esc(item.tmdb_id)+'" data-request-type="'+esc(item.media_type)+'" '+(state.requestingTmdbId===String(item.tmdb_id)?'disabled':'')+'>'+requestLabel+'</button></div></article>';
     }).join('')+'</section>':'';
     target.innerHTML=state.query?(rows.length?'<div class="catalog-grid">'+rows.map((item,index)=>card(item)+(index===5?renderAdSlot("catalog_after_sixth"):"")).join("")+'</div>':externalMarkup||'<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><strong>لا توجد نتائج</strong>جرّب عنواناً آخر.</div>'):'<div class="empty-state">ابدأ بكتابة اسم الفيلم أو المسلسل.</div>';
@@ -187,7 +187,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
         const result=await api("request",{tmdb_id:tmdbId,media_type:mediaType});
         b.textContent=result.request?.is_new_requester?"تم إرسال طلبك":"سبق لك طلب هذا العنوان";
         notify(result.request?.is_new_requester?"تسجل طلبك للإدارة":"هذا العنوان سبق طلبه من طرفك");
-      }catch(error){state.requestingTmdbId=null;b.disabled=false;b.textContent="طلب إضافة الفيلم";notify(error.message);}
+      }catch(error){state.requestingTmdbId=null;b.disabled=false;b.textContent="طلب إضافة العنوان";notify(error.message);}
       finally{state.requestingTmdbId=null;}
       return;
     }
