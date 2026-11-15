@@ -18,6 +18,7 @@ test("media ingestion activates uploaded assets and authorizes owner-declared di
   assert.match(telegramRoute, /episode_id: linkedEpisodeId/);
   assert.match(telegramRoute, /from\("movie_seasons"\)/);
   assert.match(telegramRoute, /from\("movie_episodes"\)/);
+  assert.match(telegramRoute, /\.eq\("media_type", media\.mediaType \|\| "movie"\)/);
   assert.match(telegramRoute, /from\("movie_distribution_rights"\)[\s\S]*?upsert\(\{[\s\S]*?title_id: linkedTitleId,[\s\S]*?status: "authorized"/);
   assert.doesNotMatch(telegramRoute, /metadata_status:\s*"authorized_media_available"/);
 });
