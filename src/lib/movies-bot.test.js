@@ -8,7 +8,8 @@ import {
   MOVIE_PAGE_SIZE,
   buildMoviePosterAlbum,
   buildMoviePosterKeyboard,
-  buildMoviesMiniAppButton
+  buildMoviesMiniAppButton,
+  buildMoviesSearchPromptOptions
 } from "./movies-bot.js";
 import { getTelegramToken, getTelegramWebhookSecret } from "./telegram.js";
 
@@ -207,4 +208,15 @@ test("builds a secure Telegram Mini App launch button for the Master Bot", () =>
   assert.equal(buildMoviesMiniAppButton("http://example.com"), null);
   assert.equal(buildMoviesMiniAppButton("javascript:alert(1)"), null);
   assert.equal(buildMoviesMiniAppButton(""), null);
+});
+
+
+test("builds Telegram Force Reply markup with the required top-level shape", () => {
+  assert.deepEqual(buildMoviesSearchPromptOptions(), {
+    reply_markup: {
+      force_reply: true,
+      selective: true,
+      input_field_placeholder: "اسم الفيلم أو المسلسل"
+    }
+  });
 });

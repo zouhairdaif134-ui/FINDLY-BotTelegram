@@ -32,6 +32,16 @@ export const MOVIE_PAGE_SIZE = 4;
 const SEARCH_PROMPT = "🔎 بحث FINDLY Movies";
 const YEAR_PROMPT = "📅 سنة إصدار FINDLY";
 
+export function buildMoviesSearchPromptOptions() {
+  return {
+    reply_markup: {
+      force_reply: true,
+      selective: true,
+      input_field_placeholder: "اسم الفيلم أو المسلسل"
+    }
+  };
+}
+
 export function normalizeMovieSearch(value) {
   return String(value || "")
     .trim()
@@ -988,7 +998,7 @@ async function sendEpisodes(env, bot, chatId, seasonId) {
 export async function showMoviesSearchPrompt(env, bot, chatId) {
   await sendMessage(env, bot.slug, chatId,
     "<b>" + SEARCH_PROMPT + "</b>\nصيفط اسم الفيلم أو المسلسل فجواب على هاد الرسالة.",
-    { reply_markup: { force_reply: { force_reply: true, selective: true, input_field_placeholder: "اسم الفيلم أو المسلسل" } } }
+    buildMoviesSearchPromptOptions()
   );
 }
 
