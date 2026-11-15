@@ -245,8 +245,8 @@ test("builds TMDB fallback results with safe request callbacks and official link
   assert.match(payload.text, /نتائج TMDB عن: Tony/);
   assert.doesNotMatch(payload.text, /<script>/);
   assert.deepEqual(payload.reply_markup.inline_keyboard[0], [
-    { text: "📩 طلب الإضافة · Tony & Friends", callback_data: "movies:tmdbrequest:movie:603" },
-    { text: "TMDB ↗", url: "https://www.themoviedb.org/movie/603" }
+    { text: "Tony & Friends", callback_data: "movies:tmdbrequest:movie:603" },
+    { text: "↗", url: "https://www.themoviedb.org/movie/603" }
   ]);
   assert.equal(payload.reply_markup.inline_keyboard[1][0].callback_data, "movies:tmdbrequest:series:1399");
 });
@@ -264,6 +264,6 @@ test("keeps the full TMDB title on the request button and makes the source link 
     { tmdb_id: 603, media_type: "movie", title, release_year: 2025, rating: 7.2 }
   ]);
   const [requestButton, sourceButton] = payload.reply_markup.inline_keyboard[0];
-  assert.equal(requestButton.text, "📩 " + title);
+  assert.equal(requestButton.text, title);
   assert.equal(sourceButton.text, "↗");
 });
