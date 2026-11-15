@@ -355,6 +355,77 @@ async function getMovieShare(env,userId,body,requestUrl){
  return json({ok:true,...share});
 }
 
+
+async function getMiniAppAdsConfig(env) {
+  const { data, error } = await getSupabase(env)
+    .from("system_settings")
+    .select("ads_enabled, ads_provider_order, ads_frequency_policy")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) throw error;
+  const allowedProviders = new Set(["monetag", "adsgram"]);
+  const requestedOrder = Array.isArray(data?.ads_provider_order) ? data.ads_provider_order : ["monetag", "adsgram"];
+  const providerOrder = [...new Set(requestedOrder.filter((provider) => allowedProviders.has(provider)))];
+  const policy = data?.ads_frequency_policy && typeof data.ads_frequency_policy === "object"
+    ? data.ads_frequency_policy
+    : {};
+  return json({
+    ok: true,
+    config: {
+      ads_enabled: data?.ads_enabled === true,
+      // No provider SDK or rendering is shipped in Phase 1.
+      sdk_enabled: env.MINIAPP_AD_SDK_ENABLED === "true",
+      provider_order: providerOrder.length ? providerOrder : ["monetag", "adsgram"],
+      frequency: {
+        max_per_session: 1,
+        min_interval_minutes: Number.isInteger(policy.min_interval_minutes) && policy.min_interval_minutes >= 10 && policy.min_interval_minutes <= 1440 ? policy.min_interval_minutes : 10,
+        detail_views_before_interstitial: Number.isInteger(policy.detail_views_before_interstitial) && policy.detail_views_before_interstitial >= 3 && policy.detail_views_before_interstitial <= 20 ? policy.detail_views_before_interstitial : 3
+      },
+      slots: {
+        catalog_after_sixth: true,
+        details_banner: true
+      }
+    }
+  });
+}
+
+async function trackMiniAppAdEvent(env, userId, body) {
+  const configResponse = await getMiniAppAdsConfig(env);
+  const config = await configResponse.json();
+  if (!config.config?.ads_enabled || !config.config?.sdk_enabled) {
+    return json({ ok: false, error: "ADS_DISABLED" }, 403);
+  }
+  const provider = String(body.provider || "");
+  const slotKey = String(body.slot_key || "");
+  const eventType = String(body.event_type || "");
+  const eventId = String(body.event_id || "");
+  if (!["monetag", "adsgram"].includes(provider)
+    || !["catalog_after_sixth", "details_banner"].includes(slotKey)
+    || !["impression", "click"].includes(eventType)
+    || !UUID_RE.test(eventId)) {
+    return json({ ok: false, error: "INVALID_AD_EVENT" }, 400);
+  }
+  const db = getSupabase(env);
+  const [userResult, botResult] = await Promise.all([
+    db.from("telegram_users").select("id").eq("telegram_user_id", userId).maybeSingle(),
+    db.from("bots").select("id").eq("slug", "findly").eq("is_active", true).maybeSingle()
+  ]);
+  if (userResult.error) throw userResult.error;
+  if (botResult.error) throw botResult.error;
+  const titleId = UUID_RE.test(body.title_id || "") ? body.title_id : null;
+  const { error } = await db.from("miniapp_ad_events").insert({
+    idempotency_key: eventId,
+    user_id: userResult.data?.id || null,
+    title_id: titleId,
+    provider,
+    slot_key: slotKey,
+    event_type: eventType,
+    metadata: { source: "miniapp" }
+  });
+  if (error && error.code !== "23505") throw error;
+  return json({ ok: true, duplicate: error?.code === "23505" });
+}
+
 export async function handleMiniAppRoute(env, request, url) {
   const match = url.pathname.match(/^\/api\/miniapp\/(catalog|details|favorite|share)$/);
   if (!match) return null;
@@ -372,7 +443,7 @@ export async function handleMiniAppRoute(env, request, url) {
   try {
     const auth = await authenticate(env, body);
     if (auth.error) return json({ ok: false, error: auth.error }, auth.status);
-    if (match[1] === "catalog") return await getCatalog(env, auth.userId, body);
+    if (match[1] === "ads/config") return await getMiniAppAdsConfig(env);\n    if (match[1] === "ads/track") return await trackMiniAppAdEvent(env, auth.userId, body);\n    if (match[1] === "catalog") return await getCatalog(env, auth.userId, body);
     if (match[1] === "details") return await getTitleDetails(env, auth.userId, body.title_id, body.include_full_plot === true);
     if (match[1] === "share") return await getMovieShare(env, auth.userId, body, request.url);
     if (match[1] === "favorite") {
