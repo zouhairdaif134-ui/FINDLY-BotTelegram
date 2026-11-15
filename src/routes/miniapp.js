@@ -377,8 +377,8 @@ async function getMiniAppAdsConfig(env) {
       sdk_enabled: providerOrder.includes("monetag"),
       provider_order: providerOrder.length ? providerOrder : ["monetag", "adsgram"],
       frequency: {
-        max_per_session: 1,
-        min_interval_minutes: Number.isInteger(policy.min_interval_minutes) && policy.min_interval_minutes >= 10 && policy.min_interval_minutes <= 1440 ? policy.min_interval_minutes : 10,
+        max_per_session: 0,
+        min_interval_minutes: 0,
         detail_views_before_interstitial: Number.isInteger(policy.detail_views_before_interstitial) && policy.detail_views_before_interstitial >= 3 && policy.detail_views_before_interstitial <= 20 ? policy.detail_views_before_interstitial : 3
       },
       // Monetag currently supplies interstitial formats, not the inline banner/card slots.
