@@ -256,3 +256,14 @@ test("returns a clear empty TMDB result state without request buttons", () => {
   assert.match(payload.text, /لا فمكتبة FINDLY ولا فنتائج TMDB/);
   assert.equal(payload.reply_markup.inline_keyboard.length, 1);
 });
+
+
+test("keeps the full TMDB title on the request button and makes the source link compact", () => {
+  const title = "The Extraordinary Adventures of Tony Gym and His Friends";
+  const payload = buildTmdbSearchResultsPayload("Tony", [
+    { tmdb_id: 603, media_type: "movie", title, release_year: 2025, rating: 7.2 }
+  ]);
+  const [requestButton, sourceButton] = payload.reply_markup.inline_keyboard[0];
+  assert.equal(requestButton.text, "📩 " + title);
+  assert.equal(sourceButton.text, "↗");
+});
