@@ -677,6 +677,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     .from("movie_media_assets")
     .select("id,quality_label,storage_chat_id,storage_message_id,media_type,file_id")
     .eq("title_id", title.id)
+    .is("episode_id", null)
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(10);
@@ -699,7 +700,9 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
       .eq("is_active", true)
       .maybeSingle();
     if (moviesBotError) throw moviesBotError;
-    const watchButton = buildMasterWatchButton(moviesBot?.telegram_username, title.id);
+    const watchButton = title.media_type === "movie"
+      ? buildMasterWatchButton(moviesBot?.telegram_username, title.id)
+      : null;
     if (watchButton) keyboard.push([watchButton]);
   } else if (title.media_available && bot.slug === "movies") {
     for (const asset of availableMediaAssets) {
@@ -924,6 +927,7 @@ async function sendWatchTitle(env, bot, chatId, titleId) {
     .from("movie_media_assets")
     .select("id,quality_label,media_type,file_id")
     .eq("title_id", title.id)
+    .is("episode_id", null)
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(10);
@@ -982,6 +986,7 @@ async function sendMovieTitleMedia(env, bot, chatId, titleId) {
     .from("movie_media_assets")
     .select("id,storage_chat_id,storage_message_id,quality_label,media_type,file_id")
     .eq("title_id", title.id)
+    .is("episode_id", null)
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(10);
