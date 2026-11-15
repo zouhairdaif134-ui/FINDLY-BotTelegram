@@ -137,7 +137,7 @@ as $function$
       count(*) filter (
         where tu.first_seen_at >= b.from_at
           and tu.first_seen_at < b.to_at
-      )::bigint as new_users,
+      ) as new_users,
       (select count(*)::bigint from active_users) as active
     from public.telegram_users tu, bounds b
   )
