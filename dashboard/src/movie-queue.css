@@ -30,3 +30,28 @@
   background: #eef2f7;
   color: #334155;
 }
+
+
+.movie-requests-panel { display: grid; gap: 18px; }
+.movie-requests-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.movie-requests-toolbar label, .movie-request-status-control { display: grid; gap: 6px; color: #64748b; font-size: 12px; }
+.movie-requests-pending { display: flex; align-items: center; gap: 8px; color: #64748b; font-size: 12px; }
+.movie-requests-pending strong { color: #172033; font-size: 22px; }
+.movie-requests-list { display: grid; gap: 12px; }
+.movie-request-row { display: grid; grid-template-columns: 64px minmax(0,1fr) 160px; align-items: start; gap: 14px; padding: 14px; border: 1px solid #e5e7eb; border-radius: 14px; background: #fff; }
+.movie-request-row > img, .movie-request-poster-fallback { width: 64px; height: 96px; object-fit: cover; border-radius: 8px; background: #eef2f7; }
+.movie-request-poster-fallback { display: grid; place-items: center; color: #64748b; font-weight: 800; font-size: 22px; }
+.movie-request-main { min-width: 0; }
+.movie-request-title-line { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.movie-request-title-line h3 { margin: 0; color: #172033; font-size: 15px; }
+.movie-request-main > p { margin: 7px 0 0; color: #64748b; font-size: 12px; }
+.movie-request-main .movie-request-overview { color: #475569; line-height: 1.7; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.movie-request-meta { display: flex; align-items: center; gap: 14px; margin-top: 10px; font-size: 12px; }
+.movie-request-meta strong { color: #172033; }
+.movie-request-meta a { color: #4657a5; text-decoration: none; }
+.movie-request-status-control { align-self: center; }
+@media (max-width: 700px) {
+  .movie-request-row { grid-template-columns: 54px minmax(0,1fr); }
+  .movie-request-row > img, .movie-request-poster-fallback { width: 54px; height: 82px; }
+  .movie-request-status-control { grid-column: 1 / -1; }
+}
