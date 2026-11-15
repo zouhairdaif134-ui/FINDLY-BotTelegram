@@ -13,7 +13,7 @@ test("rejects malformed FINDLY storage captions", () => {
   assert.equal(parseMovieStorageCaption("FINDLY:not-a-uuid"), null);
   assert.equal(parseMovieStorageCaption("ordinary caption"), null);
   assert.deepEqual(parseMovieStorageCaption("FINDLY:Wicker (2026) | 1080p"), {
-    titleId: null, title: "Wicker", releaseYear: 2026, quality: "1080p"
+    titleId: null, title: "Wicker", releaseYear: 2026, quality: "1080p", mediaType: "movie"
   });
 });
 
@@ -33,6 +33,21 @@ test("matches title-year captions only to the requested media type", () => {
   const series = { id: "22222222-2222-4222-8222-222222222222", title: "Reacher", release_year: 2022, media_type: "series" };
   assert.equal(findMovieMediaTitle([movie], media), null);
   assert.equal(findMovieMediaTitle([movie, series], media), series);
+});
+
+test("extracts title-year series episode references from Telegram channel captions", () => {
+  const media = extractTelegramMedia({
+    message_id: 324,
+    chat: { id: -1001234567890 },
+    caption: "FINDLY:Reacher (2022)|S01E01|1080p",
+    video: { file_id: "episode-file-id", file_unique_id: "episode-unique-id" }
+  });
+  assert.equal(media.title, "Reacher");
+  assert.equal(media.releaseYear, 2022);
+  assert.equal(media.mediaType, "series");
+  assert.equal(media.seasonNumber, 1);
+  assert.equal(media.episodeNumber, 1);
+  assert.equal(media.quality, "1080p");
 });
 
 test("extracts video metadata from a channel post without downloading the file", () => {
