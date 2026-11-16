@@ -197,3 +197,13 @@ test("AdsGram interstitial runs before each uploaded series episode redirects to
   assert.ok(episodeHandler.includes("openTelegramLink(url)"));
   assert.match(app, /async function showWatchInterstitial\(titleId\)/);
 });
+
+
+test("episode handoff falls back to the Telegram deep link when openTelegramLink does not switch away from the Mini App", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const app = await readFile(new URL("../miniapp/app.js", import.meta.url), "utf8");
+  const handoff = app.slice(app.indexOf("function openWatchBotLink"), app.indexOf("function shareSheet"));
+  assert.match(handoff, /openTelegramLink/);
+  assert.match(handoff, /visibilitychange/);
+  assert.match(handoff, /location\.assign\(url\)/);
+});
