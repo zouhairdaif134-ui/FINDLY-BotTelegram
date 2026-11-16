@@ -194,6 +194,6 @@ test("AdsGram interstitial runs before each uploaded series episode redirects to
   const app = await readFile(new URL("../miniapp/app.js", import.meta.url), "utf8");
   const episodeHandler = app.slice(app.indexOf('const episodeLink='), app.indexOf('const b=event.target.closest("button")'));
   assert.match(episodeHandler, /await showWatchInterstitial\(titleId\)/);
-  assert.ok(episodeHandler.includes("tg?.openTelegramLink(url)"));
+  assert.ok(episodeHandler.includes("openTelegramLink(url)"));
   assert.match(app, /async function showWatchInterstitial\(titleId\)/);
 });
