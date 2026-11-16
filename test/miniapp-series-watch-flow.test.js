@@ -10,7 +10,7 @@ test("series details expose only episodes with active uploaded media and episode
   assert.match(miniappRoute, /select\("episode_id,file_id,media_type"\)/);
   assert.match(miniappRoute, /\.not\("episode_id",\s*"is",\s*null\)/);
   assert.match(miniappRoute, /\.in\("id",\s*uploadedEpisodeIds\)/);
-  assert.match(miniappRoute, /episode_\s*\+\s*episode\.id/);
+  assert.match(miniappRoute, /episode_"\s*\+\s*episode\.id/);
 });
 
 test("series details do not expose a title-level watch deep link", () => {
