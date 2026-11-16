@@ -327,6 +327,7 @@ test("series seasons and episodes use count-based range pagination instead of a 
 
 
 // Regression guard: Master owns browsing; Watch Bot only delivers the selected episode.
+// The episode deep link is the only handoff between the two bots.
 test("series navigation stays in Master and Watch Bot opens only the selected episode", () => {
   const source = readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
   const titleDetails = source.slice(source.indexOf("async function sendTitle("), source.indexOf("async function sendMovieMedia("));
