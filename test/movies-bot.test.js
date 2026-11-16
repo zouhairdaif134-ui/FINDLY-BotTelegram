@@ -326,10 +326,11 @@ test("series seasons and episodes use count-based range pagination instead of a 
 });
 
 
-test("Watch Bot routes series title links to the season picker instead of querying movie-level media", () => {
+test("Watch Bot directs series users back to Master and never browses seasons", () => {
   const source = readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
   const watchTitle = source.slice(source.indexOf("async function sendWatchTitle("), source.indexOf("async function sendMovieTitleMedia("));
-  assert.match(watchTitle, /if \(title\.media_type === "series"\) \{[\s\S]*?await sendSeasons\(env, bot, chatId, title\.id, 0\);[\s\S]*?return;[\s\S]*?\}/);
+  assert.match(watchTitle, /if \(title\.media_type === "series"\)[\s\S]*?اختار الموسم والحلقة من FINDLY Master/);
+  assert.doesNotMatch(watchTitle, /sendSeasons\(env, bot, chatId/);
   assert.ok(watchTitle.indexOf('if (title.media_type === "series")') < watchTitle.indexOf('.is("episode_id", null)'));
 });
 
