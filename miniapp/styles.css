@@ -43,3 +43,5 @@
 .tmdb-result-info a { color: #9ca3ff; font-size: 11px; text-decoration: none; }
 .tmdb-request-button { min-height: 34px; padding: 7px 12px; font-size: 11px; margin-top: 3px; border: 0; border-radius: 8px; background: #7770e8; color: #fff; font-family: inherit; font-weight: 700; }
 .tmdb-request-button:disabled { opacity: .65; }
+
+.episode{display:flex;align-items:center;justify-content:space-between;gap:12px}.episode-watch-btn{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;padding:7px 11px;border-radius:6px;background:var(--accent);color:#fff;text-decoration:none;font-size:11px;font-weight:700;white-space:nowrap}.episode-watch-btn:active{transform:scale(.97)}
