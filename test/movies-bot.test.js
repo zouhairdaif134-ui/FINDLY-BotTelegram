@@ -290,3 +290,16 @@ test("Watch Bot new-user flag is returned only when a bot relation is first crea
   const source = readFileSync(new URL("../src/routes/telegram.js", import.meta.url), "utf8");
   assert.match(source, /is_new_bot_user: !existingRelation/);
 });
+
+
+test("parses season episode pagination callbacks and rejects invalid pages", () => {
+  const seasonId = "550e8400-e29b-41d4-a716-446655440000";
+  assert.deepEqual(parseMoviesCallback("movies:season:" + seasonId + ":3"), {
+    action: "season", id: seasonId, page: 3
+  });
+  assert.deepEqual(parseMoviesCallback("movies:season:" + seasonId), {
+    action: "season", id: seasonId, page: 0
+  });
+  assert.equal(parseMoviesCallback("movies:season:" + seasonId + ":-1"), null);
+  assert.equal(parseMoviesCallback("movies:season:" + seasonId + ":1.5"), null);
+});
