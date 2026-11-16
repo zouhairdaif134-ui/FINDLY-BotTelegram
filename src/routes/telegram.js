@@ -1,4 +1,4 @@
-import { extractTelegramMedia, findMovieMediaTitle, resolveMovieMediaTitleId, isActiveMovieStorageChannel } from "../lib/movie-media.js";
+import { extractTelegramMedia, findMovieMediaTitle, resolveMovieMediaTitleId, isActiveMovieStorageChannel, getStorageChatIdForContentType } from "../lib/movie-media.js";
 import { getMaintenanceDecision } from "./system-settings.js";
 import { getMessageTemplate, getMessageButtons } from "./message-templates.js";
 import { getSupabase } from "../lib/supabase.js";
@@ -1359,11 +1359,12 @@ async function processTelegramUpdate(
     const supabase = getSupabase(env);
     const { data: storageConfig, error: storageConfigError } = await supabase
       .from("movie_media_storage_config")
-      .select("active_storage_chat_id")
+      .select("active_storage_chat_id,series_storage_chat_id")
       .eq("id", 1)
       .maybeSingle();
     if (storageConfigError) throw storageConfigError;
-    if (!isActiveMovieStorageChannel(media.chatId, storageConfig?.active_storage_chat_id)) {
+    const expectedStorageChatId = getStorageChatIdForContentType(storageConfig, media.contentType);
+    if (!isActiveMovieStorageChannel(media.chatId, expectedStorageChatId)) {
       return { ok: true, media_ignored: true, reason: "inactive_storage_channel" };
     }
 
@@ -1381,7 +1382,7 @@ async function processTelegramUpdate(
         .from("movie_titles")
         .select("id,title,release_year,media_type")
         .eq("release_year", media.releaseYear)
-        .eq("media_type", media.mediaType || "movie")
+        .eq("media_type", media.contentType || "movie")
         .limit(100);
       if (titleError) throw titleError;
       title = findMovieMediaTitle(candidates || [], media);
@@ -1449,20 +1450,8 @@ async function processTelegramUpdate(
       .single();
     if (mediaError) throw mediaError;
 
-    // Uploading to the private storage channel is the owner's assertion
-    // that this title is cleared for distribution. No separate dashboard step.
-    const { error: rightsError } = await supabase
-      .from("movie_distribution_rights")
-      .upsert({
-        title_id: linkedTitleId,
-        status: "authorized",
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: null
-      }, { onConflict: "title_id" });
-    if (rightsError) throw rightsError;
-
     const statusMessage = registeredAsset.status === "active"
-      ? "تم ربط الملف بالعنوان وتفعيله تلقائياً، وأصبح متاحاً للمشاهدة."
+      ? "تم تسجيل الملف بنجاح. التوفر للمشاهدة يخضع لمراجعة الوسيط وحقوق التوزيع."
       : "تم تسجيل الملف، لكن حالته الحالية لا تسمح بعرضه للمشاهدة.";
 
     await sendMessage(
