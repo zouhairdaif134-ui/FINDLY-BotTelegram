@@ -332,3 +332,23 @@ test("Watch Bot routes series title links to the season picker instead of queryi
   assert.match(watchTitle, /if \(title\.media_type === "series"\) \{[\s\S]*?await sendSeasons\(env, bot, chatId, title\.id, 0\);[\s\S]*?return;[\s\S]*?\}/);
   assert.ok(watchTitle.indexOf('if (title.media_type === "series")') < watchTitle.indexOf('.is("episode_id", null)'));
 });
+
+
+test("series browsing shows only seasons and episodes with active uploaded media", () => {
+  const source = readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
+  const seasons = source.slice(source.indexOf("async function sendSeasons("), source.indexOf("async function sendEpisodes("));
+  const episodes = source.slice(source.indexOf("async function sendEpisodes("), source.indexOf("export async function showMoviesSearchPrompt("));
+
+  assert.match(seasons, /from\("movie_media_assets"\)[\s\S]*?\.eq\("status", "active"\)[\s\S]*?\.not\("episode_id", "is", null\)/);
+  assert.match(seasons, /\.in\("id", episodeIds\)/);
+  assert.match(episodes, /from\("movie_media_assets"\)[\s\S]*?\.eq\("status", "active"\)[\s\S]*?\.not\("episode_id", "is", null\)/);
+  assert.match(episodes, /\.in\("id", episodeIds\)/);
+  assert.match(episodes, /\?start=episode_/);
+});
+
+test("series storage upload automatically upserts missing season and episode records", () => {
+  const source = readFileSync(new URL("../src/routes/telegram.js", import.meta.url), "utf8");
+  const ingestion = source.slice(source.indexOf("async function processTelegramUpdate("));
+  assert.match(ingestion, /from\("movie_seasons"\)[\s\S]*?\.upsert\([\s\S]*?onConflict: "title_id,season_number"/);
+  assert.match(ingestion, /from\("movie_episodes"\)[\s\S]*?\.upsert\([\s\S]*?onConflict: "season_id,episode_number"/);
+});
