@@ -36,7 +36,7 @@ test("parses title, favorite and season callbacks only with UUID identifiers", (
   assert.deepEqual(parseMoviesCallback("movies:title:" + id), { action: "title", id });
   assert.deepEqual(parseMoviesCallback("movies:plot:" + id), { action: "plot", id });
   assert.deepEqual(parseMoviesCallback("movies:favorite:" + id), { action: "favorite", id });
-  assert.deepEqual(parseMoviesCallback("movies:season:" + id), { action: "season", id });
+  assert.deepEqual(parseMoviesCallback("movies:season:" + id), { action: "season", id, page: 0 });
 });
 
 test("normalizes search input, removes control characters and caps length", () => {
@@ -289,4 +289,38 @@ test("Watch Bot start flow requires Master start and never routes watch payload 
 test("Watch Bot new-user flag is returned only when a bot relation is first created", () => {
   const source = readFileSync(new URL("../src/routes/telegram.js", import.meta.url), "utf8");
   assert.match(source, /is_new_bot_user: !existingRelation/);
+});
+
+
+test("parses season episode pagination callbacks and rejects invalid pages", () => {
+  const seasonId = "550e8400-e29b-41d4-a716-446655440000";
+  assert.deepEqual(parseMoviesCallback("movies:season:" + seasonId + ":3"), {
+    action: "season", id: seasonId, page: 3
+  });
+  assert.deepEqual(parseMoviesCallback("movies:season:" + seasonId), {
+    action: "season", id: seasonId, page: 0
+  });
+  assert.equal(parseMoviesCallback("movies:season:" + seasonId + ":-1"), null);
+  assert.equal(parseMoviesCallback("movies:season:" + seasonId + ":1.5"), null);
+  assert.equal(parseMoviesCallback("movies:season:" + seasonId + ":9007199254740992"), null);
+});
+
+test("parses season list pagination callbacks for series with many seasons", () => {
+  const titleId = "550e8400-e29b-41d4-a716-446655440000";
+  assert.deepEqual(parseMoviesCallback("movies:seasons:" + titleId + ":2"), {
+    action: "seasons", id: titleId, page: 2
+  });
+  assert.deepEqual(parseMoviesCallback("movies:seasons:" + titleId), {
+    action: "seasons", id: titleId, page: 0
+  });
+  assert.equal(parseMoviesCallback("movies:seasons:" + titleId + ":-1"), null);
+});
+
+test("series seasons and episodes use count-based range pagination instead of a fixed episode cap", () => {
+  const source = readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
+  assert.match(source, /SERIES_SEASON_PAGE_SIZE = 10/);
+  assert.match(source, /SERIES_EPISODE_PAGE_SIZE = 8/);
+  assert.match(source, /\.select\("id,episode_number,name,runtime_minutes,status", \{ count: "exact" \}\)[\s\S]*?\.range\(page \* SERIES_EPISODE_PAGE_SIZE/);
+  assert.match(source, /\.select\("id,season_number,name,episode_count", \{ count: "exact" \}\)[\s\S]*?\.range\(page \* SERIES_SEASON_PAGE_SIZE/);
+  assert.doesNotMatch(source, /\.limit\(50\)/);
 });
