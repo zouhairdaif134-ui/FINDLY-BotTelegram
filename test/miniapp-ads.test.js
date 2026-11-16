@@ -182,7 +182,7 @@ test("AdsGram is loaded separately and only gates the Watch Bot handoff", async 
   assert.match(app, /blockId:"int-59890"/);
   assert.match(app, /await controller\.show\(\)/);
   assert.match(app, /FINDLY AdsGram interstitial unavailable; continuing to Watch Bot/);
-  assert.match(app, /if\(tg\?\.openTelegramLink\)tg\.openTelegramLink\(url\)/);
+  assert.match(app, /function openWatchBotLink\(url\)/);\n  assert.match(app, /tg\.openTelegramLink\(url\)/);
   assert.match(app, /window\.location\.assign\(url\)/);
   const watchHandler = app.slice(app.indexOf('if(b.dataset.watch){'), app.indexOf('if(b.dataset.favorite)', app.indexOf('if(b.dataset.watch){')));
   assert.doesNotMatch(watchHandler, /maybeShowMonetagInterstitial|show_12270189/);
@@ -194,7 +194,7 @@ test("AdsGram interstitial runs before each uploaded series episode redirects to
   const app = await readFile(new URL("../miniapp/app.js", import.meta.url), "utf8");
   const episodeHandler = app.slice(app.indexOf('const episodeLink='), app.indexOf('const b=event.target.closest("button")'));
   assert.match(episodeHandler, /await showWatchInterstitial\(titleId\)/);
-  assert.ok(episodeHandler.includes("openTelegramLink(url)"));
+  assert.ok(episodeHandler.includes("openWatchBotLink(url)"));
   assert.match(app, /async function showWatchInterstitial\(titleId\)/);
 });
 
