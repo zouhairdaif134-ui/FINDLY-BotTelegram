@@ -346,7 +346,8 @@ test("series browsing shows only seasons and episodes with active uploaded media
   assert.match(seasons, /\.in\("id", episodeIds\)/);
   assert.match(episodes, /from\("movie_media_assets"\)[\s\S]*?\.eq\("status", "active"\)[\s\S]*?\.not\("episode_id", "is", null\)/);
   assert.match(episodes, /\.in\("id", episodeIds\)/);
-  assert.match(episodes, /\?start=episode_/);
+  assert.match(episodes, /callback_data: "movies:episode:"/);
+  assert.match(source, /\?start=episode_/);
 });
 
 test("series storage upload automatically upserts missing season and episode records", () => {
