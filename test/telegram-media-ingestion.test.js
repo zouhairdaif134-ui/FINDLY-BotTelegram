@@ -19,7 +19,7 @@ test("media ingestion registers media without silently authorizing distribution 
   assert.match(telegramRoute, /from\("movie_seasons"\)/);
   assert.match(telegramRoute, /from\("movie_episodes"\)/);
   assert.match(telegramRoute, /\.eq\("media_type", media\.contentType \|\| "movie"\)/);
-  assert.match(telegramRoute, /from\("movie_distribution_rights"\)[\s\S]*?upsert\(\{[\s\S]*?title_id: linkedTitleId,[\s\S]*?status: "authorized"/);
+  assert.doesNotMatch(telegramRoute, /status: "authorized"/);
   assert.doesNotMatch(telegramRoute, /metadata_status:\s*"authorized_media_available"/);
 });
 
