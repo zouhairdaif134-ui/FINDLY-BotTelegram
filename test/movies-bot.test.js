@@ -314,3 +314,12 @@ test("parses season list pagination callbacks for series with many seasons", () 
   });
   assert.equal(parseMoviesCallback("movies:seasons:" + titleId + ":-1"), null);
 });
+
+test("series seasons and episodes use count-based range pagination instead of a fixed episode cap", () => {
+  const source = readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
+  assert.match(source, /SERIES_SEASON_PAGE_SIZE = 10/);
+  assert.match(source, /SERIES_EPISODE_PAGE_SIZE = 8/);
+  assert.match(source, /\.select\("id,episode_number,name,runtime_minutes,status", \{ count: "exact" \}\)[\s\S]*?\.range\(page \* SERIES_EPISODE_PAGE_SIZE/);
+  assert.match(source, /\.select\("id,season_number,name,episode_count", \{ count: "exact" \}\)[\s\S]*?\.range\(page \* SERIES_SEASON_PAGE_SIZE/);
+  assert.doesNotMatch(source, /\.limit\(50\)/);
+});
