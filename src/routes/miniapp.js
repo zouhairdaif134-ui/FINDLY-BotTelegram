@@ -287,7 +287,7 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
         .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,full_plot_summary,poster_path,backdrop_path")
         .eq("id", titleId).eq("status", "active").maybeSingle(),
       supabase.from("movie_title_genres").select("movie_genres(name,slug)").eq("title_id", titleId),
-      supabase.from("movie_media_assets").select("id,file_id,media_type").eq("title_id", titleId).eq("status", "active").limit(10),
+      supabase.from("movie_media_assets").select("id,file_id,media_type,episode_id").eq("title_id", titleId).eq("status", "active").is("episode_id", null).limit(10),
       supabase.from("movie_provider_availability").select("provider,region_code,availability_type,provider_url").eq("title_id", titleId).eq("is_active", true),
       supabase.from("movie_seasons").select("id,season_number,name,overview,air_date,episode_count,poster_path")
         .eq("title_id", titleId).eq("status", "active").order("season_number", { ascending: true }),
@@ -299,18 +299,49 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
     if (!title) return json({ ok: false, error: "TITLE_NOT_FOUND" }, 404);
 
     let seasons = seasonResult.data || [];
+    let uploadedEpisodeIds = [];
     if (title.media_type === "series" && seasons.length) {
-      const { data: episodes, error: episodeError } = await supabase.from("movie_episodes")
-        .select("id,season_id,episode_number,name,overview,air_date,runtime_minutes,still_path")
-        .in("season_id", seasons.map((season) => season.id)).eq("status", "active")
-        .order("episode_number", { ascending: true });
-      if (episodeError) throw episodeError;
-      seasons = seasons.map((season) => ({ ...season, episodes: (episodes || []).filter((episode) => episode.season_id === season.id) }));
+      const { data: episodeAssets, error: episodeAssetsError } = await supabase.from("movie_media_assets")
+        .select("episode_id,file_id,media_type")
+        .eq("title_id", titleId)
+        .eq("status", "active")
+        .not("episode_id", "is", null);
+      if (episodeAssetsError) throw episodeAssetsError;
+      uploadedEpisodeIds = [...new Set((episodeAssets || [])
+        .filter((asset) => asset.episode_id && asset.file_id && ["video", "document"].includes(asset.media_type))
+        .map((asset) => asset.episode_id))];
+
+      if (uploadedEpisodeIds.length) {
+        const { data: episodes, error: episodeError } = await supabase.from("movie_episodes")
+          .select("id,season_id,episode_number,name,overview,air_date,runtime_minutes,still_path")
+          .in("id", uploadedEpisodeIds)
+          .in("season_id", seasons.map((season) => season.id))
+          .eq("status", "active")
+          .order("episode_number", { ascending: true });
+        if (episodeError) throw episodeError;
+        const watchUsername = await getWatchBotUsername(supabase);
+        const validWatchUsername = /^[a-zA-Z0-9_]{5,32}$/.test(watchUsername);
+        const episodesBySeason = new Map();
+        for (const episode of episodes || []) {
+          if (!episodesBySeason.has(episode.season_id)) episodesBySeason.set(episode.season_id, []);
+          episodesBySeason.get(episode.season_id).push({
+            ...episode,
+            watch_url: validWatchUsername
+              ? "https://t.me/" + watchUsername + "?start=episode_" + episode.id
+              : null
+          });
+        }
+        seasons = seasons
+          .map((season) => ({ ...season, episodes: episodesBySeason.get(season.id) || [] }))
+          .filter((season) => season.episodes.length > 0);
+      } else {
+        seasons = [];
+      }
     }
 
     const watchAvailable = (mediaResult.data || []).some((asset) => asset.file_id && ["video", "document"].includes(asset.media_type));
     const username = watchAvailable ? await getWatchBotUsername(supabase) : "";
-    const watchUrl = watchAvailable && /^[a-zA-Z0-9_]{5,32}$/.test(username)
+    const watchUrl = title.media_type === "movie" && watchAvailable && /^[a-zA-Z0-9_]{5,32}$/.test(username)
       ? "https://t.me/" + username + "?start=movie_" + titleId + "_watch"
       : null;
 
@@ -320,7 +351,7 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
         has_full_plot_summary: Boolean(title.full_plot_summary),
         genres: (genreResult.data || []).map((row) => row.movie_genres?.name).filter(Boolean),
         watch_available: Boolean(watchUrl),
-        watch_url: watchUrl,
+        watch_url: title.media_type === "movie" ? watchUrl : null,
         providers: (providerResult.data || []).map((row) => ({
           provider: row.provider,
           region_code: row.region_code,
