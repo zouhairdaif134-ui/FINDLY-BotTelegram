@@ -44,7 +44,8 @@ test("extracts title-year series episode references from Telegram channel captio
   });
   assert.equal(media.title, "Reacher");
   assert.equal(media.releaseYear, 2022);
-  assert.equal(media.mediaType, "series");
+  assert.equal(media.contentType, "series");
+  assert.equal(media.mediaType, "video");
   assert.equal(media.seasonNumber, 1);
   assert.equal(media.episodeNumber, 1);
   assert.equal(media.quality, "1080p");
@@ -124,7 +125,7 @@ test("ignores channel posts without a supported media attachment or matching cap
   }), null);
 });
 
-import { getTelegramMediaDelivery, canDistributeMovieMedia, isActiveMovieStorageChannel, isAllowedMovieMediaStatusTransition, canApproveMovieMediaAsset } from "../src/lib/movie-media.js";
+import { getTelegramMediaDelivery, canDistributeMovieMedia, isActiveMovieStorageChannel, getStorageChatIdForContentType, isAllowedMovieMediaStatusTransition, canApproveMovieMediaAsset } from "../src/lib/movie-media.js";
 
 test("uses Telegram file_id delivery methods for stored media types", () => {
   assert.deepEqual(getTelegramMediaDelivery("video"), { method: "sendVideo", field: "video" });
@@ -194,4 +195,11 @@ test("only Telegram video posts can be approved for in-chat movie playback", () 
   assert.equal(canApproveMovieMediaAsset({ media_type: "audio" }), false);
   assert.equal(canApproveMovieMediaAsset({ media_type: "animation" }), false);
   assert.equal(canApproveMovieMediaAsset(null), false);
+});
+
+test("routes movie and series uploads to their independent Telegram storage channels", () => {
+  const config = { active_storage_chat_id: "-1001111111111", series_storage_chat_id: "-1002222222222" };
+  assert.equal(getStorageChatIdForContentType(config, "movie"), "-1001111111111");
+  assert.equal(getStorageChatIdForContentType(config, "series"), "-1002222222222");
+  assert.equal(getStorageChatIdForContentType(config, "unknown"), null);
 });
