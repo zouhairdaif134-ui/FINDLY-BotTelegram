@@ -25,6 +25,33 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   async function loadAdConfig(){try{const result=await api("ads/config");adsConfig=normalizeAdConfig(result.config);if(adsConfig.ads_enabled&&adsConfig.sdk_enabled)render();}catch{adsConfig=DEFAULT_AD_CONFIG;}}
   let monetagAdPending=false;
   let watchAdPending=false;
+  async function showWatchInterstitial(titleId){
+    if(watchAdPending)return false;
+    watchAdPending=true;
+    trackAnalyticsEvent("miniapp_watch_clicked",{title_id:titleId});
+    const attemptId=crypto.randomUUID();
+    trackProviderAdEvent("adsgram","request",attemptId,titleId);
+    try{
+      const adsgram=window.Adsgram;
+      if(typeof adsgram?.init==="function"){
+        const controller=adsgram.init({blockId:"int-59890"});
+        if(typeof controller?.show==="function"){
+          await controller.show();
+          trackProviderAdEvent("adsgram","resolved",attemptId,titleId);
+        }else{
+          trackProviderAdEvent("adsgram","failed",attemptId,titleId);
+        }
+      }else{
+        trackProviderAdEvent("adsgram","failed",attemptId,titleId);
+      }
+    }catch(error){
+      trackProviderAdEvent("adsgram","failed",attemptId,titleId);
+      console.warn("FINDLY AdsGram interstitial unavailable; continuing to Watch Bot",error);
+    }finally{
+      watchAdPending=false;
+    }
+    return true;
+  }
   function maybeShowMonetagInterstitial(){
     const threshold=adsConfig.frequency.detail_views_before_interstitial;
     if(!adsConfig.ads_enabled||!adsConfig.sdk_enabled||monetagAdPending||!shouldTriggerInterstitial(adFrequencyState,threshold)||!canDisplayAd(adFrequencyState,adsConfig.frequency))return;
@@ -146,36 +173,13 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   app.addEventListener("touchstart",event=>{const target=event.target.closest("[data-open]");if(target)prefetchDetails(target.dataset.open);},{passive:true});
   app.addEventListener("click",async event=>{
     if(event.target.classList.contains("share-overlay")){state.shareOpen=false;render();return;}
-    const episodeLink=event.target.closest("a[data-watch-episode]");if(episodeLink){event.preventDefault();const url=episodeLink.href;if(tg?.openTelegramLink)tg.openTelegramLink(url);else window.location.assign(url);return;}
+    const episodeLink=event.target.closest("a[data-watch-episode]");if(episodeLink){event.preventDefault();const url=episodeLink.href;const titleId=state.details?.title?.id;if(!await showWatchInterstitial(titleId))return;if(tg?.openTelegramLink)tg.openTelegramLink(url);else window.location.assign(url);return;}
     const b=event.target.closest("button");if(!b)return;
     if(b.dataset.open)return openDetails(b.dataset.open);
     if(b.dataset.watch){
       const t=state.details?.title;if(t?.media_type!=="movie")return;const url=t?.watch_url||state.titles.find(x=>x.id===b.dataset.watch)?.watch_url;
       if(!url)return openDetails(b.dataset.watch);
-      if(watchAdPending)return;
-      trackAnalyticsEvent("miniapp_watch_clicked",{title_id:b.dataset.watch});
-      watchAdPending=true;b.disabled=true;
-      const attemptId=crypto.randomUUID();
-      trackProviderAdEvent("adsgram","request",attemptId,b.dataset.watch);
-      try{
-        const adsgram=window.Adsgram;
-        if(typeof adsgram?.init==="function"){
-          const controller=adsgram.init({blockId:"int-59890"});
-          if(typeof controller?.show==="function"){
-            await controller.show();
-            trackProviderAdEvent("adsgram","resolved",attemptId,b.dataset.watch);
-          }else{
-            trackProviderAdEvent("adsgram","failed",attemptId,b.dataset.watch);
-          }
-        }else{
-          trackProviderAdEvent("adsgram","failed",attemptId,b.dataset.watch);
-        }
-      }catch(error){
-        trackProviderAdEvent("adsgram","failed",attemptId,b.dataset.watch);
-        console.warn("FINDLY AdsGram interstitial unavailable; continuing to Watch Bot",error);
-      }finally{
-        watchAdPending=false;
-      }
+      if(!await showWatchInterstitial(b.dataset.watch))return;
       if(tg?.openTelegramLink)tg.openTelegramLink(url);
       else window.location.assign(url);
       return;
