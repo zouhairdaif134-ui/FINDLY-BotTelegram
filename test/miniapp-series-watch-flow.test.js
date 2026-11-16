@@ -22,7 +22,7 @@ test("Mini App renders uploaded episodes as individual Watch Bot links", () => {
   assert.match(miniappClient, /s\.episodes\s*\|\|\s*\[\]/);
   assert.match(miniappClient, /e\.watch_url/);
   assert.match(miniappClient, /data-watch-episode/);
-  assert.match(miniappClient, /episodeLink=event\.target\.closest\("a\[data-watch-episode\]"\)[\s\S]*?tg\.openTelegramLink\(url\)/);
+  assert.match(miniappClient, /episodeLink=event\.target\.closest\("a\[data-watch-episode\]"\)[\s\S]*?openWatchBotLink\(url\)/);
   assert.match(miniappClient, /if\(b\.dataset\.watch\)[\s\S]*?t\?\.media_type!=="movie"/);
 });
 

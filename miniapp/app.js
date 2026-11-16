@@ -145,6 +145,25 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   async function openDetails(id){recordDetailView(id);trackAnalyticsEvent("miniapp_title_viewed",{title_id:id});savedScrollY=window.scrollY||document.documentElement.scrollTop||0;state.activeTitle=id;state.showFullPlot=false;tg?.BackButton?.show();const cached=detailsCache.get(id);state.details=cached&&cached.expiresAt>Date.now()?cached.data:null;render();try{state.details=await fetchDetails(id);if(state.activeTitle===id)render();}catch(error){if(state.activeTitle===id){state.activeTitle=null;notify(error.message);render();window.scrollTo(0,savedScrollY);}}}
   function closeDetails(){state.activeTitle=null;state.details=null;state.showFullPlot=false;state.shareOpen=false;tg?.BackButton?.hide();render();requestAnimationFrame(()=>window.scrollTo(0,savedScrollY));maybeShowMonetagInterstitial();}
 
+  function openWatchBotLink(url){
+    if(!url)return;
+    if(!tg?.openTelegramLink){window.location.assign(url);return;}
+    let fallbackTimer=null;
+    const cleanup=()=>{if(fallbackTimer!==null)clearTimeout(fallbackTimer);document.removeEventListener("visibilitychange",onVisibilityChange);};
+    const onVisibilityChange=()=>{if(document.visibilityState==="hidden")cleanup();};
+    document.addEventListener("visibilitychange",onVisibilityChange);
+    try{
+      tg.openTelegramLink(url);
+      fallbackTimer=window.setTimeout(()=>{
+        const stillVisible=document.visibilityState!=="hidden";
+        cleanup();
+        if(stillVisible)window.location.assign(url);
+      },1800);
+    }catch(error){
+      cleanup();
+      window.location.assign(url);
+    }
+  }
   function shareSheet(){if(!state.shareOpen||!state.details?.title)return "";const t=state.details.title;return '<div class="share-overlay" data-share-close><section class="share-sheet" role="dialog" aria-modal="true" aria-label="مشاركة العنوان"><div class="share-sheet-handle"></div><div class="share-sheet-head"><div><strong>مشاركة العنوان</strong><small>'+esc(t.title)+'</small></div><button class="share-close" data-share-close aria-label="إغلاق">×</button></div><div class="share-grid"><button data-share-platform="facebook"><span class="share-brand facebook">f</span><small>Facebook</small></button><button data-share-platform="whatsapp"><span class="share-brand whatsapp">◉</span><small>WhatsApp</small></button><button data-share-platform="x"><span class="share-brand x-brand">𝕏</span><small>X</small></button><button data-share-platform="telegram"><span class="share-brand telegram">➤</span><small>Telegram</small></button><button data-share-platform="instagram"><span class="share-brand instagram">◎</span><small>Instagram</small></button></div><p class="share-hint">Facebook ما كيعمرش نص المنشور تلقائياً. نسخ الكابشن من هنا ولصقو يدوياً.</p><div class="share-tools"><button data-share-action="copy-link">نسخ رابط المشاركة</button><button data-share-action="copy-caption">نسخ الكابشن</button><button data-share-action="download-image">فتح صورة المشاركة</button><button data-share-action="copy-film-link">نسخ رابط الفيلم</button><button data-share-action="copy-bot-link">نسخ رابط بوت FINDLY</button></div></section></div>';}
   async function copyShareText(value){try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(value);return true;}}catch{}try{const f=document.createElement("textarea");f.value=value;f.style.position="fixed";f.style.opacity="0";document.body.appendChild(f);f.select();const ok=document.execCommand("copy");f.remove();return ok;}catch{return false;}}
   function openShareLink(url){if(tg?.openLink)tg.openLink(url);else window.open(url,"_blank","noopener,noreferrer");}
@@ -173,15 +192,14 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   app.addEventListener("touchstart",event=>{const target=event.target.closest("[data-open]");if(target)prefetchDetails(target.dataset.open);},{passive:true});
   app.addEventListener("click",async event=>{
     if(event.target.classList.contains("share-overlay")){state.shareOpen=false;render();return;}
-    const episodeLink=event.target.closest("a[data-watch-episode]");if(episodeLink){event.preventDefault();const url=episodeLink.href;const titleId=state.details?.title?.id;if(!await showWatchInterstitial(titleId))return;if(tg?.openTelegramLink)tg.openTelegramLink(url);else window.location.assign(url);return;}
+    const episodeLink=event.target.closest("a[data-watch-episode]");if(episodeLink){event.preventDefault();const url=episodeLink.href;const titleId=state.details?.title?.id;if(!await showWatchInterstitial(titleId))return;openWatchBotLink(url);return;}
     const b=event.target.closest("button");if(!b)return;
     if(b.dataset.open)return openDetails(b.dataset.open);
     if(b.dataset.watch){
       const t=state.details?.title;if(t?.media_type!=="movie")return;const url=t?.watch_url||state.titles.find(x=>x.id===b.dataset.watch)?.watch_url;
       if(!url)return openDetails(b.dataset.watch);
       if(!await showWatchInterstitial(b.dataset.watch))return;
-      if(tg?.openTelegramLink)tg.openTelegramLink(url);
-      else window.location.assign(url);
+      openWatchBotLink(url);
       return;
     }
     if(b.dataset.requestTmdb){
