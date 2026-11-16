@@ -355,3 +355,5 @@ test("series storage upload automatically upserts missing season and episode rec
   assert.match(ingestion, /from\("movie_seasons"\)[\s\S]*?\.upsert\([\s\S]*?onConflict: "title_id,season_number"/);
   assert.match(ingestion, /from\("movie_episodes"\)[\s\S]*?\.upsert\([\s\S]*?onConflict: "season_id,episode_number"/);
 });
+
+// CI trigger: validate the final combined Master/Watch and uploaded-only series behavior.
