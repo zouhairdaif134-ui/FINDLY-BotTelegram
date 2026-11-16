@@ -889,10 +889,16 @@ async function sendWatchTitle(env, bot, chatId, titleId) {
     .maybeSingle();
   if (titleError) throw titleError;
   if (!title) {
-    await sendMessage(env, bot.slug, chatId, "هاد الفيلم ما بقاش متاح للمشاهدة.");
+    await sendMessage(env, bot.slug, chatId, "هاد العنوان ما بقاش متاح للمشاهدة.");
     return;
   }
 
+  // Series media belongs to episodes, never to the title-level movie asset query.
+  // Open the existing season/episode browser; the movie delivery path below stays unchanged.
+  if (title.media_type === "series") {
+    await sendSeasons(env, bot, chatId, title.id, 0);
+    return;
+  }
 
   const { data: assets, error: assetsError } = await supabase
     .from("movie_media_assets")
