@@ -16,9 +16,11 @@ export function findMovieMediaTitle(titles, media) {
   if (!Array.isArray(titles) || !media?.title || !Number.isInteger(media.releaseYear)) return null;
   const target = normalizeMovieTitle(media.title);
   if (!target) return null;
+  // Telegram file type (video/document) is distinct from catalog content type (movie/series).
+  const contentType = media.contentType || media.mediaType;
   const matches = titles.filter((title) =>
     Number(title.release_year) === media.releaseYear &&
-    (!media.mediaType || title.media_type === media.mediaType) &&
+    (!contentType || title.media_type === contentType) &&
     normalizeMovieTitle(title.title) === target
   );
   return matches.length === 1 ? matches[0] : null;
