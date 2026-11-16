@@ -36,7 +36,7 @@ test("parses title, favorite and season callbacks only with UUID identifiers", (
   assert.deepEqual(parseMoviesCallback("movies:title:" + id), { action: "title", id });
   assert.deepEqual(parseMoviesCallback("movies:plot:" + id), { action: "plot", id });
   assert.deepEqual(parseMoviesCallback("movies:favorite:" + id), { action: "favorite", id });
-  assert.deepEqual(parseMoviesCallback("movies:season:" + id), { action: "season", id });
+  assert.deepEqual(parseMoviesCallback("movies:season:" + id), { action: "season", id, page: 0 });
 });
 
 test("normalizes search input, removes control characters and caps length", () => {
