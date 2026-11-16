@@ -326,9 +326,16 @@ test("series seasons and episodes use count-based range pagination instead of a 
 });
 
 
-test("Watch Bot routes series title links to the season picker instead of querying movie-level media", () => {
+test("series navigation stays in Master and Watch Bot opens only the selected episode", () => {
   const source = readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
+  const titleDetails = source.slice(source.indexOf("async function sendTitle("), source.indexOf("async function sendMovieMedia("));
   const watchTitle = source.slice(source.indexOf("async function sendWatchTitle("), source.indexOf("async function sendMovieTitleMedia("));
-  assert.match(watchTitle, /if \(title\.media_type === "series"\) \{[\s\S]*?await sendSeasons\(env, bot, chatId, title\.id, 0\);[\s\S]*?return;[\s\S]*?\}/);
-  assert.ok(watchTitle.indexOf('if (title.media_type === "series")') < watchTitle.indexOf('.is("episode_id", null)'));
+  const episodes = source.slice(source.indexOf("async function sendEpisodes("), source.indexOf("export async function showMoviesSearchPrompt("));
+
+  assert.match(titleDetails, /text: "▶️ مشاهدة",\s*callback_data: "movies:seasons:" \+ title\.id/);
+  assert.match(titleDetails, /title\.media_type === "series" && bot\.slug === "findly"/);
+  assert.match(episodes, /https:\/\/t\.me\/.*\?start=episode_/);
+  assert.match(watchTitle, /if \(title\.media_type === "series"\)[\s\S]*?اختار الحلقة من FINDLY Master/);
+  assert.doesNotMatch(watchTitle, /sendSeasons\(env, bot, chatId/);
+  assert.ok(watchTitle.indexOf('.is("episode_id", null)') > watchTitle.indexOf('if (title.media_type === "series")'));
 });
