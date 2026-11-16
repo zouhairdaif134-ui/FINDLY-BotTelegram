@@ -12,7 +12,7 @@ test("media ingestion is limited to the configured active storage channel", () =
   assert.match(telegramRoute, /isActiveMovieStorageChannel\(media\.chatId, storageConfig\?\.active_storage_chat_id\)/);
 });
 
-test("media ingestion activates uploaded assets and authorizes owner-declared distribution on upload", () => {
+test("media ingestion registers media without silently authorizing distribution rights", () => {
   assert.match(telegramRoute, /\.upsert\(\{[\s\S]*?quality_label: media\.quality,[\s\S]*?status: "active"[\s\S]*?\}\s*,\s*\{ onConflict:/);
   assert.match(telegramRoute, /تم ربط الملف بالعنوان وتفعيله تلقائياً/);
   assert.match(telegramRoute, /episode_id: linkedEpisodeId/);
