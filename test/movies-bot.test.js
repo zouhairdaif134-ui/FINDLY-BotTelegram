@@ -302,6 +302,7 @@ test("parses season episode pagination callbacks and rejects invalid pages", () 
   });
   assert.equal(parseMoviesCallback("movies:season:" + seasonId + ":-1"), null);
   assert.equal(parseMoviesCallback("movies:season:" + seasonId + ":1.5"), null);
+  assert.equal(parseMoviesCallback("movies:season:" + seasonId + ":9007199254740992"), null);
 });
 
 test("parses season list pagination callbacks for series with many seasons", () => {
