@@ -30,6 +30,8 @@ export function buildMovieMediaDeliveryRequest(asset, chatId) {
   return { method: delivery.method, payload };
 }
 export const MOVIE_PAGE_SIZE = 4;
+export const SERIES_SEASON_PAGE_SIZE = 10;
+export const SERIES_EPISODE_PAGE_SIZE = 8;
 const SEARCH_PROMPT = "🔎 بحث FINDLY Movies";
 const YEAR_PROMPT = "📅 سنة إصدار FINDLY";
 
@@ -144,11 +146,13 @@ export function parseMoviesCallback(value) {
   if (action === "tmdbrequest" && ["movie", "series"].includes(parts[2]) && /^\d{1,12}$/.test(parts[3] || "")) {
     return { action, mediaType: parts[2], tmdbId: parts[3] };
   }
-  if (["title", "favorite", "seasons", "plot", "watch"].includes(action) && UUID_RE.test(parts[2] || "")) {
+  if (["title", "favorite", "plot", "watch"].includes(action) && UUID_RE.test(parts[2] || "")) {
     return { action, id: parts[2] };
   }
-  if (action === "season" && UUID_RE.test(parts[2] || "")) {
-    return { action, id: parts[2] };
+  if (["seasons", "season"].includes(action) && UUID_RE.test(parts[2] || "")) {
+    const page = Number(parts[3] || 0);
+    if (!Number.isInteger(page) || page < 0) return null;
+    return { action, id: parts[2], page };
   }
   return null;
 }
@@ -1043,30 +1047,47 @@ async function sendFavorites(env, bot, chatId, telegramUserId) {
   });
 }
 
-async function sendSeasons(env, bot, chatId, titleId) {
+async function sendSeasons(env, bot, chatId, titleId, requestedPage = 0) {
   const supabase = getSupabase(env);
-  const { data: seasons, error } = await supabase
+  const fetchPage = (page) => supabase
     .from("movie_seasons")
-    .select("id,season_number,name,episode_count")
+    .select("id,season_number,name,episode_count", { count: "exact" })
     .eq("title_id", titleId)
     .eq("status", "active")
-    .order("season_number", { ascending: true });
-  if (error) throw error;
-  if (!seasons?.length) {
+    .order("season_number", { ascending: true })
+    .range(page * SERIES_SEASON_PAGE_SIZE, (page + 1) * SERIES_SEASON_PAGE_SIZE - 1);
+
+  let result = await fetchPage(requestedPage);
+  if (result.error) throw result.error;
+  const totalSeasons = Number(result.count || 0);
+  const totalPages = Math.max(1, Math.ceil(totalSeasons / SERIES_SEASON_PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages - 1);
+  if (page !== requestedPage) {
+    result = await fetchPage(page);
+    if (result.error) throw result.error;
+  }
+  const seasons = result.data || [];
+  if (!totalSeasons) {
     await sendMessage(env, bot.slug, chatId, "مازال ما تسجلوش المواسم ديال هاد المسلسل.");
     return;
   }
   const keyboard = seasons.map((season) => [{
     text: "الموسم " + season.season_number + (season.episode_count != null ? " · " + season.episode_count + " حلقة" : ""),
-    callback_data: "movies:season:" + season.id
+    callback_data: "movies:season:" + season.id + ":0"
   }]);
+  const navigation = [];
+  if (page > 0) navigation.push({ text: "⬅️ السابقة", callback_data: "movies:seasons:" + titleId + ":" + (page - 1) });
+  if (page + 1 < totalPages) navigation.push({ text: "التالية ➡️", callback_data: "movies:seasons:" + titleId + ":" + (page + 1) });
+  if (navigation.length) keyboard.push(navigation);
   keyboard.push([{ text: "⬅️ رجوع", callback_data: "movies:home" }]);
-  await sendMessage(env, bot.slug, chatId, "<b>📚 المواسم</b>\n\nاختار الموسم:", {
-    reply_markup: { inline_keyboard: keyboard }
-  });
+  await sendMessage(env, bot.slug, chatId,
+    "<b>📚 المواسم</b>\n\nاختار الموسم:" +
+    (totalPages > 1 ? "\n<i>صفحة " + (page + 1) + " من " + totalPages + "</i>" : ""),
+    { reply_markup: { inline_keyboard: keyboard } }
+  );
 }
 
-async function sendEpisodes(env, bot, chatId, seasonId) {
+async function sendEpisodes(env, bot, chatId, seasonId, requestedPage = 0) {
   const supabase = getSupabase(env);
   const { data: season, error: seasonError } = await supabase
     .from("movie_seasons")
@@ -1079,14 +1100,26 @@ async function sendEpisodes(env, bot, chatId, seasonId) {
     await sendMessage(env, bot.slug, chatId, "هاد الموسم ما بقاش متاح.");
     return;
   }
-  const { data: episodes, error } = await supabase
+
+  const fetchPage = (page) => supabase
     .from("movie_episodes")
-    .select("id,episode_number,name,overview,runtime_minutes,status")
+    .select("id,episode_number,name,runtime_minutes,status", { count: "exact" })
     .eq("season_id", seasonId)
     .eq("status", "active")
     .order("episode_number", { ascending: true })
-    .limit(50);
-  if (error) throw error;
+    .range(page * SERIES_EPISODE_PAGE_SIZE, (page + 1) * SERIES_EPISODE_PAGE_SIZE - 1);
+
+  let result = await fetchPage(requestedPage);
+  if (result.error) throw result.error;
+  const totalEpisodes = Number(result.count || 0);
+  const totalPages = Math.max(1, Math.ceil(totalEpisodes / SERIES_EPISODE_PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages - 1);
+  if (page !== requestedPage) {
+    result = await fetchPage(page);
+    if (result.error) throw result.error;
+  }
+  const episodes = result.data || [];
+
   let watchUsername = null;
   if (bot.slug === "findly") {
     const { data: watchBot, error: watchBotError } = await supabase
@@ -1094,22 +1127,30 @@ async function sendEpisodes(env, bot, chatId, seasonId) {
     if (watchBotError) throw watchBotError;
     watchUsername = watchBot?.telegram_username?.replace(/^@/, "") || null;
   }
+
   const keyboard = [];
-  const lines = (episodes || []).map((episode) => {
+  const lines = episodes.map((episode) => {
     if (watchUsername) {
       keyboard.push([{
         text: "▶️ الحلقة " + String(episode.episode_number).padStart(2, "0"),
         url: "https://t.me/" + watchUsername + "?start=episode_" + episode.id
       }]);
     }
-    return "<b>" + episode.episode_number + ". " + escapeHtml(episode.name || ("الحلقة " + episode.episode_number)) + "</b>" +
-      (episode.runtime_minutes ? " · " + episode.runtime_minutes + " دقيقة" : "") +
-      (episode.overview ? "\n" + escapeHtml(episode.overview) : "");
+    return "<b>" + episode.episode_number + ". " +
+      escapeHtml(Array.from(String(episode.name || ("الحلقة " + episode.episode_number))).slice(0, 100).join("")) + "</b>" +
+      (episode.runtime_minutes ? " · " + episode.runtime_minutes + " دقيقة" : "");
   });
-  keyboard.push([{ text: "⬅️ رجوع للمواسم", callback_data: "movies:seasons:" + season.title_id }]);
+
+  const navigation = [];
+  if (page > 0) navigation.push({ text: "⬅️ السابقة", callback_data: "movies:season:" + seasonId + ":" + (page - 1) });
+  if (page + 1 < totalPages) navigation.push({ text: "التالية ➡️", callback_data: "movies:season:" + seasonId + ":" + (page + 1) });
+  if (navigation.length) keyboard.push(navigation);
+  keyboard.push([{ text: "⬅️ رجوع للمواسم", callback_data: "movies:seasons:" + season.title_id + ":0" }]);
+
   await sendMessage(env, bot.slug, chatId,
     "<b>🎞️ الحلقات · الموسم " + season.season_number + "</b>\n\n" +
-    (lines.length ? lines.join("\n\n") : "مازال ما تسجلات حتى حلقة نشطة."),
+    (lines.length ? lines.join("\n\n") : "مازال ما تسجلات حتى حلقة نشطة.") +
+    (totalPages > 1 ? "\n\n<i>صفحة " + (page + 1) + " من " + totalPages + " · " + totalEpisodes + " حلقة</i>" : ""),
     { parse_mode: "HTML", reply_markup: { inline_keyboard: keyboard } }
   );
 }
@@ -1201,8 +1242,8 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   else if (parsed.action === "watch") await sendMovieMedia(env, bot, chatId, parsed.id);
   else if (parsed.action === "plot") await sendFullPlotSummary(env, bot, chatId, parsed.id);
   else if (parsed.action === "favorite") await toggleFavorite(env, bot, chatId, parsed.id, telegramUserId);
-  else if (parsed.action === "seasons") await sendSeasons(env, bot, chatId, parsed.id);
-  else if (parsed.action === "season") await sendEpisodes(env, bot, chatId, parsed.id);
+  else if (parsed.action === "seasons") await sendSeasons(env, bot, chatId, parsed.id, parsed.page);
+  else if (parsed.action === "season") await sendEpisodes(env, bot, chatId, parsed.id, parsed.page);
   else if (parsed.action === "genre") await sendList(env, bot, chatId, "genre", parsed.page, "", parsed.genreSlug);
   else if (parsed.action === "year") await sendList(env, bot, chatId, "year", parsed.page, String(parsed.year));
   else await sendList(env, bot, chatId, parsed.action, parsed.page, parsed.query || "");
