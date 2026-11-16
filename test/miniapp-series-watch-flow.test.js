@@ -7,7 +7,7 @@ const miniappClient = await readFile(new URL("../miniapp/app.js", import.meta.ur
 const moviesBot = await readFile(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
 
 test("series details expose only episodes with active uploaded media and episode deep links", () => {
-  assert.match(miniappRoute, /select\("id,file_id,media_type,episode_id"\)/);
+  assert.match(miniappRoute, /select\("episode_id,file_id,media_type"\)/);
   assert.match(miniappRoute, /\.not\("episode_id",\s*"is",\s*null\)/);
   assert.match(miniappRoute, /\.in\("id",\s*uploadedEpisodeIds\)/);
   assert.match(miniappRoute, /episode_\s*\+\s*episode\.id/);
@@ -23,7 +23,7 @@ test("Mini App renders uploaded episodes as individual Watch Bot links", () => {
   assert.match(miniappClient, /e\.watch_url/);
   assert.match(miniappClient, /data-watch-episode/);
   assert.match(miniappClient, /episodeLink=event\.target\.closest\("a\[data-watch-episode\]"\)[\s\S]*?tg\?\.openTelegramLink\(url\)/);
-  assert.match(miniappClient, /if\(b\.dataset\.watch\)[\s\S]*?t\\?\\.media_type\\s*!==\\s*"movie"/);
+  assert.match(miniappClient, /if\(b\.dataset\.watch\)[\s\S]*?t\?\.media_type!=="movie"/);
 });
 
 test("Watch Bot keeps episode deep links on the delivery-only episode path", () => {
