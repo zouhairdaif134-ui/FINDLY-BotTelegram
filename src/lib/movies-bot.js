@@ -146,7 +146,7 @@ export function parseMoviesCallback(value) {
   if (action === "tmdbrequest" && ["movie", "series"].includes(parts[2]) && /^\d{1,12}$/.test(parts[3] || "")) {
     return { action, mediaType: parts[2], tmdbId: parts[3] };
   }
-  if (["title", "favorite", "plot", "watch"].includes(action) && UUID_RE.test(parts[2] || "")) {
+  if (["title", "favorite", "plot", "watch", "episode"].includes(action) && UUID_RE.test(parts[2] || "")) {
     return { action, id: parts[2] };
   }
   if (["seasons", "season"].includes(action) && UUID_RE.test(parts[2] || "")) {
@@ -222,6 +222,15 @@ export function buildMasterWatchButton(username, titleId) {
   return {
     text: "▶️ مشاهدة الآن",
     url: "https://t.me/" + normalizedUsername + "?start=movie_" + titleId + "_watch"
+  };
+}
+
+export function buildMasterEpisodeWatchButton(username, episodeId) {
+  const normalizedUsername = String(username || "").replace(/^@/, "").trim();
+  if (!normalizedUsername || !UUID_RE.test(episodeId || "")) return null;
+  return {
+    text: "▶️ فتح الحلقة في FINDLY Watch",
+    url: "https://t.me/" + normalizedUsername + "?start=episode_" + episodeId
   };
 }
 
@@ -1117,6 +1126,52 @@ async function sendSeasons(env, bot, chatId, titleId, requestedPage = 0) {
 }
 
 
+async function sendEpisodeWatchLink(env, bot, chatId, episodeId) {
+  if (bot.slug !== "findly" || !UUID_RE.test(episodeId || "")) return;
+  const supabase = getSupabase(env);
+  const { data: episode, error: episodeError } = await supabase
+    .from("movie_episodes")
+    .select("id")
+    .eq("id", episodeId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (episodeError) throw episodeError;
+  if (!episode) {
+    await sendMessage(env, bot.slug, chatId, "هاد الحلقة ما بقاتش متاحة.");
+    return;
+  }
+
+  const { data: asset, error: assetError } = await supabase
+    .from("movie_media_assets")
+    .select("id")
+    .eq("episode_id", episodeId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  if (assetError) throw assetError;
+  if (!asset) {
+    await sendMessage(env, bot.slug, chatId, "هاد الحلقة ما بقاتش متاحة للمشاهدة.");
+    return;
+  }
+
+  const { data: watchBot, error: watchBotError } = await supabase
+    .from("bots")
+    .select("telegram_username")
+    .eq("slug", "movies")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (watchBotError) throw watchBotError;
+  const button = buildMasterEpisodeWatchButton(watchBot?.telegram_username, episodeId);
+  if (!button) {
+    await sendMessage(env, bot.slug, chatId, "رابط المشاهدة غير متاح حالياً.");
+    return;
+  }
+  await sendMessage(env, bot.slug, chatId,
+    "الحلقة واجدة. اضغط على الزر باش تفتحها في FINDLY Watch.",
+    { reply_markup: { inline_keyboard: [[button]] } }
+  );
+}
+
 async function sendEpisodes(env, bot, chatId, seasonId, requestedPage = 0) {
   const supabase = getSupabase(env);
   const { data: season, error: seasonError } = await supabase
@@ -1158,20 +1213,12 @@ async function sendEpisodes(env, bot, chatId, seasonId, requestedPage = 0) {
   const page = Math.min(Math.max(0, requestedPage), totalPages - 1);
   const visibleEpisodes = episodes.slice(page * SERIES_EPISODE_PAGE_SIZE, (page + 1) * SERIES_EPISODE_PAGE_SIZE);
 
-  let watchUsername = null;
-  if (bot.slug === "findly") {
-    const { data: watchBot, error: watchBotError } = await supabase
-      .from("bots").select("telegram_username").eq("slug", "movies").eq("is_active", true).maybeSingle();
-    if (watchBotError) throw watchBotError;
-    watchUsername = watchBot?.telegram_username?.replace(/^@/, "") || null;
-  }
-
   const keyboard = [];
   const lines = visibleEpisodes.map((episode) => {
-    if (watchUsername) {
+    if (bot.slug === "findly") {
       keyboard.push([{
         text: "▶️ الحلقة " + String(episode.episode_number).padStart(2, "0"),
-        url: "https://t.me/" + watchUsername + "?start=episode_" + episode.id
+        callback_data: "movies:episode:" + episode.id
       }]);
     }
     return "<b>" + episode.episode_number + ". " +
@@ -1278,6 +1325,7 @@ export async function handleMoviesCallback(env, bot, chatId, callbackQuery) {
   else if (parsed.action === "favorites") await sendFavorites(env, bot, chatId, telegramUserId);
   else if (parsed.action === "title") await sendTitle(env, bot, chatId, parsed.id, telegramUserId);
   else if (parsed.action === "watch") await sendMovieMedia(env, bot, chatId, parsed.id);
+  else if (parsed.action === "episode" && bot.slug === "findly") await sendEpisodeWatchLink(env, bot, chatId, parsed.id);
   else if (parsed.action === "plot") await sendFullPlotSummary(env, bot, chatId, parsed.id);
   else if (parsed.action === "favorite") await toggleFavorite(env, bot, chatId, parsed.id, telegramUserId);
   else if (parsed.action === "seasons") await sendSeasons(env, bot, chatId, parsed.id, parsed.page);
