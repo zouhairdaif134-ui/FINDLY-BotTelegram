@@ -119,7 +119,7 @@ async function verifyConfiguredStorageChannel(env, chatId, request) {
 async function readStorageConfig(supabase) {
   const { data, error } = await supabase
     .from("movie_media_storage_config")
-    .select("id,active_storage_chat_id,active_channel_title,updated_at")
+    .select("id,active_storage_chat_id,active_channel_title,series_storage_chat_id,series_channel_title,updated_at")
     .eq("id", 1)
     .maybeSingle();
   if (error) throw error;
@@ -306,9 +306,10 @@ export async function handleMediaRoute(env, request, url, helpers) {
       const supabase = getSupabase(env);
       const existing = await readStorageConfig(supabase);
       const verified = await verifyConfiguredStorageChannel(env, body?.chat_id, request);
-      if (existing?.active_storage_chat_id &&
-          existing.active_storage_chat_id !== verified.chat_id &&
-          body?.confirm_change !== true) {
+      const contentType = body?.content_type === "series" ? "series" : body?.content_type === "movie" ? "movie" : null;
+      if (!contentType) throw makeError("حدد نوع قناة التخزين: movie أو series.");
+      const previousChatId = contentType === "series" ? existing?.series_storage_chat_id : existing?.active_storage_chat_id;
+      if (previousChatId && previousChatId !== verified.chat_id && body?.confirm_change !== true) {
         throw makeError("تغيير قناة التخزين يحتاج إلى تأكيد صريح.", 409, "STORAGE_CHANNEL_CONFIRMATION_REQUIRED");
       }
 
@@ -316,11 +317,12 @@ export async function handleMediaRoute(env, request, url, helpers) {
         .from("movie_media_storage_config")
         .upsert({
           id: 1,
-          active_storage_chat_id: verified.chat_id,
-          active_channel_title: verified.title,
+          ...(contentType === "series"
+            ? { series_storage_chat_id: verified.chat_id, series_channel_title: verified.title }
+            : { active_storage_chat_id: verified.chat_id, active_channel_title: verified.title }),
           updated_by: auth.userId
         }, { onConflict: "id" })
-        .select("id,active_storage_chat_id,active_channel_title,updated_at")
+        .select("id,active_storage_chat_id,active_channel_title,series_storage_chat_id,series_channel_title,updated_at")
         .single();
       if (error) throw error;
 
@@ -330,9 +332,10 @@ export async function handleMediaRoute(env, request, url, helpers) {
         action: auditAction,
         entityType,
         details: {
-          previous_storage_chat_id: existing?.active_storage_chat_id || null,
-          active_storage_chat_id: verified.chat_id,
-          active_channel_title: verified.title
+          content_type: contentType,
+          previous_storage_chat_id: previousChatId || null,
+          configured_storage_chat_id: verified.chat_id,
+          configured_channel_title: verified.title
         }
       });
       return send(helpers, request, { ...data, audit_logged: auditLogged });
