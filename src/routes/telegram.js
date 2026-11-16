@@ -1413,28 +1413,28 @@ async function processTelegramUpdate(
         await sendMessage(env, bot.slug, media.chatId, "صيغة الحلقة غير صالحة أو أن العنوان ليس مسلسلاً.");
         return { ok: true, media_ignored: true, reason: "invalid_episode_reference" };
       }
+      // Create season and episode records on first upload; the visible catalog is
+      // derived separately from active media assets, so empty seasons stay hidden.
       const { data: season, error: seasonError } = await supabase
         .from("movie_seasons")
+        .upsert({
+          title_id: linkedTitleId,
+          season_number: media.seasonNumber,
+          status: "active"
+        }, { onConflict: "title_id,season_number" })
         .select("id")
-        .eq("title_id", linkedTitleId)
-        .eq("season_number", media.seasonNumber)
-        .maybeSingle();
+        .single();
       if (seasonError) throw seasonError;
-      if (!season) {
-        await sendMessage(env, bot.slug, media.chatId, "ما لقيتش الموسم S" + String(media.seasonNumber).padStart(2, "0") + " فمكتبة FINDLY.");
-        return { ok: true, media_unlinked: true, reason: "season_not_found" };
-      }
       const { data: episode, error: episodeError } = await supabase
         .from("movie_episodes")
+        .upsert({
+          season_id: season.id,
+          episode_number: media.episodeNumber,
+          status: "active"
+        }, { onConflict: "season_id,episode_number" })
         .select("id")
-        .eq("season_id", season.id)
-        .eq("episode_number", media.episodeNumber)
-        .maybeSingle();
+        .single();
       if (episodeError) throw episodeError;
-      if (!episode) {
-        await sendMessage(env, bot.slug, media.chatId, "ما لقيتش الحلقة E" + String(media.episodeNumber).padStart(2, "0") + " فهاد الموسم.");
-        return { ok: true, media_unlinked: true, reason: "episode_not_found" };
-      }
       linkedEpisodeId = episode.id;
     }
 

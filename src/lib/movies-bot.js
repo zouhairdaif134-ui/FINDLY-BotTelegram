@@ -711,7 +711,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     keyboard.push([{ text: "📖 قراءة الملخص الكامل (حرق الأحداث)", callback_data: "movies:plot:" + title.id }]);
   }
   if (title.media_type === "series" && bot.slug === "findly") {
-    keyboard.push([{ text: "📚 المواسم والحلقات", callback_data: "movies:seasons:" + title.id }]);
+    keyboard.push([{ text: "▶️ مشاهدة", callback_data: "movies:seasons:" + title.id }]);
   }
 
   if (bot.slug === "movies") {
@@ -893,10 +893,14 @@ async function sendWatchTitle(env, bot, chatId, titleId) {
     return;
   }
 
-  // Series media belongs to episodes, never to the title-level movie asset query.
-  // Open the existing season/episode browser; the movie delivery path below stays unchanged.
+  // Watch Bot is delivery-only. Series browsing and episode selection stay in Master Bot.
   if (title.media_type === "series") {
-    await sendSeasons(env, bot, chatId, title.id, 0);
+    const master = await getMasterBot(env);
+    const username = master?.telegram_username?.replace(/^@/, "");
+    const keyboard = username
+      ? { reply_markup: { inline_keyboard: [[{ text: "⬅️ العودة إلى FINDLY Master", url: "https://t.me/" + username }]] } }
+      : {};
+    await sendMessage(env, bot.slug, chatId, "اختار الموسم والحلقة من FINDLY Master، ومن بعد اضغط على مشاهدة الحلقة باش توصلك هنا مباشرة.", keyboard);
     return;
   }
 
@@ -1055,30 +1059,49 @@ async function sendFavorites(env, bot, chatId, telegramUserId) {
 
 async function sendSeasons(env, bot, chatId, titleId, requestedPage = 0) {
   const supabase = getSupabase(env);
-  const fetchPage = (page) => supabase
-    .from("movie_seasons")
-    .select("id,season_number,name,episode_count", { count: "exact" })
+  // Only seasons with at least one active uploaded episode asset are visible.
+  const { data: assets, error: assetsError } = await supabase
+    .from("movie_media_assets")
+    .select("episode_id")
     .eq("title_id", titleId)
     .eq("status", "active")
-    .order("season_number", { ascending: true })
-    .range(page * SERIES_SEASON_PAGE_SIZE, (page + 1) * SERIES_SEASON_PAGE_SIZE - 1);
-
-  let result = await fetchPage(requestedPage);
-  if (result.error) throw result.error;
-  const totalSeasons = Number(result.count || 0);
-  const totalPages = Math.max(1, Math.ceil(totalSeasons / SERIES_SEASON_PAGE_SIZE));
-  const page = Math.min(requestedPage, totalPages - 1);
-  if (page !== requestedPage) {
-    result = await fetchPage(page);
-    if (result.error) throw result.error;
-  }
-  const seasons = result.data || [];
-  if (!totalSeasons) {
-    await sendMessage(env, bot.slug, chatId, "مازال ما تسجلوش المواسم ديال هاد المسلسل.");
+    .not("episode_id", "is", null);
+  if (assetsError) throw assetsError;
+  const episodeIds = [...new Set((assets || []).map((asset) => asset.episode_id).filter(Boolean))];
+  if (!episodeIds.length) {
+    await sendMessage(env, bot.slug, chatId, "مازال ما ترفع حتى حلقة متاحة لهاد المسلسل.");
     return;
   }
-  const keyboard = seasons.map((season) => [{
-    text: "الموسم " + season.season_number + (season.episode_count != null ? " · " + season.episode_count + " حلقة" : ""),
+
+  const { data: episodes, error: episodesError } = await supabase
+    .from("movie_episodes")
+    .select("id,season_id")
+    .in("id", episodeIds)
+    .eq("status", "active");
+  if (episodesError) throw episodesError;
+  const counts = new Map();
+  for (const episode of episodes || []) counts.set(episode.season_id, (counts.get(episode.season_id) || 0) + 1);
+  const seasonIds = [...counts.keys()];
+  if (!seasonIds.length) {
+    await sendMessage(env, bot.slug, chatId, "مازال ما ترفع حتى حلقة متاحة لهاد المسلسل.");
+    return;
+  }
+
+  const { data: allSeasons, error: seasonsError } = await supabase
+    .from("movie_seasons")
+    .select("id,season_number,name")
+    .eq("title_id", titleId)
+    .eq("status", "active")
+    .in("id", seasonIds)
+    .order("season_number", { ascending: true });
+  if (seasonsError) throw seasonsError;
+  const seasons = allSeasons || [];
+  const totalSeasons = seasons.length;
+  const totalPages = Math.max(1, Math.ceil(totalSeasons / SERIES_SEASON_PAGE_SIZE));
+  const page = Math.min(Math.max(0, requestedPage), totalPages - 1);
+  const visibleSeasons = seasons.slice(page * SERIES_SEASON_PAGE_SIZE, (page + 1) * SERIES_SEASON_PAGE_SIZE);
+  const keyboard = visibleSeasons.map((season) => [{
+    text: "الموسم " + season.season_number + " · " + (counts.get(season.id) || 0) + " حلقة",
     callback_data: "movies:season:" + season.id + ":0"
   }]);
   const navigation = [];
@@ -1087,11 +1110,12 @@ async function sendSeasons(env, bot, chatId, titleId, requestedPage = 0) {
   if (navigation.length) keyboard.push(navigation);
   keyboard.push([{ text: "⬅️ رجوع", callback_data: "movies:home" }]);
   await sendMessage(env, bot.slug, chatId,
-    "<b>📚 المواسم</b>\n\nاختار الموسم:" +
+    "<b>📚 المواسم المتاحة</b>\n\nاختار الموسم:" +
     (totalPages > 1 ? "\n<i>صفحة " + (page + 1) + " من " + totalPages + "</i>" : ""),
     { reply_markup: { inline_keyboard: keyboard } }
   );
 }
+
 
 async function sendEpisodes(env, bot, chatId, seasonId, requestedPage = 0) {
   const supabase = getSupabase(env);
@@ -1107,24 +1131,32 @@ async function sendEpisodes(env, bot, chatId, seasonId, requestedPage = 0) {
     return;
   }
 
-  const fetchPage = (page) => supabase
-    .from("movie_episodes")
-    .select("id,episode_number,name,runtime_minutes,status", { count: "exact" })
-    .eq("season_id", seasonId)
+  // Show only episodes with at least one active uploaded file.
+  const { data: assets, error: assetsError } = await supabase
+    .from("movie_media_assets")
+    .select("episode_id")
+    .eq("title_id", season.title_id)
     .eq("status", "active")
-    .order("episode_number", { ascending: true })
-    .range(page * SERIES_EPISODE_PAGE_SIZE, (page + 1) * SERIES_EPISODE_PAGE_SIZE - 1);
-
-  let result = await fetchPage(requestedPage);
-  if (result.error) throw result.error;
-  const totalEpisodes = Number(result.count || 0);
-  const totalPages = Math.max(1, Math.ceil(totalEpisodes / SERIES_EPISODE_PAGE_SIZE));
-  const page = Math.min(requestedPage, totalPages - 1);
-  if (page !== requestedPage) {
-    result = await fetchPage(page);
-    if (result.error) throw result.error;
+    .not("episode_id", "is", null);
+  if (assetsError) throw assetsError;
+  const episodeIds = [...new Set((assets || []).map((asset) => asset.episode_id).filter(Boolean))];
+  let episodes = [];
+  if (episodeIds.length) {
+    const { data, error } = await supabase
+      .from("movie_episodes")
+      .select("id,episode_number,name,runtime_minutes,status")
+      .eq("season_id", seasonId)
+      .eq("status", "active")
+      .in("id", episodeIds)
+      .order("episode_number", { ascending: true });
+    if (error) throw error;
+    episodes = data || [];
   }
-  const episodes = result.data || [];
+
+  const totalEpisodes = episodes.length;
+  const totalPages = Math.max(1, Math.ceil(totalEpisodes / SERIES_EPISODE_PAGE_SIZE));
+  const page = Math.min(Math.max(0, requestedPage), totalPages - 1);
+  const visibleEpisodes = episodes.slice(page * SERIES_EPISODE_PAGE_SIZE, (page + 1) * SERIES_EPISODE_PAGE_SIZE);
 
   let watchUsername = null;
   if (bot.slug === "findly") {
@@ -1135,7 +1167,7 @@ async function sendEpisodes(env, bot, chatId, seasonId, requestedPage = 0) {
   }
 
   const keyboard = [];
-  const lines = episodes.map((episode) => {
+  const lines = visibleEpisodes.map((episode) => {
     if (watchUsername) {
       keyboard.push([{
         text: "▶️ الحلقة " + String(episode.episode_number).padStart(2, "0"),
@@ -1154,8 +1186,8 @@ async function sendEpisodes(env, bot, chatId, seasonId, requestedPage = 0) {
   keyboard.push([{ text: "⬅️ رجوع للمواسم", callback_data: "movies:seasons:" + season.title_id + ":0" }]);
 
   await sendMessage(env, bot.slug, chatId,
-    "<b>🎞️ الحلقات · الموسم " + season.season_number + "</b>\n\n" +
-    (lines.length ? lines.join("\n\n") : "مازال ما تسجلات حتى حلقة نشطة.") +
+    "<b>🎞️ الحلقات المتاحة · الموسم " + season.season_number + "</b>\n\n" +
+    (lines.length ? lines.join("\n\n") : "مازال ما ترفع حتى حلقة متاحة فهاد الموسم.") +
     (totalPages > 1 ? "\n\n<i>صفحة " + (page + 1) + " من " + totalPages + " · " + totalEpisodes + " حلقة</i>" : ""),
     { parse_mode: "HTML", reply_markup: { inline_keyboard: keyboard } }
   );
