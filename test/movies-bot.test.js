@@ -324,3 +324,11 @@ test("series seasons and episodes use count-based range pagination instead of a 
   assert.match(source, /\.select\("id,season_number,name,episode_count", \{ count: "exact" \}\)[\s\S]*?\.range\(page \* SERIES_SEASON_PAGE_SIZE/);
   assert.doesNotMatch(source, /\.limit\(50\)/);
 });
+
+
+test("Watch Bot routes series title links to the season picker instead of querying movie-level media", () => {
+  const source = readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
+  const watchTitle = source.slice(source.indexOf("async function sendWatchTitle("), source.indexOf("async function sendMovieTitleMedia("));
+  assert.match(watchTitle, /if \(title\.media_type === "series"\) \{[\s\S]*?await sendSeasons\(env, bot, chatId, title\.id, 0\);[\s\S]*?return;[\s\S]*?\}/);
+  assert.ok(watchTitle.indexOf('if (title.media_type === "series")') < watchTitle.indexOf('.is("episode_id", null)'));
+});
