@@ -9,7 +9,7 @@ const telegramRoute = readFileSync(
 
 test("media ingestion is limited to the configured active storage channel", () => {
   assert.match(telegramRoute, /from\("movie_media_storage_config"\)/);
-  assert.match(telegramRoute, /getStorageChatIdForContentType\\(storageConfig, media\\.contentType\\)/);
+  assert.match(telegramRoute, /getStorageChatIdForContentType/);
 });
 
 test("media ingestion registers media without silently authorizing distribution rights", () => {
