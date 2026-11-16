@@ -303,3 +303,14 @@ test("parses season episode pagination callbacks and rejects invalid pages", () 
   assert.equal(parseMoviesCallback("movies:season:" + seasonId + ":-1"), null);
   assert.equal(parseMoviesCallback("movies:season:" + seasonId + ":1.5"), null);
 });
+
+test("parses season list pagination callbacks for series with many seasons", () => {
+  const titleId = "550e8400-e29b-41d4-a716-446655440000";
+  assert.deepEqual(parseMoviesCallback("movies:seasons:" + titleId + ":2"), {
+    action: "seasons", id: titleId, page: 2
+  });
+  assert.deepEqual(parseMoviesCallback("movies:seasons:" + titleId), {
+    action: "seasons", id: titleId, page: 0
+  });
+  assert.equal(parseMoviesCallback("movies:seasons:" + titleId + ":-1"), null);
+});
