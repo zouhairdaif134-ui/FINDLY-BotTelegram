@@ -31,12 +31,18 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
     trackAnalyticsEvent("miniapp_watch_clicked",{title_id:titleId});
     const attemptId=crypto.randomUUID();
     trackProviderAdEvent("adsgram","request",attemptId,titleId);
+    let adTimeout=null;
     try{
       const adsgram=window.Adsgram;
       if(typeof adsgram?.init==="function"){
         const controller=adsgram.init({blockId:"int-59890"});
         if(typeof controller?.show==="function"){
-          await controller.show();
+          await Promise.race([
+            controller.show(),
+            new Promise((_,reject)=>{
+              adTimeout=window.setTimeout(()=>reject(new Error("AdsGram interstitial timed out")),8000);
+            })
+          ]);
           trackProviderAdEvent("adsgram","resolved",attemptId,titleId);
         }else{
           trackProviderAdEvent("adsgram","failed",attemptId,titleId);
@@ -48,6 +54,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
       trackProviderAdEvent("adsgram","failed",attemptId,titleId);
       console.warn("FINDLY AdsGram interstitial unavailable; continuing to Watch Bot",error);
     }finally{
+      if(adTimeout!==null)clearTimeout(adTimeout);
       watchAdPending=false;
     }
     return true;
