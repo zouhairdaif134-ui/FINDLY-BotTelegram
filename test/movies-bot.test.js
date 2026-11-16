@@ -9,7 +9,8 @@ import {
   resolveMovieWatchAction,
   buildMovieMediaDeliveryRequest,
   isMovieDeepLinkBot,
-  buildMasterWatchButton
+  buildMasterWatchButton,
+  buildMasterEpisodeWatchButton
 } from "../src/lib/movies-bot.js";
 import { getTelegramToken } from "../src/lib/telegram.js";
 
@@ -357,3 +358,23 @@ test("series storage upload automatically upserts missing season and episode rec
 });
 
 // CI trigger: validate the final combined Master/Watch and uploaded-only series behavior.
+
+
+test("episode watch selection is a Master callback and preserves the Watch Bot deep link", () => {
+  const episodeId = "550e8400-e29b-41d4-a716-446655440000";
+  assert.deepEqual(parseMoviesCallback("movies:episode:" + episodeId), {
+    action: "episode", id: episodeId
+  });
+  assert.equal(parseMoviesCallback("movies:episode:not-a-uuid"), null);
+  assert.deepEqual(buildMasterEpisodeWatchButton("@FindlyMovies2026Bot", episodeId), {
+    text: "▶️ فتح الحلقة في FINDLY Watch",
+    url: "https://t.me/FindlyMovies2026Bot?start=episode_" + episodeId
+  });
+  assert.equal(buildMasterEpisodeWatchButton("", episodeId), null);
+
+  const source = readFileSync(new URL("../src/lib/movies-bot.js", import.meta.url), "utf8");
+  const episodes = source.slice(source.indexOf("async function sendEpisodes("), source.indexOf("export async function showMoviesSearchPrompt("));
+  assert.match(episodes, /callback_data: "movies:episode:" \+ episode\.id/);
+  assert.doesNotMatch(episodes, /url: "https:\/\/t\.me\/" \+ watchUsername \+ "\?start=episode_/);
+  assert.match(source, /parsed\.action === "episode"[\s\S]*?buildMasterEpisodeWatchButton/);
+});
