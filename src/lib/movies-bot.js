@@ -1137,7 +1137,7 @@ async function sendEpisodes(env, bot, chatId, seasonId, requestedPage = 0) {
       }]);
     }
     return "<b>" + episode.episode_number + ". " +
-      escapeHtml(Array.from(String(episode.name || ("الحلقة " + episode.episode_number))).slice(0, 100).join("")) + "</b>" +
+      escapeHtml(Array.from(String(episode.name || ("الحلقة " + episode.episode_number))).slice(0, 80).join("")) + "</b>" +
       (episode.runtime_minutes ? " · " + episode.runtime_minutes + " دقيقة" : "");
   });
 
