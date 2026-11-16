@@ -1353,10 +1353,21 @@ async function processTelegramUpdate(
 
   const channelPost = update.channel_post || update.edited_channel_post;
   if (bot.slug === "movies" && channelPost) {
+    const supabase = getSupabase(env);
+    if (channelPost.chat?.id && channelPost.chat?.type === "channel") {
+      const { error: channelSeenError } = await supabase
+        .from("telegram_storage_channel_candidates")
+        .upsert({
+          chat_id: String(channelPost.chat.id),
+          channel_title: channelPost.chat.title || null,
+          bot_id: bot.id,
+          last_seen_at: new Date().toISOString()
+        }, { onConflict: "chat_id" });
+      if (channelSeenError) throw channelSeenError;
+    }
     const media = extractTelegramMedia(channelPost);
     if (!media) return { ok: true, media_ignored: true };
 
-    const supabase = getSupabase(env);
     const { data: storageConfig, error: storageConfigError } = await supabase
       .from("movie_media_storage_config")
       .select("active_storage_chat_id,series_storage_chat_id")
