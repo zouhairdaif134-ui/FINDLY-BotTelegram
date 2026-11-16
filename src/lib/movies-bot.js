@@ -151,7 +151,7 @@ export function parseMoviesCallback(value) {
   }
   if (["seasons", "season"].includes(action) && UUID_RE.test(parts[2] || "")) {
     const page = Number(parts[3] || 0);
-    if (!Number.isInteger(page) || page < 0) return null;
+    if (!Number.isSafeInteger(page) || page < 0) return null;
     return { action, id: parts[2], page };
   }
   return null;
