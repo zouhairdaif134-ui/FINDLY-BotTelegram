@@ -146,6 +146,7 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   app.addEventListener("touchstart",event=>{const target=event.target.closest("[data-open]");if(target)prefetchDetails(target.dataset.open);},{passive:true});
   app.addEventListener("click",async event=>{
     if(event.target.classList.contains("share-overlay")){state.shareOpen=false;render();return;}
+    const episodeLink=event.target.closest("a[data-watch-episode]");if(episodeLink){event.preventDefault();const url=episodeLink.href;if(tg?.openTelegramLink)tg.openTelegramLink(url);else window.location.assign(url);return;}
     const b=event.target.closest("button");if(!b)return;
     if(b.dataset.open)return openDetails(b.dataset.open);
     if(b.dataset.watch){
