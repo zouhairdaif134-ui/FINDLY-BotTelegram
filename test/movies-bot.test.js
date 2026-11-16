@@ -335,7 +335,7 @@ test("series navigation stays in Master and Watch Bot opens only the selected ep
   assert.match(titleDetails, /text: "▶️ مشاهدة",\s*callback_data: "movies:seasons:" \+ title\.id/);
   assert.match(titleDetails, /title\.media_type === "series" && bot\.slug === "findly"/);
   assert.match(episodes, /https:\/\/t\.me\/.*\?start=episode_/);
-  assert.match(watchTitle, /if \(title\.media_type === "series"\)[\s\S]*?اختار الحلقة من FINDLY Master/);
+  assert.match(watchTitle, /if \(title\.media_type === "series"\)[\s\S]*?اختار الموسم والحلقة من FINDLY Master/);
   assert.doesNotMatch(watchTitle, /sendSeasons\(env, bot, chatId/);
   assert.ok(watchTitle.indexOf('.is("episode_id", null)') > watchTitle.indexOf('if (title.media_type === "series")'));
 });
