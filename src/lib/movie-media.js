@@ -125,10 +125,6 @@ export function getTelegramMediaDelivery(mediaType) {
   return deliveries[mediaType] || null;
 }
 
-export function canDistributeMovieMedia(rightsStatus) {
-  return rightsStatus === "authorized";
-}
-
 export function getStorageChatIdForContentType(config, contentType) {
   if (contentType === "series") return config?.series_storage_chat_id || null;
   if (contentType === "movie") return config?.active_storage_chat_id || null;
