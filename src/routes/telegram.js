@@ -1462,7 +1462,7 @@ async function processTelegramUpdate(
     if (mediaError) throw mediaError;
 
     const statusMessage = registeredAsset.status === "active"
-      ? "تم تسجيل الملف بنجاح. التوفر للمشاهدة يخضع لمراجعة الوسيط وحقوق التوزيع."
+      ? "تم تسجيل الملف بنجاح وأصبح متاحاً للمشاهدة."
       : "تم تسجيل الملف، لكن حالته الحالية لا تسمح بعرضه للمشاهدة.";
 
     await sendMessage(
