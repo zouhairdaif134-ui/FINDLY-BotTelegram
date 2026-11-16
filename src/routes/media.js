@@ -5,7 +5,6 @@ import { isAllowedMovieMediaStatusTransition, canApproveMovieMediaAsset } from "
 
 const PERMISSION = "media.manage";
 const ASSET_STATUSES = new Set(["pending_review", "active", "inactive", "rejected"]);
-const RIGHTS_STATUSES = new Set(["unverified", "authorized", "not_authorized"]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function makeError(message, status = 400, code = "BAD_REQUEST") {
@@ -119,7 +118,7 @@ async function verifyConfiguredStorageChannel(env, chatId, request) {
 async function readStorageConfig(supabase) {
   const { data, error } = await supabase
     .from("movie_media_storage_config")
-    .select("id,active_storage_chat_id,active_channel_title,updated_at")
+    .select("id,active_storage_chat_id,active_channel_title,series_storage_chat_id,series_channel_title,updated_at")
     .eq("id", 1)
     .maybeSingle();
   if (error) throw error;
@@ -183,21 +182,7 @@ async function listAssets(env, status) {
   const assets = data || [];
   if (!assets.length) return assets;
 
-  const titleIds = [...new Set(assets.map((asset) => asset.title_id).filter(Boolean))];
-  const { data: rightsRows, error: rightsError } = await getSupabase(env)
-    .from("movie_distribution_rights")
-    .select("title_id,status")
-    .in("title_id", titleIds);
-  if (rightsError) throw rightsError;
-  const rightsByTitle = new Map((rightsRows || []).map((row) => [row.title_id, row.status]));
-
-  return assets.map((asset) => ({
-    ...asset,
-    movie_titles: {
-      ...(asset.movie_titles || {}),
-      distribution_rights_status: rightsByTitle.get(asset.title_id) || "unverified"
-    }
-  }));
+  return assets;
 }
 
 async function updateAssetStatus(env, assetId, nextStatus) {
@@ -235,43 +220,6 @@ async function updateAssetStatus(env, assetId, nextStatus) {
   return data;
 }
 
-async function updateDistributionRights(env, titleId, body, auth) {
-  if (!UUID_RE.test(titleId || "")) throw makeError("معرّف العنوان غير صالح.");
-  const status = body?.status;
-  if (!RIGHTS_STATUSES.has(status)) throw makeError("حالة حقوق التوزيع غير صالحة.");
-  if (status !== "unverified" && body?.confirmation !== true) {
-    throw makeError("خاص تأكد العملية صراحةً قبل تغيير حالة حقوق التوزيع.");
-  }
-
-  const supabase = getSupabase(env);
-  const { data: title, error: titleError } = await supabase
-    .from("movie_titles")
-    .select("id,title")
-    .eq("id", titleId)
-    .maybeSingle();
-  if (titleError) throw titleError;
-  if (!title) throw makeError("العنوان غير موجود.", 404, "NOT_FOUND");
-
-  const reviewedAt = status === "unverified" ? null : new Date().toISOString();
-  const reviewedBy = status === "unverified" ? null : auth.userId;
-  const { data: rights, error } = await supabase
-    .from("movie_distribution_rights")
-    .upsert({
-      title_id: titleId,
-      status,
-      reviewed_at: reviewedAt,
-      reviewed_by: reviewedBy
-    }, { onConflict: "title_id" })
-    .select("title_id,status,reviewed_at")
-    .single();
-  if (error) throw error;
-  return {
-    id: title.id,
-    title: title.title,
-    distribution_rights_status: rights.status,
-    distribution_rights_reviewed_at: rights.reviewed_at
-  };
-}
 
 export async function handleMediaRoute(env, request, url, helpers) {
   if (url.pathname !== "/api/media" && !url.pathname.startsWith("/api/media/")) return null;
@@ -306,9 +254,10 @@ export async function handleMediaRoute(env, request, url, helpers) {
       const supabase = getSupabase(env);
       const existing = await readStorageConfig(supabase);
       const verified = await verifyConfiguredStorageChannel(env, body?.chat_id, request);
-      if (existing?.active_storage_chat_id &&
-          existing.active_storage_chat_id !== verified.chat_id &&
-          body?.confirm_change !== true) {
+      const contentType = body?.content_type === "series" ? "series" : body?.content_type === "movie" ? "movie" : null;
+      if (!contentType) throw makeError("حدد نوع قناة التخزين: movie أو series.");
+      const previousChatId = contentType === "series" ? existing?.series_storage_chat_id : existing?.active_storage_chat_id;
+      if (previousChatId && previousChatId !== verified.chat_id && body?.confirm_change !== true) {
         throw makeError("تغيير قناة التخزين يحتاج إلى تأكيد صريح.", 409, "STORAGE_CHANNEL_CONFIRMATION_REQUIRED");
       }
 
@@ -316,11 +265,12 @@ export async function handleMediaRoute(env, request, url, helpers) {
         .from("movie_media_storage_config")
         .upsert({
           id: 1,
-          active_storage_chat_id: verified.chat_id,
-          active_channel_title: verified.title,
+          ...(contentType === "series"
+            ? { series_storage_chat_id: verified.chat_id, series_channel_title: verified.title }
+            : { active_storage_chat_id: verified.chat_id, active_channel_title: verified.title }),
           updated_by: auth.userId
         }, { onConflict: "id" })
-        .select("id,active_storage_chat_id,active_channel_title,updated_at")
+        .select("id,active_storage_chat_id,active_channel_title,series_storage_chat_id,series_channel_title,updated_at")
         .single();
       if (error) throw error;
 
@@ -330,9 +280,10 @@ export async function handleMediaRoute(env, request, url, helpers) {
         action: auditAction,
         entityType,
         details: {
-          previous_storage_chat_id: existing?.active_storage_chat_id || null,
-          active_storage_chat_id: verified.chat_id,
-          active_channel_title: verified.title
+          content_type: contentType,
+          previous_storage_chat_id: previousChatId || null,
+          configured_storage_chat_id: verified.chat_id,
+          configured_channel_title: verified.title
         }
       });
       return send(helpers, request, { ...data, audit_logged: auditLogged });
@@ -349,20 +300,6 @@ export async function handleMediaRoute(env, request, url, helpers) {
         entityType: "movie",
         entityId,
         details: { media_asset_id: updated.id, status: updated.status }
-      });
-      return send(helpers, request, { ...updated, audit_logged: auditLogged });
-    }
-
-    if (resource === "titles" && parts.length === 3 && action === "rights" && request.method === "POST") {
-      const body = await helpers.readJson(request);
-      const updated = await updateDistributionRights(env, id, body, auth);
-      auditAction = "media.rights.update";
-      entityId = updated.id;
-      const auditLogged = await auditEvent(env, auth, {
-        action: auditAction,
-        entityType: "movie",
-        entityId,
-        details: { distribution_rights_status: updated.distribution_rights_status }
       });
       return send(helpers, request, { ...updated, audit_logged: auditLogged });
     }

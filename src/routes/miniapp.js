@@ -149,26 +149,24 @@ async function decorateTitles(supabase, titles) {
   const ids = (titles || []).map((title) => title.id);
   if (!ids.length) return [];
 
-  const [genreResult, rightsResult, mediaResult] = await Promise.all([
+  const [genreResult, mediaResult] = await Promise.all([
     supabase.from("movie_title_genres").select("title_id,movie_genres(name,slug)").in("title_id", ids),
-    supabase.from("movie_distribution_rights").select("title_id,status").in("title_id", ids).eq("status", "authorized"),
     supabase.from("movie_media_assets").select("title_id,id,file_id,media_type").in("title_id", ids).eq("status", "active")
   ]);
-  for (const result of [genreResult, rightsResult, mediaResult]) if (result.error) throw result.error;
+  for (const result of [genreResult, mediaResult]) if (result.error) throw result.error;
 
   const genresByTitle = new Map();
   for (const row of genreResult.data || []) {
     if (!genresByTitle.has(row.title_id)) genresByTitle.set(row.title_id, []);
     if (row.movie_genres?.name) genresByTitle.get(row.title_id).push(row.movie_genres.name);
   }
-  const authorized = new Set((rightsResult.data || []).map((row) => row.title_id));
   const hasActiveMedia = new Set((mediaResult.data || []).filter((row) => row.file_id && ["video", "document"].includes(row.media_type)).map((row) => row.title_id));
-  const needsWatchBot = (titles || []).some((title) => authorized.has(title.id) && hasActiveMedia.has(title.id));
+  const needsWatchBot = (titles || []).some((title) => hasActiveMedia.has(title.id));
   const watchUsername = needsWatchBot ? await getWatchBotUsername(supabase) : "";
   const validWatchUsername = /^[a-zA-Z0-9_]{5,32}$/.test(watchUsername);
 
   return (titles || []).map((title) => {
-    const watchAvailable = authorized.has(title.id) && hasActiveMedia.has(title.id) && validWatchUsername;
+    const watchAvailable = hasActiveMedia.has(title.id) && validWatchUsername;
     return {
       ...title,
       overview: truncateOverview(title.overview, 160),
@@ -284,19 +282,18 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
   let cached = detailsCache.get(titleId);
 
   if (!cached || cached.expiresAt <= now) {
-    const [titleResult, genreResult, rightsResult, mediaResult, providerResult, seasonResult, userFavoriteResult] = await Promise.all([
+    const [titleResult, genreResult, mediaResult, providerResult, seasonResult, userFavoriteResult] = await Promise.all([
       supabase.from("movie_titles")
         .select("id,title,original_title,media_type,release_year,release_date,runtime_minutes,rating,overview,full_plot_summary,poster_path,backdrop_path")
         .eq("id", titleId).eq("status", "active").maybeSingle(),
       supabase.from("movie_title_genres").select("movie_genres(name,slug)").eq("title_id", titleId),
-      supabase.from("movie_distribution_rights").select("status").eq("title_id", titleId).maybeSingle(),
       supabase.from("movie_media_assets").select("id,file_id,media_type").eq("title_id", titleId).eq("status", "active").limit(10),
       supabase.from("movie_provider_availability").select("provider,region_code,availability_type,provider_url").eq("title_id", titleId).eq("is_active", true),
       supabase.from("movie_seasons").select("id,season_number,name,overview,air_date,episode_count,poster_path")
         .eq("title_id", titleId).eq("status", "active").order("season_number", { ascending: true }),
       favoritePromise
     ]);
-    for (const result of [titleResult, genreResult, rightsResult, mediaResult, providerResult, seasonResult, userFavoriteResult]) if (result.error) throw result.error;
+    for (const result of [titleResult, genreResult, mediaResult, providerResult, seasonResult, userFavoriteResult]) if (result.error) throw result.error;
     favoriteResult = userFavoriteResult;
     const title = titleResult.data;
     if (!title) return json({ ok: false, error: "TITLE_NOT_FOUND" }, 404);
@@ -311,7 +308,7 @@ async function getTitleDetails(env, userId, titleId, includeFullPlot = false) {
       seasons = seasons.map((season) => ({ ...season, episodes: (episodes || []).filter((episode) => episode.season_id === season.id) }));
     }
 
-    const watchAvailable = rightsResult.data?.status === "authorized" && (mediaResult.data || []).some((asset) => asset.file_id && ["video", "document"].includes(asset.media_type));
+    const watchAvailable = (mediaResult.data || []).some((asset) => asset.file_id && ["video", "document"].includes(asset.media_type));
     const username = watchAvailable ? await getWatchBotUsername(supabase) : "";
     const watchUrl = watchAvailable && /^[a-zA-Z0-9_]{5,32}$/.test(username)
       ? "https://t.me/" + username + "?start=movie_" + titleId + "_watch"

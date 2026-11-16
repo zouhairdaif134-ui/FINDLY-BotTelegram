@@ -108,7 +108,7 @@ export function extractTelegramMedia(channelPost) {
     titleId: link.titleId,
     title: link.title,
     releaseYear: link.releaseYear,
-    ...(link.mediaType ? { mediaType: link.mediaType } : {}),
+    contentType: link.mediaType || (link.seasonNumber != null ? "series" : "movie"),
     seasonNumber: link.seasonNumber ?? null,
     episodeNumber: link.episodeNumber ?? null,
     quality: link.quality
@@ -125,8 +125,10 @@ export function getTelegramMediaDelivery(mediaType) {
   return deliveries[mediaType] || null;
 }
 
-export function canDistributeMovieMedia(rightsStatus) {
-  return rightsStatus === "authorized";
+export function getStorageChatIdForContentType(config, contentType) {
+  if (contentType === "series") return config?.series_storage_chat_id || null;
+  if (contentType === "movie") return config?.active_storage_chat_id || null;
+  return null;
 }
 
 export function isActiveMovieStorageChannel(messageChatId, activeStorageChatId) {

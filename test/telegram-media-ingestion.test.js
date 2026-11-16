@@ -9,17 +9,17 @@ const telegramRoute = readFileSync(
 
 test("media ingestion is limited to the configured active storage channel", () => {
   assert.match(telegramRoute, /from\("movie_media_storage_config"\)/);
-  assert.match(telegramRoute, /isActiveMovieStorageChannel\(media\.chatId, storageConfig\?\.active_storage_chat_id\)/);
+  assert.match(telegramRoute, /getStorageChatIdForContentType/);
 });
 
-test("media ingestion activates uploaded assets and authorizes owner-declared distribution on upload", () => {
+test("media ingestion registers media without silently authorizing distribution rights", () => {
   assert.match(telegramRoute, /\.upsert\(\{[\s\S]*?quality_label: media\.quality,[\s\S]*?status: "active"[\s\S]*?\}\s*,\s*\{ onConflict:/);
-  assert.match(telegramRoute, /تم ربط الملف بالعنوان وتفعيله تلقائياً/);
+  assert.match(telegramRoute, /تم تسجيل الملف بنجاح/);
   assert.match(telegramRoute, /episode_id: linkedEpisodeId/);
   assert.match(telegramRoute, /from\("movie_seasons"\)/);
   assert.match(telegramRoute, /from\("movie_episodes"\)/);
-  assert.match(telegramRoute, /\.eq\("media_type", media\.mediaType \|\| "movie"\)/);
-  assert.match(telegramRoute, /from\("movie_distribution_rights"\)[\s\S]*?upsert\(\{[\s\S]*?title_id: linkedTitleId,[\s\S]*?status: "authorized"/);
+  assert.match(telegramRoute, /\.eq\("media_type", media\.contentType \|\| "movie"\)/);
+  assert.doesNotMatch(telegramRoute, /status: "authorized"/);
   assert.doesNotMatch(telegramRoute, /metadata_status:\s*"authorized_media_available"/);
 });
 
