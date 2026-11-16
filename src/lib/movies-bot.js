@@ -711,7 +711,7 @@ async function sendTitle(env, bot, chatId, titleId, telegramUserId = null) {
     keyboard.push([{ text: "📖 قراءة الملخص الكامل (حرق الأحداث)", callback_data: "movies:plot:" + title.id }]);
   }
   if (title.media_type === "series" && bot.slug === "findly") {
-    keyboard.push([{ text: "📚 المواسم والحلقات", callback_data: "movies:seasons:" + title.id }]);
+    keyboard.push([{ text: "▶️ مشاهدة", callback_data: "movies:seasons:" + title.id }]);
   }
 
   if (bot.slug === "movies") {
@@ -893,10 +893,14 @@ async function sendWatchTitle(env, bot, chatId, titleId) {
     return;
   }
 
-  // Series media belongs to episodes, never to the title-level movie asset query.
-  // Open the existing season/episode browser; the movie delivery path below stays unchanged.
+  // Watch Bot is delivery-only. Series browsing and episode selection stay in Master Bot.
   if (title.media_type === "series") {
-    await sendSeasons(env, bot, chatId, title.id, 0);
+    const master = await getMasterBot(env);
+    const username = master?.telegram_username?.replace(/^@/, "");
+    const keyboard = username
+      ? { reply_markup: { inline_keyboard: [[{ text: "⬅️ العودة إلى FINDLY Master", url: "https://t.me/" + username }]] } }
+      : {};
+    await sendMessage(env, bot.slug, chatId, "اختار الموسم والحلقة من FINDLY Master، ومن بعد اضغط على مشاهدة الحلقة باش توصلك هنا مباشرة.", keyboard);
     return;
   }
 
@@ -1085,7 +1089,7 @@ async function sendSeasons(env, bot, chatId, titleId, requestedPage = 0) {
   if (page > 0) navigation.push({ text: "⬅️ السابقة", callback_data: "movies:seasons:" + titleId + ":" + (page - 1) });
   if (page + 1 < totalPages) navigation.push({ text: "التالية ➡️", callback_data: "movies:seasons:" + titleId + ":" + (page + 1) });
   if (navigation.length) keyboard.push(navigation);
-  keyboard.push([{ text: "⬅️ رجوع", callback_data: "movies:home" }]);
+  keyboard.push([{ text: "⬅️ رجوع لتفاصيل المسلسل", callback_data: "movies:title:" + titleId }]);
   await sendMessage(env, bot.slug, chatId,
     "<b>📚 المواسم</b>\n\nاختار الموسم:" +
     (totalPages > 1 ? "\n<i>صفحة " + (page + 1) + " من " + totalPages + "</i>" : ""),
