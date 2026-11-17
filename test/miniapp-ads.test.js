@@ -219,3 +219,13 @@ test("AdsGram no-fill or a stalled SDK never blocks the Watch Bot handoff", asyn
   assert.match(gate, /AdsGram interstitial unavailable; continuing to Watch Bot/);
   assert.match(gate, /return true;/);
 });
+
+
+test("Watch Bot handoff closes the Mini App after opening the Telegram deep link", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const app = await readFile(new URL("../miniapp/app.js", import.meta.url), "utf8");
+  const handoff = app.slice(app.indexOf("function openWatchBotLink"), app.indexOf("function shareSheet"));
+  assert.match(handoff, /tg\.openTelegramLink\(url\)/);
+  assert.match(handoff, /tg\.close\(\)/);
+  assert.ok(handoff.indexOf("tg.openTelegramLink(url)") < handoff.indexOf("tg.close()"));
+});

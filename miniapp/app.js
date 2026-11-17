@@ -155,12 +155,22 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   function openWatchBotLink(url){
     if(!url)return;
     if(!tg?.openTelegramLink){window.location.assign(url);return;}
+    let closeTimer=null;
     let fallbackTimer=null;
-    const cleanup=()=>{if(fallbackTimer!==null)clearTimeout(fallbackTimer);document.removeEventListener("visibilitychange",onVisibilityChange);};
+    const cleanup=()=>{
+      if(closeTimer!==null)clearTimeout(closeTimer);
+      if(fallbackTimer!==null)clearTimeout(fallbackTimer);
+      document.removeEventListener("visibilitychange",onVisibilityChange);
+    };
     const onVisibilityChange=()=>{if(document.visibilityState==="hidden")cleanup();};
     document.addEventListener("visibilitychange",onVisibilityChange);
     try{
       tg.openTelegramLink(url);
+      closeTimer=window.setTimeout(()=>{
+        if(document.visibilityState!=="hidden"){
+          try{tg.close();}catch(error){console.warn("FINDLY could not close Mini App after Watch Bot handoff",error);}
+        }
+      },250);
       fallbackTimer=window.setTimeout(()=>{
         const stillVisible=document.visibilityState!=="hidden";
         cleanup();
