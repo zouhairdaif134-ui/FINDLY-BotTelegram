@@ -254,3 +254,4 @@ import { DEFAULT_AD_CONFIG, normalizeAdConfig, adSlot, canDisplayAd, readAdFrequ
   if(tg?.BackButton)tg.BackButton.onClick(()=>{if(state.shareOpen){state.shareOpen=false;render();}else if(state.activeTitle)closeDetails();else goTab("home");});
   start();
 })();
+// Production deployment trigger: AdsGram no-fill Watch Bot fallback is enabled.
