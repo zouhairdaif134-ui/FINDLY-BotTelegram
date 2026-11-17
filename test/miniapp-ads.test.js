@@ -180,7 +180,7 @@ test("AdsGram is loaded separately and only gates the Watch Bot handoff", async 
   const html = await readFile(new URL("../miniapp/index.html", import.meta.url), "utf8");
   assert.match(html, /sad\.adsgram\.ai\/js\/sad\.min\.js/);
   assert.match(app, /blockId:"int-59890"/);
-  assert.match(app, /await controller\.show\(\)/);
+  assert.match(app, /controller\.show\(\)/);
   assert.match(app, /FINDLY AdsGram interstitial unavailable; continuing to Watch Bot/);
   assert.match(app, /function openWatchBotLink\(url\)/);
   assert.match(app, /tg\.openTelegramLink\(url\)/);
@@ -207,4 +207,15 @@ test("episode handoff falls back to the Telegram deep link when openTelegramLink
   assert.match(handoff, /openTelegramLink/);
   assert.match(handoff, /visibilitychange/);
   assert.match(handoff, /location\.assign\(url\)/);
+});
+
+
+test("AdsGram no-fill or a stalled SDK never blocks the Watch Bot handoff", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const app = await readFile(new URL("../miniapp/app.js", import.meta.url), "utf8");
+  const gate = app.slice(app.indexOf("async function showWatchInterstitial"), app.indexOf("function maybeShowMonetagInterstitial"));
+  assert.match(gate, /Promise\.race\(/);
+  assert.match(gate, /setTimeout\(/);
+  assert.match(gate, /AdsGram interstitial unavailable; continuing to Watch Bot/);
+  assert.match(gate, /return true;/);
 });
