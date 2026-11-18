@@ -13,12 +13,13 @@ test("campaign redirect is routed through the Worker before the SPA fallback", a
 });
 
 test("campaign redirect generates a bounded Telegram start token and excludes crawler traffic", async () => {
-  const route = await read("../src/index.js");
-  assert.match(route, /\/go\//);
-  assert.match(route, /campaign_visit/);
-  assert.match(route, /visitor_hash/);
-  assert.match(route, /is_bot/);
-  assert.match(route, /fc_/);
+  const tracking = await read("../src/lib/campaign-tracking.js");
+  assert.match(tracking, /\/go\//);
+  assert.match(tracking, /campaign_visit/);
+  assert.match(tracking, /visitor_hash/);
+  assert.match(tracking, /is_bot/);
+  assert.match(tracking, /fc_/);
+  assert.doesNotMatch(tracking, /CF-Connecting-IP|cf-connecting-ip/);
 });
 
 test("Master Bot links campaign starts to the saved Telegram user without bypassing normal start handling", async () => {
