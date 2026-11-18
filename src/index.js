@@ -395,7 +395,7 @@ export default {
         const isPoster = movieShareMatch[2] === "poster";
         const { data: movie, error: movieError } = await getSupabase(env)
           .from("movie_titles")
-          .select("id,media_type,title,overview,release_year,runtime_minutes,rating,poster_path,backdrop_path,status")
+          .select("id,media_type,title,original_title,overview,release_year,runtime_minutes,rating,poster_path,backdrop_path,status")
           .eq("id", movieId)
           .eq("status", "active")
           .maybeSingle();
