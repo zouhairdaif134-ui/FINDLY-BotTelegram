@@ -40,6 +40,8 @@ test("public movie share pages create uncached visit tokens and pass tracked Min
   assert.match(route, /Cache-Control": "no-store/);
   assert.match(route, /renderMovieSharePage\([\s\S]*attribution\.telegramUrl/);
   assert.match(tracking, /export async function recordMovieShareVisit/);
+  assert.match(tracking, /const visitToken = isBot \? null : randomHex\(12\)/);
+  assert.match(tracking, /telegramUrl: visitSaved && !isBot \? trackedUrl : fallbackUrl/);
   assert.match(sharing, /trackedTelegramUrl/);
   assert.match(sharing, /startapp=/);
 });
