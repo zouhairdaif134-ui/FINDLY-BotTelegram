@@ -4,6 +4,7 @@ const VISITOR_COOKIE_NAME = "findly_campaign_visitor";
 const FALLBACK_MASTER_URL = "https://t.me/FindlySearch2026Bot";
 const CAMPAIGN_SLUG_RE = /^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$/i;
 const VISIT_TOKEN_RE = /^[a-f0-9]{24}$/i;
+const MOVIE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VISITOR_ID_RE = /^[a-f0-9]{32}$/i;
 const ALLOWED_SOURCES = new Set(["facebook", "instagram", "whatsapp", "telegram", "x", "tiktok", "youtube", "direct"]);
 
@@ -19,8 +20,35 @@ export function buildCampaignStartPayload(visitToken) {
   return VISIT_TOKEN_RE.test(token) ? "fc_" + token : null;
 }
 
+export function buildMovieCampaignSlug(source, title, titleId) {
+  const requestedSource = String(source || "").trim().toLowerCase();
+  const normalizedSource = ["facebook", "instagram", "whatsapp", "telegram", "x", "tiktok", "youtube", "direct"].includes(requestedSource)
+    ? requestedSource
+    : "direct";
+  const id = String(titleId || "").toLowerCase();
+  if (!MOVIE_UUID_RE.test(id)) return null;
+  const titleSlug = String(title || "")
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[\\u0300-\\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 32) || "title";
+  return (normalizedSource + "_movie_" + titleSlug + "_" + id.replace(/-/g, "").slice(0, 8)).slice(0, 64);
+}
+
+export function buildMovieCampaignStartPayload(titleId, visitToken) {
+  const id = String(titleId || "").toLowerCase();
+  const token = String(visitToken || "").toLowerCase();
+  if (!MOVIE_UUID_RE.test(id) || !VISIT_TOKEN_RE.test(token)) return null;
+  return "movie_" + id + "_fc_" + token;
+}
+
 export function parseCampaignStartPayload(startPayload) {
-  const match = /^fc_([a-f0-9]{24})$/i.exec(String(startPayload || ""));
+  const value = String(startPayload || "");
+  const movieMatch = /^movie_([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})_fc_([a-f0-9]{24})$/i.exec(value);
+  if (movieMatch) return { visitToken: movieMatch[2].toLowerCase(), titleId: movieMatch[1].toLowerCase() };
+  const match = /^fc_([a-f0-9]{24})$/i.exec(value);
   return match ? { visitToken: match[1].toLowerCase() } : null;
 }
 
@@ -79,6 +107,68 @@ function getReferrerHost(request) {
   } catch {
     return null;
   }
+}
+
+export async function recordMovieShareVisit(env, request, movie, bot, requestedSource) {
+  const titleId = String(movie?.id || "").toLowerCase();
+  const campaignSource = ["facebook", "instagram", "whatsapp", "telegram", "x", "tiktok", "youtube", "direct"]
+    .includes(String(requestedSource || "").toLowerCase())
+    ? String(requestedSource).toLowerCase()
+    : "direct";
+  const campaignSlug = buildMovieCampaignSlug(campaignSource, movie?.title, titleId);
+  const username = String(bot?.telegram_username || "").replace(/^@/, "").trim();
+  const validUsername = /^[A-Za-z0-9_]{5,32}$/.test(username);
+  const fallbackUrl = validUsername && MOVIE_UUID_RE.test(titleId)
+    ? "https://t.me/" + username + "?startapp=movie_" + titleId
+    : FALLBACK_MASTER_URL;
+  if (!campaignSlug || !bot?.id || !validUsername) {
+    return { telegramUrl: fallbackUrl, campaignSlug, visitSaved: false, setCookie: null };
+  }
+
+  const visitToken = randomHex(12);
+  const startPayload = buildMovieCampaignStartPayload(titleId, visitToken);
+  const trackedUrl = "https://t.me/" + username + "?startapp=" + encodeURIComponent(startPayload);
+  const existingVisitorId = readVisitorCookie(request);
+  const visitorId = existingVisitorId || randomHex(16);
+  const visitorHash = await hashVisitorId(visitorId, campaignSlug);
+  const crawler = classifyCrawlerUserAgent(request.headers.get("User-Agent"));
+  const isBot = request.method === "HEAD" || crawler.isBot;
+  const eventData = {
+    campaign_slug: campaignSlug,
+    source: campaignSource,
+    title_id: titleId,
+    title: String(movie?.title || "").slice(0, 180),
+    visit_token: visitToken,
+    visitor_hash: visitorHash,
+    is_bot: isBot,
+    crawler_name: crawler.crawlerName || (request.method === "HEAD" ? "head" : null),
+    referrer_host: getReferrerHost(request)
+  };
+
+  let visitSaved = false;
+  try {
+    const { error } = await getSupabase(env).from("analytics_events").insert({
+      user_id: null,
+      bot_id: bot.id,
+      event_type: "campaign_visit",
+      event_data: eventData
+    });
+    if (error) throw error;
+    visitSaved = true;
+  } catch (error) {
+    console.error("FINDLY movie share visit tracking failed:", JSON.stringify(errorDetails(error)));
+  }
+
+  const setCookie = visitSaved && request.method === "GET" && !existingVisitorId && !isBot
+    ? VISITOR_COOKIE_NAME + "=" + visitorId + "; Max-Age=2592000; Path=/; Secure; HttpOnly; SameSite=Lax"
+    : null;
+  return {
+    telegramUrl: visitSaved ? trackedUrl : fallbackUrl,
+    campaignSlug,
+    visitToken: visitSaved ? visitToken : null,
+    visitSaved,
+    setCookie
+  };
 }
 
 function errorDetails(error) {
@@ -184,6 +274,7 @@ export async function recordCampaignStart(env, bot, internalUserId, startPayload
 
     if (lookupError) throw lookupError;
     if (!visit || visit.event_data?.is_bot === true || visit.event_data?.started_at) return false;
+    if (payload.titleId && String(visit.event_data?.title_id || "").toLowerCase() !== payload.titleId) return false;
 
     const eventData = { ...visit.event_data, started_at: new Date().toISOString(), start_bot_slug: bot.slug };
     const { data: updated, error: updateError } = await supabase
