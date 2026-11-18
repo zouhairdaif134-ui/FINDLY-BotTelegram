@@ -262,7 +262,7 @@ export default function AnalyticsSection({ fetchApi }) {
             <table className="analytics-table analytics-campaign-table">
               <thead><tr>
                 <th>الحملة</th><th>المصدر</th><th>الزيارات البشرية</th><th>زوار فريدون</th><th>زيارات الروبوتات</th>
-                <th>ضغطوا Start</th><th>مستخدمون فريدون</th><th>نسبة التحويل</th><th>بحث</th><th>تفاصيل الأفلام</th><th>ضغطات المشاهدة</th><th>فتح Mini App</th>
+                <th>ضغطوا Start</th><th>مستخدمون فريدون</th><th>نسبة التحويل</th><th>رسائل البوت</th><th>تفاعلات الأزرار</th><th>بحث</th><th>تفاصيل الأفلام</th><th>ضغطات المشاهدة</th><th>فتح Mini App</th><th>مشاركات</th>
               </tr></thead>
               <tbody>
                 {campaignRows.map((row) => (
@@ -275,13 +275,16 @@ export default function AnalyticsSection({ fetchApi }) {
                     <td><strong>{number(row.starts)}</strong></td>
                     <td>{number(row.unique_starters)}</td>
                     <td>{Number(row.start_rate || 0).toFixed(1)}%</td>
+                    <td>{number(row.post_start_telegram_messages)}</td>
+                    <td>{number(row.post_start_button_interactions)}</td>
                     <td>{number(row.post_start_searches)}</td>
                     <td>{number(row.post_start_movie_detail_views)}</td>
                     <td>{number(row.post_start_watch_clicks)}</td>
                     <td>{number(row.post_start_miniapp_opens)}</td>
+                    <td>{number(row.post_start_movie_shares)}</td>
                   </tr>
                 ))}
-                {!loading && campaignRows.length === 0 && <tr><td className="analytics-empty" colSpan="12">مازال ما تسجلات حتى زيارة بشرية من روابط الحملات.</td></tr>}
+                {!loading && campaignRows.length === 0 && <tr><td className="analytics-empty" colSpan="15">مازال ما تسجلات حتى زيارة بشرية من روابط الحملات.</td></tr>}
               </tbody>
             </table>
           </div>
