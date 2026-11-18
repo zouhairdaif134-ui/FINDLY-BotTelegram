@@ -38,7 +38,7 @@ test("public movie share pages create uncached visit tokens and pass tracked Min
   const sharing = await read("../src/lib/movie-sharing.js");
   assert.match(route, /recordMovieShareVisit/);
   assert.match(route, /Cache-Control": "no-store/);
-  assert.match(route, /renderMovieSharePage\([\s\S]*trackedTelegramUrl/);
+  assert.match(route, /renderMovieSharePage\([\s\S]*attribution\.telegramUrl/);
   assert.match(tracking, /export async function recordMovieShareVisit/);
   assert.match(sharing, /trackedTelegramUrl/);
   assert.match(sharing, /startapp=/);
@@ -49,7 +49,7 @@ test("Mini App attributes movie campaign starts from Telegram's signed start_par
   const app = await read("../miniapp/app.js");
   assert.match(route, /startParam: params\.get\("start_param"\)/);
   assert.match(route, /recordCampaignStart\(env,[\s\S]*startParam/);
-  assert.match(app, /movie_\(\[0-9a-f-\]\{36\}\)\(\?:_fc_\[a-f0-9\]\{24\}\)\?/i);
+  assert.match(app, /movie_\(\[0-9a-f-\]\{36\}\)\(\?:_fc_\[a-f0-9\]\{24\}\)\?/i);\n  assert.match(app, /await trackAnalyticsEvent\("miniapp_opened"/);
 });
 
 test("Mini App copy-film-link and generated share captions use the tracked public share page", async () => {
@@ -57,7 +57,7 @@ test("Mini App copy-film-link and generated share captions use the tracked publi
   const sharing = await read("../src/lib/movie-sharing.js");
   assert.match(app, /copyShareText\(s\.sharePageUrl\)/);
   assert.match(sharing, /overview,[\s\S]*sharePageUrl/);
-  assert.match(sharing, /caption,[\s\S]*sharePageUrl/);
+  assert.match(sharing, /sharePageUrl,"","#FINDLYMovies #Cinema/);
 });
 
 test("campaign analytics dashboard displays per-film campaign slugs", async () => {
