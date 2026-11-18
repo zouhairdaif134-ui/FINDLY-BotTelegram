@@ -19,7 +19,7 @@ test("campaign redirect generates a bounded Telegram start token and excludes cr
   assert.match(tracking, /visitor_hash/);
   assert.match(tracking, /is_bot/);
   assert.match(tracking, /fc_/);
-  assert.match(tracking, /if \\(visitSaved && !existingVisitorId\\)/);
+  assert.ok(tracking.includes("visitSaved && !existingVisitorId"));
   assert.doesNotMatch(tracking, /CF-Connecting-IP|cf-connecting-ip/);
 });
 
