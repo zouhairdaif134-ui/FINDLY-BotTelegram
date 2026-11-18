@@ -256,7 +256,7 @@ export default function AnalyticsSection({ fetchApi }) {
         </div>
         <div className="analytics-table-card">
           <div className="analytics-table-heading">
-            <div><h3>الأداء حسب الحملة</h3><p>زيارات الروبوتات مفصولة ولا تدخل في عدد الزيارات البشرية أو نسبة التحويل.</p></div>
+            <div><h3>الأداء حسب الحملة</h3><p>زوار فريدون = متصفحات مميزة تقريبياً عبر Cookie؛ المستخدم الفريد بعد Start يُحسب بحساب Telegram. زيارات الروبوتات لا تدخل في نسبة التحويل.</p></div>
           </div>
           <div className="analytics-table-wrap">
             <table className="analytics-table analytics-campaign-table">
