@@ -50,7 +50,7 @@ import {
   updateNotification,
   deleteNotification
 } from "./routes/notifications.js";
-import { getAnalytics, getMovieReferralAnalytics, getFindlyAnalyticsOverview } from "./routes/analytics.js";
+import { getAnalytics, getMovieReferralAnalytics, getFindlyAnalyticsOverview, getCampaignAnalytics } from "./routes/analytics.js";
 import { getActivity } from "./routes/activity.js";
 import { handleMonetizationRoute } from "./routes/monetization.js";
 import { handleMediaRoute } from "./routes/media.js";
@@ -91,6 +91,7 @@ import {
 
 import { authorizeRequest } from "./lib/auth.js";
 import { getSupabase } from "./lib/supabase.js";
+import { handleCampaignRedirect } from "./lib/campaign-tracking.js";
 import { cleanupExpiredAISessionMessages } from "./lib/ai-memory.js";
 import { activateDueMonetizationCampaigns } from "./lib/monetization.js";
 import { renderMovieSharePage, getMovieShareImageUrl } from "./lib/movie-sharing.js";
@@ -376,6 +377,9 @@ export default {
           )
         , request);
       }
+
+      const campaignResponse = await handleCampaignRedirect(env, request, url);
+      if (campaignResponse) return campaignResponse;
 
       const miniAppResponse = await handleMiniAppRoute(env, request, url);
       if (miniAppResponse) return miniAppResponse;
@@ -1831,6 +1835,36 @@ export default {
             await deleteNotification(
               env,
               getId(url)
+            )
+          )
+        , request);
+      }
+
+      if (
+        url.pathname ===
+          "/api/analytics/campaigns" &&
+        request.method ===
+          "GET"
+      ) {
+        const auth =
+          await requirePermission(
+            env,
+            request,
+            PERMISSIONS.analytics
+          );
+
+        if (auth.response) {
+          return withCors(
+            auth.response
+          , request);
+        }
+
+        return withCors(
+          success(
+            await getCampaignAnalytics(
+              env,
+              url.searchParams.get("from"),
+              url.searchParams.get("to")
             )
           )
         , request);

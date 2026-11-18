@@ -2,6 +2,7 @@ import { extractTelegramMedia, findMovieMediaTitle, resolveMovieMediaTitleId, is
 import { getMaintenanceDecision } from "./system-settings.js";
 import { getMessageTemplate, getMessageButtons } from "./message-templates.js";
 import { getSupabase } from "../lib/supabase.js";
+import { parseCampaignStartPayload, recordCampaignStart } from "../lib/campaign-tracking.js";
 import { buildTelegramUserProfile } from "../lib/telegram-user.js";
 import { claimTelegramAdDelivery, buildTelegramAdPayload, recordTelegramAdDelivery } from "../lib/monetization.js";
 import {
@@ -1576,6 +1577,10 @@ async function processTelegramUpdate(
     text.startsWith("/start ")
   ) {
     const startPayload = text.slice("/start".length).trim();
+
+    if (parseCampaignStartPayload(startPayload)) {
+      await recordCampaignStart(env, bot, internalUser?.id, startPayload);
+    }
 
     if (startPayload.startsWith("job_")) {
       const sharedJobId = startPayload.slice("job_".length);

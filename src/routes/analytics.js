@@ -71,3 +71,28 @@ export async function getFindlyAnalyticsOverview(env, fromValue = null, toValue 
   if (error) throw error;
   return data || {};
 }
+
+
+export async function getCampaignAnalytics(env, fromValue = null, toValue = null) {
+  const to = toValue ? new Date(toValue) : new Date();
+  const from = fromValue
+    ? new Date(fromValue)
+    : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to) {
+    const error = new Error("Campaign analytics period must contain valid ordered ISO dates");
+    error.status = 400;
+    throw error;
+  }
+
+  const { data, error } = await getSupabase(env).rpc(
+    "get_campaign_analytics",
+    {
+      p_from: from.toISOString(),
+      p_to: to.toISOString()
+    }
+  );
+
+  if (error) throw error;
+  return data || [];
+}
