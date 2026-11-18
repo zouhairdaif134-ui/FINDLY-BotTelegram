@@ -126,14 +126,16 @@ export async function recordMovieShareVisit(env, request, movie, bot, requestedS
     return { telegramUrl: fallbackUrl, campaignSlug, visitSaved: false, setCookie: null };
   }
 
-  const visitToken = randomHex(12);
-  const startPayload = buildMovieCampaignStartPayload(titleId, visitToken);
-  const trackedUrl = "https://t.me/" + username + "?startapp=" + encodeURIComponent(startPayload);
+  const crawler = classifyCrawlerUserAgent(request.headers.get("User-Agent"));
+  const isBot = request.method === "HEAD" || crawler.isBot;
+  const visitToken = isBot ? null : randomHex(12);
+  const startPayload = visitToken ? buildMovieCampaignStartPayload(titleId, visitToken) : null;
+  const trackedUrl = startPayload
+    ? "https://t.me/" + username + "?startapp=" + encodeURIComponent(startPayload)
+    : fallbackUrl;
   const existingVisitorId = readVisitorCookie(request);
   const visitorId = existingVisitorId || randomHex(16);
   const visitorHash = await hashVisitorId(visitorId, campaignSlug);
-  const crawler = classifyCrawlerUserAgent(request.headers.get("User-Agent"));
-  const isBot = request.method === "HEAD" || crawler.isBot;
   const eventData = {
     campaign_slug: campaignSlug,
     source: campaignSource,
@@ -164,9 +166,9 @@ export async function recordMovieShareVisit(env, request, movie, bot, requestedS
     ? VISITOR_COOKIE_NAME + "=" + visitorId + "; Max-Age=2592000; Path=/; Secure; HttpOnly; SameSite=Lax"
     : null;
   return {
-    telegramUrl: visitSaved ? trackedUrl : fallbackUrl,
+    telegramUrl: visitSaved && !isBot ? trackedUrl : fallbackUrl,
     campaignSlug,
-    visitToken: visitSaved ? visitToken : null,
+    visitToken: visitSaved && !isBot ? visitToken : null,
     visitSaved,
     setCookie
   };
