@@ -10,3 +10,15 @@ test("Facebook shares a public movie landing page, not the Telegram deep link",(
 test("renders crawler metadata and Master bot action",()=>{const html=renderMovieSharePage(movie,"FindlySearch2026Bot","facebook","https://findly-v3-api.berrchidcity99.workers.dev");assert.match(html,/property="og:title" content="Wicker · 2026"/);assert.match(html,/property="og:description" content="A fisherwoman lives[^"]*التقييم: 7\.7\/10[^"]*المدة: 104 دقيقة[^"]*التصنيف: Horror، Mystery/);assert.match(html,/property="og:image" content="https:\/\/image\.tmdb\.org\/t\/p\/w780\/poster\.jpg"/);assert.doesNotMatch(html,/og:image[^>]+backdrop\.jpg/);assert.match(html,/property="og:image:width" content="780"/);assert.match(html,/property="og:image:height" content="1170"/);assert.match(html,/href="https:\/\/t\.me\/FindlySearch2026Bot\?startapp=movie_/);assert.match(html,/افتح العنوان مباشرة في FINDLY Movies/);});
 test("escapes movie text before placing it in Open Graph HTML",()=>{const html=renderMovieSharePage({...movie,title:'<script>alert("x")</script>'},"FindlySearch2026Bot","facebook");assert.ok(!html.includes('<script>alert("x")</script>'));assert.match(html,/&lt;script&gt;/);});
 test("selects active Master bot username rather than Watch bot",()=>{assert.equal(getMovieShareBotUsername([{slug:"movies",telegram_username:"@FindlyMovies2026Bot",is_active:true},{slug:"findly",telegram_username:"@FindlySearch2026Bot",is_active:true}]),"@FindlySearch2026Bot");assert.equal(getMovieShareBotUsername([{slug:"findly",telegram_username:"@OldMasterBot",is_active:false}]),"");});
+
+test("share captions carry the public movie page instead of an untracked direct bot link",()=>{
+ const s=buildMovieShareContent(movie,"FindlySearch2026Bot","whatsapp");
+ assert.ok(s.caption.includes(s.sharePageUrl));
+ assert.doesNotMatch(s.caption,/https:\/\/t\.me\/FindlySearch2026Bot/);
+ assert.ok(s.whatsappShareUrl.includes(encodeURIComponent(s.sharePageUrl)));
+});
+test("public movie page CTA uses the per-visit tracked Mini App deep link",()=>{
+ const trackedUrl="https://t.me/FindlySearch2026Bot?startapp=movie_"+movie.id+"_fc_a1b2c3d4e5f60718293a4b5c";
+ const html=renderMovieSharePage(movie,"FindlySearch2026Bot","facebook","https://findly-v3-api.berrchidcity99.workers.dev",trackedUrl);
+ assert.ok(html.includes('href="'+trackedUrl+'"'));
+});
