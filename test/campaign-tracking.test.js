@@ -15,9 +15,11 @@ test("campaign redirect is routed through the Worker before the SPA fallback", a
 test("campaign redirect generates a bounded Telegram start token and excludes crawler traffic", async () => {
   const tracking = await read("../src/lib/campaign-tracking.js");
   assert.match(tracking, /campaign_visit/);
+  assert.match(tracking, /FALLBACK_MASTER_URL/);
   assert.match(tracking, /visitor_hash/);
   assert.match(tracking, /is_bot/);
   assert.match(tracking, /fc_/);
+  assert.match(tracking, /visitSaved \?\? false|visitSaved/);
   assert.doesNotMatch(tracking, /CF-Connecting-IP|cf-connecting-ip/);
 });
 
