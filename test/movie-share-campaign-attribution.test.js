@@ -49,7 +49,8 @@ test("Mini App attributes movie campaign starts from Telegram's signed start_par
   const app = await read("../miniapp/app.js");
   assert.match(route, /startParam: params\.get\("start_param"\)/);
   assert.match(route, /recordCampaignStart\(env,[\s\S]*startParam/);
-  assert.match(app, /movie_\(\[0-9a-f-\]\{36\}\)\(\?:_fc_\[a-f0-9\]\{24\}\)\?/i);\n  assert.match(app, /await trackAnalyticsEvent\("miniapp_opened"/);
+  assert.match(app, /movie_\(\[0-9a-f-\]\{36\}\)\(\?:_fc_\[a-f0-9\]\{24\}\)\?/i);
+  assert.match(app, /await trackAnalyticsEvent\("miniapp_opened"/);
 });
 
 test("Mini App copy-film-link and generated share captions use the tracked public share page", async () => {
