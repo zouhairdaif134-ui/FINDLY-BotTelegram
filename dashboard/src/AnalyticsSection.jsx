@@ -39,10 +39,13 @@ function ProviderCard({ title, data }) {
 export default function AnalyticsSection({ fetchApi }) {
   const [overview, setOverview] = useState(null);
   const [rows, setRows] = useState([]);
+  const [campaignRows, setCampaignRows] = useState([]);
+  const [copyState, setCopyState] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [period, setPeriod] = useState("30d");
+  const facebookCampaignLink = "https://findly-v3-api.berrchidcity99.workers.dev/go/facebook_launch";
 
   async function loadAnalytics() {
     try {
@@ -54,9 +57,10 @@ export default function AnalyticsSection({ fetchApi }) {
         ? new Date("2000-01-01T00:00:00.000Z")
         : new Date(to.getTime() - selected.days * 24 * 60 * 60 * 1000);
       const query = "?from=" + encodeURIComponent(from.toISOString()) + "&to=" + encodeURIComponent(to.toISOString());
-      const [overviewResult, referralsResult] = await Promise.allSettled([
+      const [overviewResult, referralsResult, campaignsResult] = await Promise.allSettled([
         fetchApi("/api/analytics/overview" + query),
-        fetchApi("/api/analytics/movie-referrals")
+        fetchApi("/api/analytics/movie-referrals"),
+        fetchApi("/api/analytics/campaigns" + query)
       ]);
       if (overviewResult.status === "fulfilled") {
         setOverview(overviewResult.value || null);
@@ -65,6 +69,9 @@ export default function AnalyticsSection({ fetchApi }) {
       }
       if (referralsResult.status === "fulfilled") {
         setRows(Array.isArray(referralsResult.value) ? referralsResult.value : []);
+      }
+      if (campaignsResult.status === "fulfilled") {
+        setCampaignRows(Array.isArray(campaignsResult.value) ? campaignsResult.value : []);
       }
     } catch (err) {
       setError(err?.message || "تعذر تحميل إحصائيات FINDLY.");
@@ -223,6 +230,63 @@ export default function AnalyticsSection({ fetchApi }) {
         </div>
       </section>
 
+
+      <section className="analytics-block">
+        <div className="analytics-block-heading">
+          <div><h3>تتبع الحملات التسويقية</h3><p>من فتح رابط الحملة إلى Start ثم التفاعلات اللاحقة داخل FINDLY.</p></div>
+        </div>
+        <div className="analytics-campaign-link">
+          <div className="analytics-campaign-link-copy">
+            <span>رابط حملة Facebook الحالية</span>
+            <code>{facebookCampaignLink}</code>
+            <small>يمكن إنشاء حملة أخرى بتغيير الاسم بعد /go/ مع إبقاء مصدرها في بداية الاسم، مثل facebook_post_02.</small>
+          </div>
+          <div className="analytics-campaign-actions">
+            <a href={facebookCampaignLink} target="_blank" rel="noreferrer">فتح الرابط</a>
+            <button type="button" onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(facebookCampaignLink);
+                setCopyState("تم نسخ الرابط");
+              } catch {
+                setCopyState("تعذر النسخ تلقائياً؛ انسخ الرابط يدوياً.");
+              }
+            }}>نسخ الرابط</button>
+          </div>
+          {copyState && <small className="analytics-copy-status" aria-live="polite">{copyState}</small>}
+        </div>
+        <div className="analytics-table-card">
+          <div className="analytics-table-heading">
+            <div><h3>الأداء حسب الحملة</h3><p>زيارات الروبوتات مفصولة ولا تدخل في عدد الزيارات البشرية أو نسبة التحويل.</p></div>
+          </div>
+          <div className="analytics-table-wrap">
+            <table className="analytics-table analytics-campaign-table">
+              <thead><tr>
+                <th>الحملة</th><th>المصدر</th><th>الزيارات البشرية</th><th>زوار فريدون</th><th>زيارات الروبوتات</th>
+                <th>ضغطوا Start</th><th>مستخدمون فريدون</th><th>نسبة التحويل</th><th>بحث</th><th>تفاصيل الأفلام</th><th>ضغطات المشاهدة</th><th>فتح Mini App</th>
+              </tr></thead>
+              <tbody>
+                {campaignRows.map((row) => (
+                  <tr key={row.campaign_slug}>
+                    <td><strong>{row.campaign_slug}</strong></td>
+                    <td>{row.source || "—"}</td>
+                    <td>{number(row.visits)}</td>
+                    <td>{number(row.unique_visitors)}</td>
+                    <td>{number(row.crawler_visits)}</td>
+                    <td><strong>{number(row.starts)}</strong></td>
+                    <td>{number(row.unique_starters)}</td>
+                    <td>{Number(row.start_rate || 0).toFixed(1)}%</td>
+                    <td>{number(row.post_start_searches)}</td>
+                    <td>{number(row.post_start_movie_detail_views)}</td>
+                    <td>{number(row.post_start_watch_clicks)}</td>
+                    <td>{number(row.post_start_miniapp_opens)}</td>
+                  </tr>
+                ))}
+                {!loading && campaignRows.length === 0 && <tr><td className="analytics-empty" colSpan="12">مازال ما تسجلات حتى زيارة بشرية من روابط الحملات.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
       <div className="analytics-note">
         <strong>ملاحظات دقة البيانات</strong>
         <p>عدد المستخدمين يعتمد على السجلات الموجودة في قاعدة البيانات، وليس قائمة شاملة من Telegram. لا يمكن الجزم بأن المستخدم حذف المحادثة أو حظر البوت؛ لذلك نستعمل «غير نشط» فقط. كما أن إحصائيات Mini App والإعلانات تبدأ من لحظة تفعيل التتبع، ونتيجة SDK لا تعني بالضرورة ظهور إعلان مدفوع أو تحقق إيراد.</p>
