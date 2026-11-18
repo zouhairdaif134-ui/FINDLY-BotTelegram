@@ -88,8 +88,8 @@ function errorDetails(error) {
 export async function handleCampaignRedirect(env, request, url) {
   const match = url.pathname.match(/^\/go\/([a-z0-9_-]{1,64})\/?$/i);
   if (!match) return null;
-  if (request.method !== "GET") {
-    return new Response("Method not allowed", { status: 405, headers: { Allow: "GET", "Cache-Control": "no-store" } });
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD", "Cache-Control": "no-store" } });
   }
 
   const campaignSlug = match[1].toLowerCase();
@@ -126,7 +126,9 @@ export async function handleCampaignRedirect(env, request, url) {
   const existingVisitorId = readVisitorCookie(request);
   const visitorId = existingVisitorId || randomHex(16);
   const visitorHash = await hashVisitorId(visitorId, campaignSlug);
-  const { isBot, crawlerName } = classifyCrawlerUserAgent(request.headers.get("User-Agent"));
+  const crawler = classifyCrawlerUserAgent(request.headers.get("User-Agent"));
+  const isBot = request.method === "HEAD" || crawler.isBot;
+  const crawlerName = crawler.crawlerName || (request.method === "HEAD" ? "head" : null);
   const eventData = {
     campaign_slug: campaignSlug,
     source,
@@ -160,7 +162,7 @@ export async function handleCampaignRedirect(env, request, url) {
     "Referrer-Policy": "no-referrer",
     "X-Robots-Tag": "noindex, nofollow"
   });
-  if (visitSaved && !existingVisitorId) {
+  if (visitSaved && request.method === "GET" && !existingVisitorId) {
     headers.set("Set-Cookie", VISITOR_COOKIE_NAME + "=" + visitorId + "; Max-Age=2592000; Path=/; Secure; HttpOnly; SameSite=Lax");
   }
   return new Response(null, { status: 302, headers });
