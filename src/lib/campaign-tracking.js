@@ -1,6 +1,7 @@
 import { getSupabase } from "./supabase.js";
 
 const VISITOR_COOKIE_NAME = "findly_campaign_visitor";
+const FALLBACK_MASTER_URL = "https://t.me/FindlySearch2026Bot";
 const CAMPAIGN_SLUG_RE = /^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$/i;
 const VISIT_TOKEN_RE = /^[a-f0-9]{24}$/i;
 const VISITOR_ID_RE = /^[a-f0-9]{32}$/i;
@@ -95,21 +96,33 @@ export async function handleCampaignRedirect(env, request, url) {
   const source = resolveCampaignSource(campaignSlug);
   if (!source) return new Response("Campaign not found", { status: 404 });
 
-  const supabase = getSupabase(env);
-  const { data: bot, error: botError } = await supabase
-    .from("bots")
-    .select("id,telegram_username")
-    .eq("slug", "findly")
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (botError) throw botError;
-  const destination = buildCampaignTelegramUrl(bot?.telegram_username, randomHex(12));
-  if (!destination) {
-    return new Response("FINDLY Master Bot is unavailable", { status: 503, headers: { "Cache-Control": "no-store" } });
+  let supabase;
+  let bot;
+  try {
+    supabase = getSupabase(env);
+    const { data, error } = await supabase
+      .from("bots")
+      .select("id,telegram_username")
+      .eq("slug", "findly")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (error) throw error;
+    bot = data;
+  } catch (error) {
+    console.error("FINDLY campaign destination lookup failed:", JSON.stringify(errorDetails(error)));
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: FALLBACK_MASTER_URL,
+        "Cache-Control": "no-store, max-age=0",
+        "Referrer-Policy": "no-referrer"
+      }
+    });
   }
 
-  const visitToken = new URL(destination).searchParams.get("start").slice(3);
+  let destination = buildCampaignTelegramUrl(bot?.telegram_username, randomHex(12));
+  if (!destination) destination = FALLBACK_MASTER_URL;
+  const visitToken = new URL(destination).searchParams.get("start")?.slice(3) || null;
   const existingVisitorId = readVisitorCookie(request);
   const visitorId = existingVisitorId || randomHex(16);
   const visitorHash = await hashVisitorId(visitorId);
@@ -124,16 +137,21 @@ export async function handleCampaignRedirect(env, request, url) {
     referrer_host: getReferrerHost(request)
   };
 
-  try {
-    const { error: insertError } = await supabase.from("analytics_events").insert({
-      user_id: null,
-      bot_id: bot.id,
-      event_type: "campaign_visit",
-      event_data: eventData
-    });
-    if (insertError) throw insertError;
-  } catch (error) {
-    console.error("FINDLY campaign visit tracking failed:", JSON.stringify(errorDetails(error)));
+  let visitSaved = false;
+  if (bot?.id && visitToken) {
+    try {
+      const { error: insertError } = await supabase.from("analytics_events").insert({
+        user_id: null,
+        bot_id: bot.id,
+        event_type: "campaign_visit",
+        event_data: eventData
+      });
+      if (insertError) throw insertError;
+      visitSaved = true;
+    } catch (error) {
+      console.error("FINDLY campaign visit tracking failed:", JSON.stringify(errorDetails(error)));
+      destination = FALLBACK_MASTER_URL;
+    }
   }
 
   const headers = new Headers({
@@ -142,7 +160,7 @@ export async function handleCampaignRedirect(env, request, url) {
     "Referrer-Policy": "no-referrer",
     "X-Robots-Tag": "noindex, nofollow"
   });
-  if (!existingVisitorId) {
+  if (visitSaved && !existingVisitorId) {
     headers.set("Set-Cookie", VISITOR_COOKIE_NAME + "=" + visitorId + "; Max-Age=2592000; Path=/; Secure; HttpOnly; SameSite=Lax");
   }
   return new Response(null, { status: 302, headers });
