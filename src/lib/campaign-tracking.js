@@ -115,7 +115,8 @@ export async function recordMovieShareVisit(env, request, movie, bot, requestedS
     .includes(String(requestedSource || "").toLowerCase())
     ? String(requestedSource).toLowerCase()
     : "direct";
-  const campaignSlug = buildMovieCampaignSlug(campaignSource, movie?.title, titleId);
+  const campaignTitle = [movie?.original_title || movie?.title, movie?.release_year].filter(Boolean).join(" ");
+  const campaignSlug = buildMovieCampaignSlug(campaignSource, campaignTitle, titleId);
   const username = String(bot?.telegram_username || "").replace(/^@/, "").trim();
   const validUsername = /^[A-Za-z0-9_]{5,32}$/.test(username);
   const fallbackUrl = validUsername && MOVIE_UUID_RE.test(titleId)
