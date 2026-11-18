@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { validateTelegramInitData, parseCatalogPagination, truncateOverview } from "./miniapp.js";
 
-async function signedInitData(token, user, authDate) {
+async function signedInitData(token, user, authDate, startParam = "") {
   const params = new URLSearchParams({
     auth_date: String(authDate),
     query_id: "AAE-test-query",
     user: JSON.stringify(user)
   });
+  if (startParam) params.set("start_param", startParam);
   const data = Array.from(params.entries()).sort(([a],[b]) => a.localeCompare(b)).map(([k,v]) => k + "=" + v).join("\n");
   const key = await webcrypto.subtle.importKey("raw", new TextEncoder().encode("WebAppData"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const secret = await webcrypto.subtle.sign("HMAC", key, new TextEncoder().encode(token));
@@ -25,6 +26,15 @@ test("validates a Telegram Mini App initData signature and user", async () => {
   const raw = await signedInitData(token, { id: 987654321, first_name: "Test" }, Math.floor(now / 1000));
   const result = await validateTelegramInitData(raw, token, now, webcrypto);
   assert.equal(result.user.id, 987654321);
+});
+
+test("preserves Telegram's signed Mini App start_param", async () => {
+  const token = "123456:TEST_TOKEN";
+  const now = 1794650000000;
+  const startParam = "movie_550e8400-e29b-41d4-a716-446655440000_fc_a1b2c3d4e5f60718293a4b5c";
+  const raw = await signedInitData(token, { id: 987654321 }, Math.floor(now / 1000), startParam);
+  const result = await validateTelegramInitData(raw, token, now, webcrypto);
+  assert.equal(result.startParam, startParam);
 });
 
 test("rejects tampered, expired and bot-user initData", async () => {
