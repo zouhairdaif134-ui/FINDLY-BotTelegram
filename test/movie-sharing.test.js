@@ -16,6 +16,8 @@ test("share captions carry the public movie page instead of an untracked direct 
  assert.ok(s.caption.includes(s.sharePageUrl));
  assert.doesNotMatch(s.caption,/https:\/\/t\.me\/FindlySearch2026Bot/);
  assert.ok(s.whatsappShareUrl.includes(encodeURIComponent(s.sharePageUrl)));
+ const telegram=buildMovieShareContent(movie,"FindlySearch2026Bot","telegram");
+ assert.equal(new URL(telegram.telegramShareUrl).searchParams.get("text").includes(telegram.sharePageUrl),false);
 });
 test("public movie page CTA uses the per-visit tracked Mini App deep link",()=>{
  const trackedUrl="https://t.me/FindlySearch2026Bot?startapp=movie_"+movie.id+"_fc_a1b2c3d4e5f60718293a4b5c";
