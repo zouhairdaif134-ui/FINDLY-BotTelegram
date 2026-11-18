@@ -4,6 +4,8 @@ insert into public.analytics_events (user_id, bot_id, event_type, event_data, cr
 (null,'10000000-0000-4000-8000-000000000001','campaign_visit','{"campaign_slug":"facebook_launch","source":"facebook","visit_token":"cccccccccccccccccccccccc","visitor_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","is_bot":true,"crawler_name":"facebook"}','2026-11-22T10:04:00Z');
 
 insert into public.analytics_events (user_id, bot_id, event_type, event_data, created_at) values
+('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','message','{"command":"/search"}','2026-11-22T10:02:30Z'),
+('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','callback_query','{"action":"movies:new:1"}','2026-11-22T10:02:45Z'),
 ('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','miniapp_search','{"query":"Dune"}','2026-11-22T10:03:00Z'),
 ('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','miniapp_title_viewed','{"title_id":"60000000-0000-4000-8000-000000000001"}','2026-11-22T10:03:30Z');
 
@@ -18,6 +20,8 @@ begin
   if result.starts <> 1 then raise exception 'expected 1 Start: %', row_to_json(result); end if;
   if result.unique_starters <> 1 then raise exception 'expected 1 unique starter: %', row_to_json(result); end if;
   if result.start_rate <> 50.0 then raise exception 'expected 50 percent conversion: %', row_to_json(result); end if;
+  if result.post_start_telegram_messages <> 1 then raise exception 'expected 1 post-start Telegram message: %', row_to_json(result); end if;
+  if result.post_start_button_interactions <> 1 then raise exception 'expected 1 post-start button interaction: %', row_to_json(result); end if;
   if result.post_start_searches <> 1 then raise exception 'expected 1 post-start search: %', row_to_json(result); end if;
   if result.post_start_movie_detail_views <> 1 then raise exception 'expected 1 post-start movie detail: %', row_to_json(result); end if;
   if result.post_start_watch_clicks <> 1 then raise exception 'expected 1 post-start watch click: %', row_to_json(result); end if;
