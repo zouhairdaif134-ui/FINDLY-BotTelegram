@@ -30,7 +30,7 @@ export function buildMovieCampaignSlug(source, title, titleId) {
   const titleSlug = String(title || "")
     .normalize("NFKD")
     .toLowerCase()
-    .replace(/[\\u0300-\\u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 32) || "title";
