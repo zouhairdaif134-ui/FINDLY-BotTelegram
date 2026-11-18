@@ -26,6 +26,8 @@ returns table (
   starts bigint,
   unique_starters bigint,
   start_rate numeric,
+  post_start_telegram_messages bigint,
+  post_start_button_interactions bigint,
   post_start_searches bigint,
   post_start_movie_detail_views bigint,
   post_start_watch_clicks bigint,
@@ -59,8 +61,8 @@ as $function$
            count(*) filter (where not cv.is_bot)::bigint as visits,
            count(distinct cv.visitor_hash) filter (where not cv.is_bot and cv.visitor_hash is not null)::bigint as unique_visitors,
            count(*) filter (where cv.is_bot)::bigint as crawler_visits,
-           count(*) filter (where not cv.is_bot and cv.started_at is not null)::bigint as starts,
-           count(distinct cv.user_id) filter (where not cv.is_bot and cv.started_at is not null and cv.user_id is not null)::bigint as unique_starters,
+           count(*) filter (where not cv.is_bot and cv.started_at >= b.from_at and cv.started_at < b.to_at)::bigint as starts,
+           count(distinct cv.user_id) filter (where not cv.is_bot and cv.started_at >= b.from_at and cv.started_at < b.to_at and cv.user_id is not null)::bigint as unique_starters,
            coalesce(round(
              100.0 * count(*) filter (where not cv.is_bot and cv.started_at is not null)
              / nullif(count(*) filter (where not cv.is_bot), 0), 1
@@ -72,11 +74,15 @@ as $function$
   last_touch as (
     select distinct on (cv.user_id) cv.user_id, cv.campaign_slug, cv.started_at
     from campaign_visits cv
-    where not cv.is_bot and cv.user_id is not null and cv.started_at is not null
+    cross join bounds b
+    where not cv.is_bot and cv.user_id is not null
+      and cv.started_at >= b.from_at and cv.started_at < b.to_at
     order by cv.user_id, cv.started_at desc
   ),
   engagement as (
     select lt.campaign_slug,
+           count(ae.id) filter (where ae.event_type = 'message')::bigint as post_start_telegram_messages,
+           count(ae.id) filter (where ae.event_type = 'callback_query')::bigint as post_start_button_interactions,
            count(ae.id) filter (
              where ae.event_type = 'miniapp_search'
                or (ae.event_type = 'callback_query' and coalesce(ae.event_data ->> 'action', '') like 'movies:search%')
@@ -103,6 +109,8 @@ as $function$
   )
   select cs.campaign_slug, cs.source, cs.visits, cs.unique_visitors, cs.crawler_visits,
          cs.starts, cs.unique_starters, cs.start_rate,
+         coalesce(en.post_start_telegram_messages, 0),
+         coalesce(en.post_start_button_interactions, 0),
          coalesce(en.post_start_searches, 0),
          coalesce(en.post_start_movie_detail_views, 0),
          coalesce(en.post_start_watch_clicks, 0),
