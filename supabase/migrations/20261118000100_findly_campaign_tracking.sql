@@ -64,10 +64,11 @@ as $function$
            count(*) filter (where not cv.is_bot and cv.started_at >= b.from_at and cv.started_at < b.to_at)::bigint as starts,
            count(distinct cv.user_id) filter (where not cv.is_bot and cv.started_at >= b.from_at and cv.started_at < b.to_at and cv.user_id is not null)::bigint as unique_starters,
            coalesce(round(
-             100.0 * count(*) filter (where not cv.is_bot and cv.started_at is not null)
+             100.0 * count(*) filter (where not cv.is_bot and cv.started_at >= b.from_at and cv.started_at < b.to_at)
              / nullif(count(*) filter (where not cv.is_bot), 0), 1
            ), 0) as start_rate
     from campaign_visits cv
+    cross join bounds b
     where cv.campaign_slug is not null
     group by cv.campaign_slug, cv.source
   ),
