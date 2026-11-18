@@ -66,8 +66,8 @@ function readVisitorCookie(request) {
   return VISITOR_ID_RE.test(value) ? value.toLowerCase() : null;
 }
 
-async function hashVisitorId(visitorId) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(visitorId));
+async function hashVisitorId(visitorId, campaignSlug) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(campaignSlug + ":" + visitorId));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
@@ -125,7 +125,7 @@ export async function handleCampaignRedirect(env, request, url) {
   const visitToken = new URL(destination).searchParams.get("start")?.slice(3) || null;
   const existingVisitorId = readVisitorCookie(request);
   const visitorId = existingVisitorId || randomHex(16);
-  const visitorHash = await hashVisitorId(visitorId);
+  const visitorHash = await hashVisitorId(visitorId, campaignSlug);
   const { isBot, crawlerName } = classifyCrawlerUserAgent(request.headers.get("User-Agent"));
   const eventData = {
     campaign_slug: campaignSlug,
