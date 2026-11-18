@@ -91,7 +91,7 @@ import {
 
 import { authorizeRequest } from "./lib/auth.js";
 import { getSupabase } from "./lib/supabase.js";
-import { handleCampaignRedirect } from "./lib/campaign-tracking.js";
+import { handleCampaignRedirect, recordMovieShareVisit } from "./lib/campaign-tracking.js";
 import { cleanupExpiredAISessionMessages } from "./lib/ai-memory.js";
 import { activateDueMonetizationCampaigns } from "./lib/monetization.js";
 import { renderMovieSharePage, getMovieShareImageUrl } from "./lib/movie-sharing.js";
@@ -395,7 +395,7 @@ export default {
         const isPoster = movieShareMatch[2] === "poster";
         const { data: movie, error: movieError } = await getSupabase(env)
           .from("movie_titles")
-          .select("id,media_type,title,overview,release_year,runtime_minutes,rating,poster_path,backdrop_path,status")
+          .select("id,media_type,title,original_title,overview,release_year,runtime_minutes,rating,poster_path,backdrop_path,status")
           .eq("id", movieId)
           .eq("status", "active")
           .maybeSingle();
@@ -431,10 +431,10 @@ export default {
         const requestedSource = url.searchParams.get("source");
         const source = ["facebook", "whatsapp", "x", "telegram", "instagram", "link", "copy_caption"].includes(requestedSource)
           ? requestedSource
-          : "facebook";
+          : "link";
         const { data: bot, error: botError } = await getSupabase(env)
           .from("bots")
-          .select("telegram_username")
+          .select("id,telegram_username")
           .eq("slug", "findly")
           .eq("is_active", true)
           .maybeSingle();
@@ -449,16 +449,17 @@ export default {
         if (genreError) throw genreError;
         movie.genres = (genreLinks || []).map((link) => link.movie_genres?.name).filter(Boolean);
 
-        const html = renderMovieSharePage(movie, bot.telegram_username, source, "https://findly-bottelegram.pages.dev");
-        return new Response(html, {
-          status: 200,
-          headers: {
-            "Content-Type": "text/html; charset=utf-8",
-            "Cache-Control": "public, max-age=300, s-maxage=3600",
-            "X-Content-Type-Options": "nosniff",
-            "Referrer-Policy": "strict-origin-when-cross-origin"
-          }
+        const attribution = await recordMovieShareVisit(env, request, movie, bot, source);
+        const shareOrigin = new URL(request.url).origin;
+        const html = renderMovieSharePage(movie, bot.telegram_username, source, shareOrigin, attribution.telegramUrl);
+        const headers = new Headers({
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store, max-age=0",
+          "X-Content-Type-Options": "nosniff",
+          "Referrer-Policy": "no-referrer"
         });
+        if (attribution.setCookie) headers.set("Set-Cookie", attribution.setCookie);
+        return new Response(html, { status: 200, headers });
       }
 
       /*

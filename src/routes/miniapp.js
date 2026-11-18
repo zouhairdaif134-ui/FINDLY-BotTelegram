@@ -1,6 +1,7 @@
 import { getSupabase } from "../lib/supabase.js";
 import { getTelegramToken } from "../lib/telegram.js";
 import { buildMovieShareContent } from "../lib/movie-sharing.js";
+import { recordCampaignStart } from "../lib/campaign-tracking.js";
 import { searchTmdbCatalog } from "./content.js";
 import { submitMovieRequest } from "./movie-requests.js";
 
@@ -88,7 +89,7 @@ export async function validateTelegramInitData(rawInitData, botToken, now = Date
   let user;
   try { user = JSON.parse(userRaw); } catch { return null; }
   if (!Number.isSafeInteger(user?.id) || user.id <= 0 || user.is_bot === true) return null;
-  return { user, authDate };
+  return { user, authDate, startParam: params.get("start_param") || "" };
 }
 
 async function authenticate(env, body) {
@@ -103,7 +104,7 @@ async function authenticate(env, body) {
   const cached = authCache.get(userId);
   if (cached && now - cached.checkedAt < AUTH_CACHE_TTL_MS) {
     if (cached.isActive === false) return { error: "USER_ACCESS_DISABLED", status: 403 };
-    return { userId };
+    return { userId, startParam: verified.startParam };
   }
 
   const { data: savedUser, error } = await getSupabase(env).from("telegram_users").upsert({
@@ -122,7 +123,7 @@ async function authenticate(env, body) {
     for (const [key, value] of authCache) if (now - value.checkedAt >= AUTH_CACHE_TTL_MS) authCache.delete(key);
   }
   if (!isActive) return { error: "USER_ACCESS_DISABLED", status: 403 };
-  return { userId };
+  return { userId, startParam: verified.startParam };
 }
 
 function safeProviderUrl(value) {
@@ -399,7 +400,7 @@ async function getMovieShare(env,userId,body,requestUrl){
  if(!titleR.data)return json({ok:false,error:"TITLE_NOT_FOUND"},404);
  if(!botR.data?.telegram_username)return json({ok:false,error:"MASTER_BOT_UNAVAILABLE"},503);
  const movie={...titleR.data,genres:(genreR.data||[]).map(x=>x.movie_genres?.name).filter(Boolean)};
- const share=buildMovieShareContent(movie,botR.data.telegram_username,platform,"https://findly-bottelegram.pages.dev");
+ const share=buildMovieShareContent(movie,botR.data.telegram_username,platform,new URL(requestUrl).origin);
  const {error}=await db.from("analytics_events").insert({user_id:userR.data?.id||null,bot_id:botR.data.id,event_type:"movie_share",event_data:{title_id:titleId,title:movie.title,platform,source:"miniapp"}});
  if(error)console.error("FINDLY movie share analytics failed:",error.code||error.message);
  return json({ok:true,...share});
@@ -488,7 +489,7 @@ const MINIAPP_ANALYTICS_EVENTS = new Set([
   "ad_provider_failed"
 ]);
 
-async function trackMiniAppAnalyticsEvent(env, userId, body) {
+async function trackMiniAppAnalyticsEvent(env, userId, body, startParam = "") {
   const eventType = String(body?.event_type || "");
   const eventId = String(body?.event_id || "");
   const sessionId = String(body?.session_id || "");
@@ -529,6 +530,10 @@ async function trackMiniAppAnalyticsEvent(env, userId, body) {
     last_seen_at: now
   }, { onConflict: "user_id,bot_id", ignoreDuplicates: true });
   if (relationError) throw relationError;
+
+  if (eventType === "miniapp_opened" && startParam) {
+    await recordCampaignStart(env, { id: botResult.data.id, slug: "findly" }, userResult.data.id, startParam);
+  }
 
   const eventData = { source: "miniapp" };
   if (eventType === "miniapp_opened") {
@@ -578,7 +583,7 @@ export async function handleMiniAppRoute(env, request, url) {
     if (auth.error) return json({ ok: false, error: auth.error }, auth.status);
     if (match[1] === "ads/config") return await getMiniAppAdsConfig(env);
     if (match[1] === "ads/track") return await trackMiniAppAdEvent(env, auth.userId, body);
-    if (match[1] === "analytics/track") return await trackMiniAppAnalyticsEvent(env, auth.userId, body);
+    if (match[1] === "analytics/track") return await trackMiniAppAnalyticsEvent(env, auth.userId, body, auth.startParam);
     if (match[1] === "catalog") return await getCatalog(env, auth.userId, body);
     if (match[1] === "request") return json({ ok: true, request: await submitMovieRequest(env, auth.userId, body) });
     if (match[1] === "details") return await getTitleDetails(env, auth.userId, body.title_id, body.include_full_plot === true);

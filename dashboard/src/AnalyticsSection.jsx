@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import "./analytics-section.css";
 
 const number = (value) => new Intl.NumberFormat("en-US").format(Number(value || 0));
+function campaignDisplayLabel(slug) {
+  const match = String(slug || "").match(/^([a-z]+)_movie_(.+)_([a-f0-9]{8})$/i);
+  if (!match) return String(slug || "—");
+  const title = match[2].replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return title + " · " + match[1];
+}
 const periodOptions = [
   { value: "7d", label: "آخر 7 أيام", days: 7 },
   { value: "30d", label: "آخر 30 يوماً", days: 30 },
@@ -233,7 +239,7 @@ export default function AnalyticsSection({ fetchApi }) {
 
       <section className="analytics-block">
         <div className="analytics-block-heading">
-          <div><h3>تتبع الحملات التسويقية</h3><p>من فتح رابط الحملة إلى Start ثم التفاعلات اللاحقة داخل FINDLY.</p></div>
+          <div><h3>تتبع الحملات التسويقية</h3><p>من فتح رابط الحملة إلى Start ثم التفاعلات اللاحقة داخل FINDLY. روابط مشاركة الأفلام تظهر باسم الفيلم والمصدر.</p></div>
         </div>
         <div className="analytics-campaign-link">
           <div className="analytics-campaign-link-copy">
@@ -267,7 +273,7 @@ export default function AnalyticsSection({ fetchApi }) {
               <tbody>
                 {campaignRows.map((row) => (
                   <tr key={row.campaign_slug}>
-                    <td><strong>{row.campaign_slug}</strong></td>
+                    <td><strong>{campaignDisplayLabel(row.campaign_slug)}</strong><small>{row.campaign_slug}</small></td>
                     <td>{row.source || "—"}</td>
                     <td>{number(row.visits)}</td>
                     <td>{number(row.unique_visitors)}</td>
