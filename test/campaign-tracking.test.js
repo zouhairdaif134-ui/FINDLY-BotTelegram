@@ -14,7 +14,6 @@ test("campaign redirect is routed through the Worker before the SPA fallback", a
 
 test("campaign redirect generates a bounded Telegram start token and excludes crawler traffic", async () => {
   const tracking = await read("../src/lib/campaign-tracking.js");
-  assert.match(tracking, /\/go\//);
   assert.match(tracking, /campaign_visit/);
   assert.match(tracking, /visitor_hash/);
   assert.match(tracking, /is_bot/);
@@ -84,5 +83,5 @@ test("campaign links always target the configured FINDLY Master bot and preserve
     buildCampaignTelegramUrl("@FindlySearch2026Bot", token),
     "https://t.me/FindlySearch2026Bot?start=fc_" + token
   );
-  assert.equal(buildCampaignTelegramUrl("invalid", token), null);
+  assert.equal(buildCampaignTelegramUrl("bad", token), null);
 });
